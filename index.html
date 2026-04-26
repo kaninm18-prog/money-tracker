@@ -50,17 +50,40 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .header-networth-amount { font-size:2.4rem; font-weight:700; line-height:1.2; }
 .header-networth-sub { font-size:0.75rem; opacity:0.7; margin-top:2px; }
 
+/* ── Credit Card Reminder Banner ── */
+.cc-reminder-banner {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff; margin: 10px 16px 0; border-radius: var(--radius);
+  padding: 12px 14px; position: relative; z-index: 10;
+  box-shadow: 0 4px 16px rgba(239,68,68,0.3);
+  animation: slideDown .3s ease;
+}
+@keyframes slideDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+.cc-reminder-title { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; opacity:.85; margin-bottom:6px; }
+.cc-reminder-item { display:flex; align-items:center; justify-content:space-between; padding:5px 0; border-bottom:1px solid rgba(255,255,255,.2); }
+.cc-reminder-item:last-child { border-bottom:none; }
+.cc-reminder-name { font-size:0.88rem; font-weight:600; }
+.cc-reminder-detail { font-size:0.78rem; opacity:.85; }
+.cc-reminder-days { font-size:0.78rem; font-weight:700; background:rgba(255,255,255,.2); padding:2px 8px; border-radius:10px; }
+.cc-reminder-close { position:absolute; top:10px; right:12px; background:none; border:none; color:#fff; font-size:1.1rem; cursor:pointer; opacity:.7; }
+
 /* ── Account Cards Row ── */
-.account-cards-wrap { overflow-x:auto; display:flex; gap:10px; padding:0 16px 4px; margin-top:-14px; position:relative; z-index:10; }
+.account-cards-wrap { overflow-x:auto; display:flex; gap:10px; padding:0 16px 4px; margin-top:10px; position:relative; z-index:10; }
 .account-cards-wrap::-webkit-scrollbar { display:none; }
 .account-card {
   flex-shrink:0; background:var(--surface); border-radius:var(--radius); padding:14px 16px;
-  box-shadow:var(--shadow); min-width:140px; cursor:pointer;
+  box-shadow:var(--shadow); min-width:148px; cursor:pointer;
 }
 .account-card-type { font-size:1.4rem; margin-bottom:4px; }
 .account-card-name { font-size:0.78rem; color:var(--text2); font-weight:500; }
 .account-card-balance { font-size:1.15rem; font-weight:700; color:var(--primary); margin-top:2px; }
 .account-card-balance.neg { color:var(--expense-color); }
+/* Credit card specific */
+.account-card.credit-card { border-top:3px solid var(--expense-color); }
+.cc-card-label { font-size:0.65rem; color:var(--expense-color); font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
+.cc-limit-bar-wrap { margin-top:6px; height:4px; background:var(--border); border-radius:2px; }
+.cc-limit-bar { height:100%; border-radius:2px; background:var(--expense-color); transition:width .4s; }
+.cc-limit-text { font-size:0.65rem; color:var(--text2); margin-top:3px; }
 
 /* ── Main ── */
 main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; margin:0 auto; width:100%; }
@@ -171,6 +194,7 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 
 /* ── Accounts Page ── */
 .acc-page-card { background:var(--surface); border-radius:var(--radius); padding:15px; margin-bottom:10px; box-shadow:var(--shadow-sm); }
+.acc-page-card.is-credit { border-left:4px solid var(--expense-color); }
 .acc-page-row { display:flex; align-items:center; gap:12px; }
 .acc-page-icon { font-size:1.6rem; }
 .acc-page-info { flex:1; }
@@ -178,6 +202,11 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .acc-page-type { font-size:0.72rem; color:var(--text2); }
 .acc-page-balance { font-size:1.15rem; font-weight:700; color:var(--primary); text-align:right; }
 .acc-page-balance.neg { color:var(--expense-color); }
+.acc-page-credit-detail { margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
+.acc-page-credit-row { display:flex; justify-content:space-between; font-size:0.78rem; color:var(--text2); margin-bottom:5px; }
+.acc-page-credit-row span:last-child { font-weight:600; color:var(--text); }
+.acc-page-limit-bar-wrap { height:6px; background:var(--border); border-radius:3px; margin-top:4px; }
+.acc-page-limit-bar { height:100%; border-radius:3px; background:var(--expense-color); }
 .acc-page-actions { display:flex; gap:6px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
 .acc-page-actions button { flex:1; padding:7px; border:none; border-radius:8px; font-size:0.8rem; font-weight:600; cursor:pointer; }
 .acc-edit-btn { background:var(--primary-light); color:var(--primary); }
@@ -256,6 +285,9 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
       <div class="header-networth-sub" id="header-networth-sub"></div>
     </div>
   </div>
+
+  <!-- Credit Card Reminder Banners -->
+  <div id="cc-reminders"></div>
 
   <!-- Account Cards -->
   <div class="account-cards-wrap" id="account-cards-wrap">
@@ -460,17 +492,42 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
     </div>
     <div class="form-group">
       <label class="form-label">Type</label>
-      <select class="form-control" id="fa-type">
+      <select class="form-control" id="fa-type" onchange="toggleCreditFields()">
         <option value="cash">💵 Cash</option>
         <option value="bank">🏦 Bank Account</option>
         <option value="investment">📈 Investment / Savings</option>
         <option value="wallet">📱 Digital Wallet</option>
+        <option value="credit">💳 Credit Card</option>
       </select>
     </div>
     <div class="form-group">
-      <label class="form-label">Starting Balance (฿)</label>
+      <label class="form-label" id="fa-balance-label">Starting Balance (฿)</label>
       <div class="amount-wrap"><span class="amount-prefix">฿</span>
         <input type="number" class="form-control" id="fa-balance" placeholder="0" inputmode="decimal" step="0.01">
+      </div>
+      <div id="fa-balance-hint" style="font-size:0.72rem;color:var(--text2);margin-top:4px;display:none">
+        For credit cards: enter current amount owed as a negative number (e.g. −5000), or 0 if starting fresh.
+      </div>
+    </div>
+    <!-- Credit card extra fields (shown only when type = credit) -->
+    <div id="credit-fields" style="display:none">
+      <div class="form-group">
+        <label class="form-label">Credit Limit (฿)</label>
+        <div class="amount-wrap"><span class="amount-prefix">฿</span>
+          <input type="number" class="form-control" id="fa-limit" placeholder="e.g. 30000" inputmode="decimal" step="0.01">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label class="form-label">Payment Due Day</label>
+          <input type="number" class="form-control" id="fa-dueday" placeholder="e.g. 5" min="1" max="31" inputmode="numeric">
+          <div style="font-size:0.68rem;color:var(--text2);margin-top:3px">Day of month (1–31)</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Statement Date</label>
+          <input type="number" class="form-control" id="fa-stmtday" placeholder="e.g. 25" min="1" max="31" inputmode="numeric">
+          <div style="font-size:0.68rem;color:var(--text2);margin-top:3px">Day of month (1–31)</div>
+        </div>
       </div>
     </div>
     <button class="btn btn-primary" onclick="saveAccount()" id="save-account-btn">Add Account</button>
@@ -530,7 +587,7 @@ var editingIncomeRow   = null;
 var editingAccountRow  = null;
 
 var MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-var ACCT_ICONS  = { cash:'💵', bank:'🏦', investment:'📈', wallet:'📱' };
+var ACCT_ICONS  = { cash:'💵', bank:'🏦', investment:'📈', wallet:'📱', credit:'💳' };
 var CAT_ICONS   = { "Food & Dining":"🍜","Transport":"🚗","Shopping":"🛍️","Bills & Utilities":"💡","Healthcare":"💊","Entertainment":"🎬","Education":"📚","Personal Care":"✨","Travel":"✈️","Savings":"🏦","Other":"📌","Salary":"💼","Investment Returns":"📈","Freelance":"💻","Bonus":"🎁","Other Income":"💰" };
 var CAT_COLORS  = ["#6c63ff","#ff6584","#22c55e","#f59e0b","#3b82f6","#ec4899","#14b8a6","#f97316","#8b5cf6","#06b6d4","#84cc16","#e11d48","#0891b2"];
 
@@ -656,25 +713,86 @@ function renderAll() {
 }
 
 // ════════════════════════════════════════════
+//  CREDIT CARD HELPERS
+// ════════════════════════════════════════════
+function nextDueDate(dueDay) {
+  var today = new Date(); today.setHours(0,0,0,0);
+  var thisMonth = new Date(today.getFullYear(), today.getMonth(), dueDay);
+  if (thisMonth <= today) return new Date(today.getFullYear(), today.getMonth()+1, dueDay);
+  return thisMonth;
+}
+function daysUntil(date) {
+  var today = new Date(); today.setHours(0,0,0,0);
+  return Math.round((date - today) / (1000*60*60*24));
+}
+function ccOwed(a) { return a.balance < 0 ? Math.abs(a.balance) : 0; }
+function ccUsedPct(a) {
+  if (!a.creditLimit) return 0;
+  return Math.min(100, Math.round(ccOwed(a) / a.creditLimit * 100));
+}
+
+// ════════════════════════════════════════════
+//  REMINDER BANNERS
+// ════════════════════════════════════════════
+function renderReminders() {
+  var cards = accounts.filter(function(a){ return a.type==='credit' && a.dueDay; });
+  var due = cards.filter(function(a){
+    return daysUntil(nextDueDate(a.dueDay)) <= 3;
+  });
+  if (!due.length) { document.getElementById('cc-reminders').innerHTML = ''; return; }
+
+  var items = due.map(function(a) {
+    var d = daysUntil(nextDueDate(a.dueDay));
+    var label = d === 0 ? 'Due TODAY' : d === 1 ? 'Due TOMORROW' : 'Due in ' + d + ' days';
+    var owed = ccOwed(a);
+    return '<div class="cc-reminder-item">' +
+      '<div><div class="cc-reminder-name">💳 ' + a.name + '</div>' +
+      '<div class="cc-reminder-detail">' + (owed > 0 ? 'Owed: ' + fmtMoney(owed) : 'Balance clear') + '</div></div>' +
+      '<div class="cc-reminder-days">' + label + '</div>' +
+    '</div>';
+  }).join('');
+
+  document.getElementById('cc-reminders').innerHTML =
+    '<div class="cc-reminder-banner">' +
+      '<button class="cc-reminder-close" onclick="document.getElementById(\'cc-reminders\').innerHTML=\'\'">✕</button>' +
+      '<div class="cc-reminder-title">⚠️ Credit Card Payment Due Soon</div>' +
+      items +
+    '</div>';
+}
+
+// ════════════════════════════════════════════
 //  ACCOUNT CARDS (top strip)
 // ════════════════════════════════════════════
 function renderAccountCards() {
   document.getElementById('header-networth').textContent = fmtMoney(totalBalance);
-  // Count accounts for subtitle
   var subtitle = accounts.length + ' account' + (accounts.length!==1?'s':'');
   document.getElementById('header-networth-sub').textContent = subtitle;
 
   var html = '';
   accounts.forEach(function(a) {
-    var neg = a.balance < 0 ? ' neg' : '';
-    html += '<div class="account-card" onclick="showPage(\'accounts\')">' +
-      '<div class="account-card-type">' + acctIcon(a.type) + '</div>' +
-      '<div class="account-card-name">' + a.name + '</div>' +
-      '<div class="account-card-balance' + neg + '">' + fmtMoney(a.balance) + '</div>' +
-    '</div>';
+    if (a.type === 'credit') {
+      var owed = ccOwed(a);
+      var pct  = ccUsedPct(a);
+      html += '<div class="account-card credit-card" onclick="showPage(\'accounts\')">' +
+        '<div class="account-card-type">💳</div>' +
+        '<div class="account-card-name">' + a.name + '</div>' +
+        '<div class="cc-card-label">Owed</div>' +
+        '<div class="account-card-balance neg">' + fmtMoney(owed) + '</div>' +
+        (a.creditLimit ? '<div class="cc-limit-bar-wrap"><div class="cc-limit-bar" style="width:'+pct+'%"></div></div><div class="cc-limit-text">'+pct+'% of '+fmtMoney(a.creditLimit)+'</div>' : '') +
+      '</div>';
+    } else {
+      var neg = a.balance < 0 ? ' neg' : '';
+      html += '<div class="account-card" onclick="showPage(\'accounts\')">' +
+        '<div class="account-card-type">' + acctIcon(a.type) + '</div>' +
+        '<div class="account-card-name">' + a.name + '</div>' +
+        '<div class="account-card-balance' + neg + '">' + fmtMoney(a.balance) + '</div>' +
+      '</div>';
+    }
   });
   if (!accounts.length) html = '<div style="padding:18px 0;color:var(--text2);font-size:0.82rem">No accounts yet — add one from the Accounts tab</div>';
   document.getElementById('account-cards-wrap').innerHTML = html;
+
+  renderReminders();
 }
 
 // ════════════════════════════════════════════
@@ -820,24 +938,50 @@ function renderAccountsPage() {
     html = '<div class="empty"><div class="empty-icon">💳</div><p>No accounts yet. Add your first account below.</p></div>';
   } else {
     accounts.forEach(function(a) {
-      var neg = a.balance < 0 ? ' neg' : '';
-      html += '<div class="acc-page-card">' +
-        '<div class="acc-page-row">' +
-          '<div class="acc-page-icon">'+acctIcon(a.type)+'</div>' +
-          '<div class="acc-page-info"><div class="acc-page-name">'+a.name+'</div><div class="acc-page-type">'+typeLabel(a.type)+'</div></div>' +
-          '<div class="acc-page-balance'+neg+'">'+fmtMoney(a.balance)+'</div>' +
-        '</div>' +
-        '<div class="acc-page-actions">' +
-          '<button class="acc-edit-btn" onclick="openEditAccount('+a.rowIndex+')">✏️ Edit</button>' +
-          '<button class="acc-del-btn"  onclick="deleteAccount('+a.rowIndex+',\''+escQ(a.name)+'\')">🗑️ Delete</button>' +
-        '</div>' +
-      '</div>';
+      if (a.type === 'credit') {
+        var owed = ccOwed(a);
+        var pct  = ccUsedPct(a);
+        var nextDue = a.dueDay ? nextDueDate(a.dueDay) : null;
+        var daysLeft = nextDue ? daysUntil(nextDue) : null;
+        var dueTxt = nextDue ? fmtDate(nextDue.toISOString().slice(0,10)) + (daysLeft<=3?' ⚠️':'') : '—';
+        html += '<div class="acc-page-card is-credit">' +
+          '<div class="acc-page-row">' +
+            '<div class="acc-page-icon">💳</div>' +
+            '<div class="acc-page-info"><div class="acc-page-name">'+a.name+'</div><div class="acc-page-type">Credit Card</div></div>' +
+            '<div class="acc-page-balance neg">Owed<br>'+fmtMoney(owed)+'</div>' +
+          '</div>' +
+          '<div class="acc-page-credit-detail">' +
+            (a.creditLimit ? '<div class="acc-page-credit-row"><span>Credit Limit</span><span>'+fmtMoney(a.creditLimit)+'</span></div>' +
+              '<div class="acc-page-credit-row"><span>Available</span><span>'+fmtMoney(Math.max(0, a.creditLimit - owed))+'</span></div>' +
+              '<div class="acc-page-limit-bar-wrap"><div class="acc-page-limit-bar" style="width:'+pct+'%"></div></div>' : '') +
+            (a.dueDay ? '<div class="acc-page-credit-row" style="margin-top:8px"><span>Next Due Date</span><span>'+dueTxt+'</span></div>' : '') +
+            (a.statementDay ? '<div class="acc-page-credit-row"><span>Statement Date</span><span>'+a.statementDay+(a.statementDay===1?'st':a.statementDay===2?'nd':a.statementDay===3?'rd':'th')+' of each month</span></div>' : '') +
+          '</div>' +
+          '<div class="acc-page-actions">' +
+            '<button class="acc-edit-btn" onclick="openEditAccount('+a.rowIndex+')">✏️ Edit</button>' +
+            '<button class="acc-del-btn"  onclick="deleteAccount('+a.rowIndex+',\''+escQ(a.name)+'\')">🗑️ Delete</button>' +
+          '</div>' +
+        '</div>';
+      } else {
+        var neg = a.balance < 0 ? ' neg' : '';
+        html += '<div class="acc-page-card">' +
+          '<div class="acc-page-row">' +
+            '<div class="acc-page-icon">'+acctIcon(a.type)+'</div>' +
+            '<div class="acc-page-info"><div class="acc-page-name">'+a.name+'</div><div class="acc-page-type">'+typeLabel(a.type)+'</div></div>' +
+            '<div class="acc-page-balance'+neg+'">'+fmtMoney(a.balance)+'</div>' +
+          '</div>' +
+          '<div class="acc-page-actions">' +
+            '<button class="acc-edit-btn" onclick="openEditAccount('+a.rowIndex+')">✏️ Edit</button>' +
+            '<button class="acc-del-btn"  onclick="deleteAccount('+a.rowIndex+',\''+escQ(a.name)+'\')">🗑️ Delete</button>' +
+          '</div>' +
+        '</div>';
+      }
     });
   }
   document.getElementById('accounts-page-list').innerHTML = html;
 }
 
-function typeLabel(t) { return {cash:'Cash',bank:'Bank Account',investment:'Investment / Savings',wallet:'Digital Wallet'}[t] || t; }
+function typeLabel(t) { return {cash:'Cash',bank:'Bank Account',investment:'Investment / Savings',wallet:'Digital Wallet',credit:'Credit Card'}[t] || t; }
 
 // ════════════════════════════════════════════
 //  ADD / EDIT EXPENSE
@@ -992,6 +1136,13 @@ function saveTransfer() {
 // ════════════════════════════════════════════
 //  ACCOUNTS CRUD
 // ════════════════════════════════════════════
+function toggleCreditFields() {
+  var isCredit = document.getElementById('fa-type').value === 'credit';
+  document.getElementById('credit-fields').style.display    = isCredit ? 'block' : 'none';
+  document.getElementById('fa-balance-hint').style.display  = isCredit ? 'block' : 'none';
+  document.getElementById('fa-balance-label').textContent   = isCredit ? 'Current Balance (฿)' : 'Starting Balance (฿)';
+}
+
 function openAddAccount() {
   editingAccountRow = null;
   document.getElementById('account-modal-title').textContent = 'Add Account';
@@ -999,6 +1150,10 @@ function openAddAccount() {
   document.getElementById('fa-name').value    = '';
   document.getElementById('fa-type').value    = 'bank';
   document.getElementById('fa-balance').value = '';
+  document.getElementById('fa-limit').value   = '';
+  document.getElementById('fa-dueday').value  = '';
+  document.getElementById('fa-stmtday').value = '';
+  toggleCreditFields();
   openModal('account-modal');
 }
 
@@ -1011,6 +1166,10 @@ function openEditAccount(rowIndex) {
   document.getElementById('fa-name').value    = a.name;
   document.getElementById('fa-type').value    = a.type;
   document.getElementById('fa-balance').value = a.startingBalance;
+  document.getElementById('fa-limit').value   = a.creditLimit || '';
+  document.getElementById('fa-dueday').value  = a.dueDay || '';
+  document.getElementById('fa-stmtday').value = a.statementDay || '';
+  toggleCreditFields();
   openModal('account-modal');
 }
 
@@ -1019,7 +1178,12 @@ function saveAccount() {
   var type    = document.getElementById('fa-type').value;
   var balance = parseFloat(document.getElementById('fa-balance').value) || 0;
   if (!name) { toast('Enter an account name'); return; }
-  var payload = { name, type, startingBalance:balance };
+  var payload = { name, type, startingBalance: balance };
+  if (type === 'credit') {
+    payload.creditLimit  = parseFloat(document.getElementById('fa-limit').value)  || 0;
+    payload.dueDay       = parseInt(document.getElementById('fa-dueday').value)   || 0;
+    payload.statementDay = parseInt(document.getElementById('fa-stmtday').value)  || 0;
+  }
   if (editingAccountRow) { payload.action='updateAccount'; payload.rowIndex=editingAccountRow; }
   else { payload.action='addAccount'; }
   document.getElementById('save-account-btn').textContent = 'Saving…';

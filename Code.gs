@@ -1,13 +1,17 @@
 // ============================================================
-//  Expense Tracker — Google Apps Script Backend v2
+//  Money Tracker — Google Apps Script Backend v3
 //
 //  Sheets:
 //    Expenses         → Date | Amount | Category | Note | Account
 //    Income           → Date | Amount | Category | Note | Account
 //    Transfers        → Date | Amount | FromAccount | ToAccount | Note
-//    Accounts         → Name | Type | StartingBalance
+//    Accounts         → Name | Type | StartingBalance | CreditLimit | DueDay | StatementDay
 //    Categories       → Name  (expense categories)
 //    IncomeCategories → Name  (income categories)
+//
+//  Credit card balance logic:
+//    balance = startingBalance - expenses + transfers_in - transfers_out
+//    (negative balance = money owed; subtracts from net worth)
 // ============================================================
 
 var SHEET = {
@@ -37,10 +41,10 @@ function getSheet(name) {
         sh.appendRow(["Date","Amount","FromAccount","ToAccount","Note"]);
         break;
       case SHEET.ACCOUNTS:
-        sh.appendRow(["Name","Type","StartingBalance"]);
+        sh.appendRow(["Name","Type","StartingBalance","CreditLimit","DueDay","StatementDay"]);
         // Seed defaults
-        sh.appendRow(["Cash","cash",0]);
-        sh.appendRow(["Investment","investment",0]);
+        sh.appendRow(["Cash","cash",0,"","",""]);
+        sh.appendRow(["Investment","investment",0,"","",""]);
         break;
       case SHEET.CATEGORIES:
         sh.appendRow(["Name"]);
@@ -127,7 +131,7 @@ function doPost(e) {
 }
 
 function doGet() {
-  return jsonResponse({ ok: true, message: "Expense Tracker API v2 — live" });
+  return jsonResponse({ ok: true, message: "Money Tracker API v3 — live" });
 }
 
 // ── EXPENSES ──────────────────────────────────────────────────
@@ -262,7 +266,16 @@ function deleteTransfer(p) {
 function getAccounts() {
   var sh = getSheet(SHEET.ACCOUNTS);
   var accounts = sheetToRows(sh, function(d, ri) {
-    return { rowIndex: ri, name: d[0], type: d[1], startingBalance: toFloat(d[2]), balance: toFloat(d[2]) };
+    return {
+      rowIndex:        ri,
+      name:            d[0],
+      type:            d[1],
+      startingBalance: toFloat(d[2]),
+      balance:         toFloat(d[2]),
+      creditLimit:     toFloat(d[3]),   // 0 for non-credit accounts
+      dueDay:          parseInt(d[4]) || 0,
+      statementDay:    parseInt(d[5]) || 0
+    };
   });
 
   // Load all income, expenses, transfers (all time) to compute running balances
@@ -291,7 +304,12 @@ function getAccounts() {
 
 function addAccount(p) {
   var sh = getSheet(SHEET.ACCOUNTS);
-  sh.appendRow([p.name || "", p.type || "bank", toFloat(p.startingBalance)]);
+  sh.appendRow([
+    p.name || "", p.type || "bank", toFloat(p.startingBalance),
+    p.type === "credit" ? toFloat(p.creditLimit) : "",
+    p.type === "credit" ? (parseInt(p.dueDay) || "") : "",
+    p.type === "credit" ? (parseInt(p.statementDay) || "") : ""
+  ]);
   return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
 }
 
@@ -299,7 +317,12 @@ function updateAccount(p) {
   var sh  = getSheet(SHEET.ACCOUNTS);
   var row = parseInt(p.rowIndex);
   if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
-  sh.getRange(row, 1, 1, 3).setValues([[p.name||"", p.type||"bank", toFloat(p.startingBalance)]]);
+  sh.getRange(row, 1, 1, 6).setValues([[
+    p.name || "", p.type || "bank", toFloat(p.startingBalance),
+    p.type === "credit" ? toFloat(p.creditLimit) : "",
+    p.type === "credit" ? (parseInt(p.dueDay) || "") : "",
+    p.type === "credit" ? (parseInt(p.statementDay) || "") : ""
+  ]]);
   return jsonResponse({ ok: true });
 }
 
