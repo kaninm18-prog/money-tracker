@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#6c63ff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Money Tracker">
+<title>Money Tracker</title>
+<link rel="manifest" href="manifest.json">
+<style>
+:root {
+  --primary: #6c63ff;
+  --primary-dark: #5a52d5;
+  --primary-light: #ede9ff;
+  --income-color: #22c55e;
+  --expense-color: #ef4444;
+  --transfer-color: #f59e0b;
+  --bg: #f5f4ff;
+  --surface: #ffffff;
+  --surface2: #f8f7ff;
+  --text: #1a1a2e;
+  --text2: #6b6b8d;
+  --border: #e8e6f5;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 4px 20px rgba(108,99,255,0.12);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.07);
+  --nav-h: 66px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100dvh; }
+#app { display: flex; flex-direction: column; min-height: 100dvh; }
+
+/* ── Header ── */
+.header {
+  background: linear-gradient(135deg, #6c63ff 0%, #9b59b6 100%);
+  color: #fff; padding: 18px 18px 36px; position: relative; overflow: hidden;
+}
+.header::after { content:''; position:absolute; bottom:-20px; left:0; right:0; height:40px; background:var(--bg); border-radius:50% 50% 0 0 / 100% 100% 0 0; }
+.header-top { display:flex; justify-content:space-between; align-items:center; }
+.header-title { font-size:1rem; font-weight:600; opacity:0.9; }
+.header-settings-btn { background:rgba(255,255,255,.2); border:none; color:#fff; width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center; }
+.header-month-nav { display:flex; align-items:center; gap:10px; margin-top:12px; }
+.header-month-nav button { background:rgba(255,255,255,.2); border:none; color:#fff; width:28px; height:28px; border-radius:50%; cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; }
+.header-month-label { font-size:0.95rem; font-weight:600; flex:1; text-align:center; }
+.header-networth { text-align:center; padding:12px 0 0; }
+.header-networth-label { font-size:0.7rem; opacity:0.75; text-transform:uppercase; letter-spacing:.08em; }
+.header-networth-amount { font-size:2.4rem; font-weight:700; line-height:1.2; }
+.header-networth-sub { font-size:0.75rem; opacity:0.7; margin-top:2px; }
+
+/* ── Account Cards Row ── */
+.account-cards-wrap { overflow-x:auto; display:flex; gap:10px; padding:0 16px 4px; margin-top:-14px; position:relative; z-index:10; }
+.account-cards-wrap::-webkit-scrollbar { display:none; }
+.account-card {
+  flex-shrink:0; background:var(--surface); border-radius:var(--radius); padding:14px 16px;
+  box-shadow:var(--shadow); min-width:140px; cursor:pointer;
+}
+.account-card-type { font-size:1.4rem; margin-bottom:4px; }
+.account-card-name { font-size:0.78rem; color:var(--text2); font-weight:500; }
+.account-card-balance { font-size:1.15rem; font-weight:700; color:var(--primary); margin-top:2px; }
+.account-card-balance.neg { color:var(--expense-color); }
+
+/* ── Main ── */
+main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; margin:0 auto; width:100%; }
+
+/* ── Bottom Nav ── */
+.bottom-nav { position:fixed; bottom:0; left:0; right:0; height:var(--nav-h); background:var(--surface); border-top:1px solid var(--border); display:flex; box-shadow:0 -4px 20px rgba(0,0,0,.07); z-index:100; }
+.nav-btn { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:none; background:none; cursor:pointer; color:var(--text2); font-size:0.62rem; font-weight:500; padding:0; }
+.nav-btn .nav-icon { font-size:1.3rem; line-height:1; }
+.nav-btn.active { color:var(--primary); }
+.add-fab { flex:none; width:54px; height:54px; background:var(--primary); border-radius:50%; border:none; color:#fff; font-size:1.9rem; cursor:pointer; margin:-18px auto 0; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 18px rgba(108,99,255,.5); }
+
+/* ── Cards ── */
+.card { background:var(--surface); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow-sm); margin-bottom:12px; }
+.card-title { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text2); margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; }
+.card-title a { font-size:0.72rem; color:var(--primary); text-decoration:none; font-weight:600; }
+
+/* ── Month Summary ── */
+.month-summary { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px; }
+.month-pill { background:var(--surface); border-radius:var(--radius-sm); padding:12px 10px; box-shadow:var(--shadow-sm); text-align:center; }
+.month-pill .pill-label { font-size:0.65rem; color:var(--text2); margin-bottom:3px; font-weight:500; }
+.month-pill .pill-val { font-size:1rem; font-weight:700; }
+.pill-income { color:var(--income-color); }
+.pill-expense { color:var(--expense-color); }
+.pill-net.pos { color:var(--income-color); }
+.pill-net.neg { color:var(--expense-color); }
+
+/* ── Transaction Items ── */
+.txn-date-header { font-size:0.75rem; font-weight:700; color:var(--text2); padding:10px 0 4px; display:flex; justify-content:space-between; }
+.txn-item { display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid var(--border); cursor:pointer; }
+.txn-item:last-child { border-bottom:none; }
+.txn-icon { width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.15rem; flex-shrink:0; }
+.txn-icon.expense  { background:#ffeaea; }
+.txn-icon.income   { background:#e6faf0; }
+.txn-icon.transfer { background:#fff8e6; }
+.txn-info { flex:1; min-width:0; }
+.txn-cat  { font-size:0.88rem; font-weight:600; }
+.txn-sub  { font-size:0.76rem; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.txn-right { text-align:right; flex-shrink:0; }
+.txn-amount { font-size:1rem; font-weight:700; }
+.txn-amount.expense  { color:var(--expense-color); }
+.txn-amount.income   { color:var(--income-color); }
+.txn-amount.transfer { color:var(--transfer-color); }
+.txn-acct { font-size:0.7rem; color:var(--text2); }
+
+/* ── Category Breakdown ── */
+.cat-row { display:flex; align-items:center; gap:10px; margin-bottom:9px; }
+.cat-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+.cat-name { flex:1; font-size:0.84rem; }
+.cat-bar-wrap { width:70px; height:5px; background:var(--border); border-radius:3px; }
+.cat-bar { height:100%; border-radius:3px; }
+.cat-amount { font-size:0.82rem; font-weight:600; min-width:70px; text-align:right; }
+
+/* ── Filter & Search ── */
+.filter-bar { display:flex; gap:7px; overflow-x:auto; padding-bottom:2px; margin-bottom:10px; }
+.filter-bar::-webkit-scrollbar { display:none; }
+.filter-chip { flex-shrink:0; padding:5px 12px; border-radius:20px; border:1.5px solid var(--border); background:var(--surface); font-size:0.78rem; font-weight:500; cursor:pointer; color:var(--text2); white-space:nowrap; }
+.filter-chip.active { background:var(--primary); border-color:var(--primary); color:#fff; }
+.type-tabs { display:flex; background:var(--surface); border-radius:var(--radius-sm); padding:3px; margin-bottom:10px; box-shadow:var(--shadow-sm); }
+.type-tab { flex:1; padding:7px; border:none; background:none; border-radius:8px; font-size:0.8rem; font-weight:500; cursor:pointer; color:var(--text2); }
+.type-tab.active { background:var(--primary); color:#fff; }
+.search-wrap { position:relative; margin-bottom:10px; }
+.search-wrap input { width:100%; padding:9px 12px 9px 34px; border:1.5px solid var(--border); border-radius:var(--radius-sm); font-size:0.88rem; background:var(--surface); color:var(--text); outline:none; }
+.search-wrap input:focus { border-color:var(--primary); }
+.search-icon { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text2); }
+
+/* ── Forms ── */
+.form-group { margin-bottom:14px; }
+.form-label { font-size:0.78rem; font-weight:600; color:var(--text2); margin-bottom:5px; display:block; }
+.form-control { width:100%; padding:11px 13px; border:1.5px solid var(--border); border-radius:var(--radius-sm); font-size:0.95rem; background:var(--surface); color:var(--text); outline:none; transition:border-color .2s; -webkit-appearance:none; }
+.form-control:focus { border-color:var(--primary); }
+.amount-wrap { position:relative; }
+.amount-prefix { position:absolute; left:13px; top:50%; transform:translateY(-50%); font-weight:600; color:var(--text2); }
+.amount-wrap input { padding-left:28px; font-size:1.5rem; font-weight:700; }
+.cat-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; }
+.cat-option { padding:9px 4px; border-radius:var(--radius-sm); border:1.5px solid var(--border); background:var(--surface2); text-align:center; cursor:pointer; transition:all .15s; font-size:0.75rem; color:var(--text); }
+.cat-option .cat-opt-icon { font-size:1.25rem; display:block; margin-bottom:2px; }
+.cat-option.selected { border-color:var(--primary); background:var(--primary-light); color:var(--primary); font-weight:600; }
+.acct-option { padding:10px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border); background:var(--surface2); cursor:pointer; font-size:0.85rem; display:flex; align-items:center; gap:8px; }
+.acct-option.selected { border-color:var(--primary); background:var(--primary-light); color:var(--primary); font-weight:600; }
+.acct-list { display:flex; flex-direction:column; gap:7px; }
+
+/* ── Buttons ── */
+.btn { display:block; width:100%; padding:13px; border:none; border-radius:var(--radius-sm); font-size:0.95rem; font-weight:600; cursor:pointer; transition:opacity .2s; }
+.btn:active { opacity:.85; }
+.btn-primary { background:var(--primary); color:#fff; }
+.btn-income { background:var(--income-color); color:#fff; }
+.btn-danger { background:var(--expense-color); color:#fff; }
+.btn-ghost { background:var(--surface2); color:var(--text); border:1.5px solid var(--border); }
+.btn-sm { padding:7px 14px; font-size:0.82rem; width:auto; display:inline-block; }
+.btn-row { display:flex; gap:8px; }
+.btn-row .btn { flex:1; }
+
+/* ── Modal ── */
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:200; align-items:flex-end; justify-content:center; }
+.modal-overlay.open { display:flex; }
+.modal { background:var(--surface); border-radius:var(--radius) var(--radius) 0 0; padding:18px; width:100%; max-width:500px; max-height:92dvh; overflow-y:auto; animation:slideUp .28s ease; }
+@keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+.modal-handle { width:38px; height:4px; background:var(--border); border-radius:2px; margin:0 auto 14px; }
+.modal-title { font-size:1.1rem; font-weight:700; margin-bottom:18px; }
+
+/* ── Add-type chooser ── */
+.type-chooser { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:6px; }
+.type-choice { padding:18px 8px; border-radius:var(--radius); border:none; background:var(--surface2); cursor:pointer; text-align:center; font-size:0.82rem; font-weight:600; color:var(--text); }
+.type-choice .tc-icon { font-size:1.8rem; display:block; margin-bottom:6px; }
+.type-choice.expense-choice { background:#ffeaea; color:var(--expense-color); }
+.type-choice.income-choice  { background:#e6faf0; color:var(--income-color); }
+.type-choice.transfer-choice{ background:#fff8e6; color:var(--transfer-color); }
+
+/* ── Accounts Page ── */
+.acc-page-card { background:var(--surface); border-radius:var(--radius); padding:15px; margin-bottom:10px; box-shadow:var(--shadow-sm); }
+.acc-page-row { display:flex; align-items:center; gap:12px; }
+.acc-page-icon { font-size:1.6rem; }
+.acc-page-info { flex:1; }
+.acc-page-name { font-size:0.95rem; font-weight:700; }
+.acc-page-type { font-size:0.72rem; color:var(--text2); }
+.acc-page-balance { font-size:1.15rem; font-weight:700; color:var(--primary); text-align:right; }
+.acc-page-balance.neg { color:var(--expense-color); }
+.acc-page-actions { display:flex; gap:6px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
+.acc-page-actions button { flex:1; padding:7px; border:none; border-radius:8px; font-size:0.8rem; font-weight:600; cursor:pointer; }
+.acc-edit-btn { background:var(--primary-light); color:var(--primary); }
+.acc-del-btn  { background:#ffeaea; color:var(--expense-color); }
+
+/* ── Settings ── */
+.settings-row { display:flex; align-items:center; padding:13px 0; border-bottom:1px solid var(--border); }
+.settings-row:last-child { border-bottom:none; }
+.settings-icon { font-size:1.1rem; margin-right:12px; width:26px; text-align:center; }
+.settings-label { flex:1; font-size:0.9rem; }
+.settings-value { font-size:0.78rem; color:var(--text2); }
+
+/* ── Toast ── */
+#toast { position:fixed; bottom:calc(var(--nav-h) + 10px); left:50%; transform:translateX(-50%) translateY(20px); background:var(--text); color:#fff; padding:9px 20px; border-radius:20px; font-size:0.85rem; opacity:0; transition:all .3s; z-index:500; pointer-events:none; white-space:nowrap; }
+#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* ── Misc ── */
+.spinner { width:26px; height:26px; border:3px solid var(--border); border-top-color:var(--primary); border-radius:50%; animation:spin .7s linear infinite; margin:20px auto; }
+@keyframes spin { to{transform:rotate(360deg)} }
+.loading-wrap { text-align:center; padding:28px; }
+.empty { text-align:center; padding:36px 20px; color:var(--text2); }
+.empty-icon { font-size:2.8rem; margin-bottom:10px; opacity:.5; }
+.page { display:none; }
+.page.active { display:block; }
+
+/* ── Setup ── */
+#setup-screen { position:fixed; inset:0; background:linear-gradient(135deg,#6c63ff 0%,#9b59b6 100%); z-index:1000; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:28px; color:#fff; text-align:center; }
+#setup-screen h1 { font-size:1.9rem; margin-bottom:6px; }
+#setup-screen p { opacity:.85; margin-bottom:28px; font-size:0.9rem; }
+.setup-card { background:rgba(255,255,255,.15); border-radius:var(--radius); padding:22px; width:100%; max-width:380px; text-align:left; backdrop-filter:blur(10px); }
+.setup-card label { font-size:0.8rem; opacity:.85; display:block; margin-bottom:5px; }
+.setup-card input { width:100%; padding:11px; border-radius:var(--radius-sm); border:2px solid rgba(255,255,255,.3); background:rgba(255,255,255,.15); color:#fff; font-size:0.88rem; outline:none; margin-bottom:14px; }
+.setup-card input::placeholder { color:rgba(255,255,255,.6); }
+.setup-card input:focus { border-color:rgba(255,255,255,.7); }
+.setup-btn { width:100%; padding:13px; border:none; border-radius:var(--radius-sm); background:#fff; color:var(--primary); font-size:1rem; font-weight:700; cursor:pointer; }
+.setup-steps { margin-bottom:14px; }
+.setup-steps li { font-size:0.8rem; opacity:.85; margin-bottom:5px; list-style:decimal; margin-left:18px; }
+</style>
+</head>
+<body>
+
+<!-- ══ Setup Screen ══ -->
+<div id="setup-screen">
+  <div style="font-size:3.2rem;margin-bottom:10px">💰</div>
+  <h1>Money Tracker</h1>
+  <p>Track income, expenses & accounts — powered by Google Sheets</p>
+  <div class="setup-card">
+    <ol class="setup-steps">
+      <li>Open <strong>script.google.com</strong> → New project</li>
+      <li>Paste the contents of <code>Code.gs</code></li>
+      <li>Deploy → New deployment → Web app → Anyone → Copy URL</li>
+    </ol>
+    <label>Paste your Apps Script Web App URL</label>
+    <input type="url" id="script-url-input" placeholder="https://script.google.com/macros/s/...">
+    <button class="setup-btn" onclick="saveScriptUrl()">Connect & Start →</button>
+  </div>
+</div>
+
+<!-- ══ Main App ══ -->
+<div id="app" style="display:none">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-top">
+      <div class="header-title">💰 Money Tracker</div>
+      <button class="header-settings-btn" onclick="openSettings()">⚙️</button>
+    </div>
+    <div class="header-month-nav">
+      <button onclick="changeMonth(-1)">‹</button>
+      <div class="header-month-label" id="header-month-label"></div>
+      <button onclick="changeMonth(1)">›</button>
+    </div>
+    <div class="header-networth">
+      <div class="header-networth-label">Total Net Worth</div>
+      <div class="header-networth-amount" id="header-networth">฿0</div>
+      <div class="header-networth-sub" id="header-networth-sub"></div>
+    </div>
+  </div>
+
+  <!-- Account Cards -->
+  <div class="account-cards-wrap" id="account-cards-wrap">
+    <div style="color:var(--text2);font-size:0.8rem;padding:14px 0">Loading accounts…</div>
+  </div>
+
+  <!-- Pages -->
+  <main>
+    <!-- Dashboard -->
+    <div id="page-dashboard" class="page active">
+      <div class="month-summary">
+        <div class="month-pill">
+          <div class="pill-label">Income</div>
+          <div class="pill-val pill-income" id="stat-income">฿0</div>
+        </div>
+        <div class="month-pill">
+          <div class="pill-label">Expense</div>
+          <div class="pill-val pill-expense" id="stat-expense">฿0</div>
+        </div>
+        <div class="month-pill">
+          <div class="pill-label">Net</div>
+          <div class="pill-val pill-net" id="stat-net">฿0</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Spending by Category <a href="#" onclick="showPage('transactions');return false;">See all</a></div>
+        <div id="cat-breakdown"><div class="loading-wrap"><div class="spinner"></div></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Recent Activity <a href="#" onclick="showPage('transactions');return false;">See all</a></div>
+        <div id="recent-list"><div class="loading-wrap"><div class="spinner"></div></div></div>
+      </div>
+    </div>
+
+    <!-- Transactions -->
+    <div id="page-transactions" class="page">
+      <div class="type-tabs">
+        <button class="type-tab active" id="tab-all"      onclick="setTypeTab('all')">All</button>
+        <button class="type-tab"        id="tab-income"   onclick="setTypeTab('income')">Income</button>
+        <button class="type-tab"        id="tab-expense"  onclick="setTypeTab('expense')">Expense</button>
+        <button class="type-tab"        id="tab-transfer" onclick="setTypeTab('transfer')">Transfer</button>
+      </div>
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="search-input" placeholder="Search…" oninput="renderTransactions()">
+      </div>
+      <div class="filter-bar" id="filter-bar"></div>
+      <div id="transactions-list"><div class="loading-wrap"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- Accounts -->
+    <div id="page-accounts" class="page">
+      <div id="accounts-page-list"><div class="loading-wrap"><div class="spinner"></div></div></div>
+      <button class="btn btn-primary" onclick="openAddAccount()">+ Add Account</button>
+    </div>
+  </main>
+
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" id="nav-dashboard" onclick="showPage('dashboard')">
+      <span class="nav-icon">📊</span><span>Dashboard</span>
+    </button>
+    <button class="nav-btn" id="nav-transactions" onclick="showPage('transactions')">
+      <span class="nav-icon">📋</span><span>Transactions</span>
+    </button>
+    <button class="add-fab" onclick="openAddChooser()">+</button>
+    <button class="nav-btn" id="nav-accounts" onclick="showPage('accounts')">
+      <span class="nav-icon">💳</span><span>Accounts</span>
+    </button>
+    <button class="nav-btn" onclick="openSettings()">
+      <span class="nav-icon">⚙️</span><span>Settings</span>
+    </button>
+  </nav>
+</div>
+
+<!-- ══ Add-Type Chooser Modal ══ -->
+<div class="modal-overlay" id="chooser-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">What do you want to add?</div>
+    <div class="type-chooser">
+      <button class="type-choice expense-choice"  onclick="openExpenseForm()"><span class="tc-icon">💸</span>Expense</button>
+      <button class="type-choice income-choice"   onclick="openIncomeForm()"><span class="tc-icon">💰</span>Income</button>
+      <button class="type-choice transfer-choice" onclick="openTransferForm()"><span class="tc-icon">↔️</span>Transfer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Expense Modal ══ -->
+<div class="modal-overlay" id="expense-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="expense-modal-title">Add Expense</div>
+    <div class="form-group">
+      <label class="form-label">Amount (฿)</label>
+      <div class="amount-wrap"><span class="amount-prefix">฿</span>
+        <input type="number" class="form-control" id="fe-amount" placeholder="0" inputmode="decimal" min="0" step="0.01">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Category</label>
+      <div class="cat-grid" id="fe-cat-grid"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Account</label>
+      <div class="acct-list" id="fe-acct-list"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Note (optional)</label>
+      <input type="text" class="form-control" id="fe-note" placeholder="What was this for?">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Date</label>
+      <input type="date" class="form-control" id="fe-date">
+    </div>
+    <button class="btn btn-danger" onclick="saveExpense()" id="save-expense-btn">Save Expense</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" id="delete-expense-btn" onclick="deleteCurrentExpense()" style="display:none">Delete Expense</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('expense-modal')">Cancel</button>
+  </div>
+</div>
+
+<!-- ══ Income Modal ══ -->
+<div class="modal-overlay" id="income-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="income-modal-title">Add Income</div>
+    <div class="form-group">
+      <label class="form-label">Amount (฿)</label>
+      <div class="amount-wrap"><span class="amount-prefix">฿</span>
+        <input type="number" class="form-control" id="fi-amount" placeholder="0" inputmode="decimal" min="0" step="0.01">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Category</label>
+      <div class="cat-grid" id="fi-cat-grid"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Into Account</label>
+      <div class="acct-list" id="fi-acct-list"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Note (optional)</label>
+      <input type="text" class="form-control" id="fi-note" placeholder="e.g. April salary">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Date</label>
+      <input type="date" class="form-control" id="fi-date">
+    </div>
+    <button class="btn btn-income" onclick="saveIncome()" id="save-income-btn">Save Income</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" id="delete-income-btn" onclick="deleteCurrentIncome()" style="display:none">Delete Income</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('income-modal')">Cancel</button>
+  </div>
+</div>
+
+<!-- ══ Transfer Modal ══ -->
+<div class="modal-overlay" id="transfer-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Transfer Between Accounts</div>
+    <div class="form-group">
+      <label class="form-label">Amount (฿)</label>
+      <div class="amount-wrap"><span class="amount-prefix">฿</span>
+        <input type="number" class="form-control" id="ft-amount" placeholder="0" inputmode="decimal" min="0" step="0.01">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">From Account</label>
+      <select class="form-control" id="ft-from"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">To Account</label>
+      <select class="form-control" id="ft-to"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Note (optional)</label>
+      <input type="text" class="form-control" id="ft-note" placeholder="e.g. ATM withdrawal">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Date</label>
+      <input type="date" class="form-control" id="ft-date">
+    </div>
+    <button class="btn btn-primary" onclick="saveTransfer()" id="save-transfer-btn" style="background:var(--transfer-color)">Save Transfer</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('transfer-modal')">Cancel</button>
+  </div>
+</div>
+
+<!-- ══ Account Modal (Add/Edit) ══ -->
+<div class="modal-overlay" id="account-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="account-modal-title">Add Account</div>
+    <div class="form-group">
+      <label class="form-label">Account Name</label>
+      <input type="text" class="form-control" id="fa-name" placeholder="e.g. KBank, SCB, Grab Wallet">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Type</label>
+      <select class="form-control" id="fa-type">
+        <option value="cash">💵 Cash</option>
+        <option value="bank">🏦 Bank Account</option>
+        <option value="investment">📈 Investment / Savings</option>
+        <option value="wallet">📱 Digital Wallet</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Starting Balance (฿)</label>
+      <div class="amount-wrap"><span class="amount-prefix">฿</span>
+        <input type="number" class="form-control" id="fa-balance" placeholder="0" inputmode="decimal" step="0.01">
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="saveAccount()" id="save-account-btn">Add Account</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('account-modal')">Cancel</button>
+  </div>
+</div>
+
+<!-- ══ Settings Modal ══ -->
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Settings</div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Script Connection</div>
+      <div class="form-group">
+        <label class="form-label">Apps Script Web App URL</label>
+        <input type="url" class="form-control" id="settings-url" placeholder="https://script.google.com/macros/s/...">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="updateScriptUrl()">Update URL</button>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Expense Categories</div>
+      <div id="settings-exp-cats"></div>
+      <div style="height:8px"></div>
+      <button class="btn btn-ghost btn-sm" onclick="promptAddCategory('expense')">+ Add Category</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Income Categories</div>
+      <div id="settings-inc-cats"></div>
+      <div style="height:8px"></div>
+      <button class="btn btn-ghost btn-sm" onclick="promptAddCategory('income')">+ Add Category</button>
+    </div>
+    <div style="height:10px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('settings-modal')">Close</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════
+var SCRIPT_URL = localStorage.getItem('moneyScriptUrl') || '';
+var viewMonth  = new Date().getMonth() + 1;
+var viewYear   = new Date().getFullYear();
+
+var accounts     = [];
+var totalBalance = 0;
+var expCategories  = [];
+var incCategories  = [];
+var transactions = []; // combined for current month
+var activeTypeTab = 'all';
+var editingExpenseRow  = null;
+var editingIncomeRow   = null;
+var editingAccountRow  = null;
+
+var MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+var ACCT_ICONS  = { cash:'💵', bank:'🏦', investment:'📈', wallet:'📱' };
+var CAT_ICONS   = { "Food & Dining":"🍜","Transport":"🚗","Shopping":"🛍️","Bills & Utilities":"💡","Healthcare":"💊","Entertainment":"🎬","Education":"📚","Personal Care":"✨","Travel":"✈️","Savings":"🏦","Other":"📌","Salary":"💼","Investment Returns":"📈","Freelance":"💻","Bonus":"🎁","Other Income":"💰" };
+var CAT_COLORS  = ["#6c63ff","#ff6584","#22c55e","#f59e0b","#3b82f6","#ec4899","#14b8a6","#f97316","#8b5cf6","#06b6d4","#84cc16","#e11d48","#0891b2"];
+
+function catIcon(n) { return CAT_ICONS[n] || "📌"; }
+function catColor(n, list) {
+  var idx = list.findIndex(function(c){ return c.name === n; });
+  return CAT_COLORS[Math.max(idx,0) % CAT_COLORS.length];
+}
+function acctIcon(type) { return ACCT_ICONS[type] || '💳'; }
+function fmtMoney(n) { return "฿" + parseFloat(n||0).toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:2}); }
+function fmtDate(str) { if(!str)return''; var d=new Date(str+'T00:00:00'); return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); }
+function todayStr() { var d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function pad(n) { return n<10?'0'+n:''+n; }
+
+// ════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', function() {
+  if (!SCRIPT_URL) {
+    show('setup-screen');
+  } else {
+    hide('setup-screen');
+    show('app');
+    document.getElementById('settings-url').value = SCRIPT_URL;
+    updateMonthLabel();
+    loadAll();
+  }
+});
+
+function show(id) { document.getElementById(id).style.display='flex'; }
+function hide(id) { document.getElementById(id).style.display='none'; }
+
+function saveScriptUrl() {
+  var url = document.getElementById('script-url-input').value.trim();
+  if (!url.startsWith('http')) { toast('Please enter a valid URL'); return; }
+  localStorage.setItem('moneyScriptUrl', url);
+  SCRIPT_URL = url;
+  hide('setup-screen'); show('app');
+  document.getElementById('settings-url').value = url;
+  updateMonthLabel();
+  loadAll();
+}
+function updateScriptUrl() {
+  var url = document.getElementById('settings-url').value.trim();
+  if (!url.startsWith('http')) { toast('Please enter a valid URL'); return; }
+  localStorage.setItem('moneyScriptUrl', url);
+  SCRIPT_URL = url;
+  toast('URL updated');
+  closeModal('settings-modal');
+  loadAll();
+}
+
+// ════════════════════════════════════════════
+//  API
+// ════════════════════════════════════════════
+function api(payload) {
+  return fetch(SCRIPT_URL, { method:'POST', body:JSON.stringify(payload) })
+    .then(function(r){ return r.json(); });
+}
+
+function loadAll() {
+  Promise.all([
+    api({action:'getAccounts'}),
+    api({action:'getCategories'}),
+    api({action:'getIncomeCategories'}),
+    api({action:'getAllTransactions', month:viewMonth, year:viewYear})
+  ]).then(function(results) {
+    var accRes=results[0], catRes=results[1], incCatRes=results[2], txnRes=results[3];
+    if (accRes.ok)    { accounts=accRes.accounts; totalBalance=accRes.totalBalance; }
+    if (catRes.ok)    { expCategories=catRes.categories; }
+    if (incCatRes.ok) { incCategories=incCatRes.categories; }
+    if (txnRes.ok)    { transactions=txnRes.transactions; }
+    renderAll();
+  }).catch(function(e){ toast('Connection error'); console.error(e); });
+}
+
+function loadTransactions() {
+  return api({action:'getAllTransactions', month:viewMonth, year:viewYear}).then(function(res){
+    if (res.ok) { transactions=res.transactions; renderDashboard(); renderTransactions(); }
+  });
+}
+
+function loadAccounts() {
+  return api({action:'getAccounts'}).then(function(res){
+    if (res.ok) { accounts=res.accounts; totalBalance=res.totalBalance; renderAccountCards(); renderAccountsPage(); }
+  });
+}
+
+// ════════════════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════════════════
+var PAGES = ['dashboard','transactions','accounts'];
+
+function showPage(name) {
+  PAGES.forEach(function(p) {
+    document.getElementById('page-'+p).classList.toggle('active', p===name);
+    var nb = document.getElementById('nav-'+p);
+    if (nb) nb.classList.toggle('active', p===name);
+  });
+}
+
+function changeMonth(d) {
+  viewMonth += d;
+  if (viewMonth>12){viewMonth=1;viewYear++;}
+  if (viewMonth<1) {viewMonth=12;viewYear--;}
+  updateMonthLabel();
+  loadTransactions();
+}
+function updateMonthLabel() {
+  document.getElementById('header-month-label').textContent = MONTH_NAMES[viewMonth-1]+' '+viewYear;
+}
+
+// ════════════════════════════════════════════
+//  RENDER ALL
+// ════════════════════════════════════════════
+function renderAll() {
+  renderAccountCards();
+  renderAccountsPage();
+  renderDashboard();
+  renderTransactions();
+  renderFilterBar();
+  renderSettingsCats();
+}
+
+// ════════════════════════════════════════════
+//  ACCOUNT CARDS (top strip)
+// ════════════════════════════════════════════
+function renderAccountCards() {
+  document.getElementById('header-networth').textContent = fmtMoney(totalBalance);
+  // Count accounts for subtitle
+  var subtitle = accounts.length + ' account' + (accounts.length!==1?'s':'');
+  document.getElementById('header-networth-sub').textContent = subtitle;
+
+  var html = '';
+  accounts.forEach(function(a) {
+    var neg = a.balance < 0 ? ' neg' : '';
+    html += '<div class="account-card" onclick="showPage(\'accounts\')">' +
+      '<div class="account-card-type">' + acctIcon(a.type) + '</div>' +
+      '<div class="account-card-name">' + a.name + '</div>' +
+      '<div class="account-card-balance' + neg + '">' + fmtMoney(a.balance) + '</div>' +
+    '</div>';
+  });
+  if (!accounts.length) html = '<div style="padding:18px 0;color:var(--text2);font-size:0.82rem">No accounts yet — add one from the Accounts tab</div>';
+  document.getElementById('account-cards-wrap').innerHTML = html;
+}
+
+// ════════════════════════════════════════════
+//  DASHBOARD
+// ════════════════════════════════════════════
+function renderDashboard() {
+  var expenses  = transactions.filter(function(t){return t.type==='expense';});
+  var incomes   = transactions.filter(function(t){return t.type==='income';});
+  var totalExp  = expenses.reduce(function(s,t){return s+t.amount;},0);
+  var totalInc  = incomes.reduce(function(s,t){return s+t.amount;},0);
+  var net       = totalInc - totalExp;
+
+  document.getElementById('stat-income').textContent  = fmtMoney(totalInc);
+  document.getElementById('stat-expense').textContent = fmtMoney(totalExp);
+  var netEl = document.getElementById('stat-net');
+  netEl.textContent = fmtMoney(net);
+  netEl.className = 'pill-val pill-net ' + (net >= 0 ? 'pos' : 'neg');
+
+  // Category breakdown (expenses only)
+  var bycat = {};
+  expenses.forEach(function(e){ bycat[e.category]=(bycat[e.category]||0)+e.amount; });
+  var sorted = Object.keys(bycat).sort(function(a,b){return bycat[b]-bycat[a];}).slice(0,6);
+  var maxAmt = sorted.length ? bycat[sorted[0]] : 1;
+  var html = '';
+  if (!sorted.length) {
+    html = '<div class="empty"><div class="empty-icon">📭</div><p>No expenses this month</p></div>';
+  } else {
+    sorted.forEach(function(cat) {
+      var pct = Math.round(bycat[cat]/maxAmt*100);
+      var color = catColor(cat, expCategories);
+      html += '<div class="cat-row">' +
+        '<div class="cat-dot" style="background:'+color+'"></div>' +
+        '<div class="cat-name">'+catIcon(cat)+' '+cat+'</div>' +
+        '<div class="cat-bar-wrap"><div class="cat-bar" style="width:'+pct+'%;background:'+color+'"></div></div>' +
+        '<div class="cat-amount">'+fmtMoney(bycat[cat])+'</div>' +
+      '</div>';
+    });
+  }
+  document.getElementById('cat-breakdown').innerHTML = html;
+
+  // Recent 5 transactions
+  var recent = transactions.slice(0,5);
+  var rhtml = recent.length ? recent.map(txnHtml).join('') :
+    '<div class="empty"><div class="empty-icon">📭</div><p>No activity this month</p></div>';
+  document.getElementById('recent-list').innerHTML = rhtml;
+}
+
+// ════════════════════════════════════════════
+//  TRANSACTIONS PAGE
+// ════════════════════════════════════════════
+function setTypeTab(tab) {
+  activeTypeTab = tab;
+  ['all','income','expense','transfer'].forEach(function(t){
+    document.getElementById('tab-'+t).classList.toggle('active', t===tab);
+  });
+  renderTransactions();
+}
+
+function renderFilterBar() {
+  var html = '<div class="filter-chip active" id="fchip-all" onclick="setAcctFilter(\'all\')">All Accounts</div>';
+  accounts.forEach(function(a){
+    html += '<div class="filter-chip" id="fchip-'+encodeId(a.name)+'" onclick="setAcctFilter(\''+escQ(a.name)+'\')">'+acctIcon(a.type)+' '+a.name+'</div>';
+  });
+  document.getElementById('filter-bar').innerHTML = html;
+  activeAcctFilter = 'all';
+}
+var activeAcctFilter = 'all';
+function setAcctFilter(name) {
+  activeAcctFilter = name;
+  document.querySelectorAll('.filter-chip').forEach(function(el){ el.classList.remove('active'); });
+  var chipId = name==='all' ? 'fchip-all' : 'fchip-'+encodeId(name);
+  var el = document.getElementById(chipId);
+  if (el) el.classList.add('active');
+  renderTransactions();
+}
+function encodeId(s) { return s.replace(/[^a-zA-Z0-9]/g,'_'); }
+
+function renderTransactions() {
+  var query = (document.getElementById('search-input').value||'').toLowerCase();
+  var filtered = transactions.filter(function(t) {
+    if (activeTypeTab !== 'all' && t.type !== activeTypeTab) return false;
+    if (activeAcctFilter !== 'all') {
+      if (t.type==='transfer') { if (t.fromAccount!==activeAcctFilter && t.toAccount!==activeAcctFilter) return false; }
+      else if (t.account !== activeAcctFilter) return false;
+    }
+    if (query) {
+      var haystack = (t.category||'')+(t.note||'')+(t.account||'')+(t.fromAccount||'')+(t.toAccount||'');
+      if (!haystack.toLowerCase().includes(query)) return false;
+    }
+    return true;
+  });
+
+  var html = '';
+  if (!filtered.length) {
+    html = '<div class="empty"><div class="empty-icon">🔍</div><p>No transactions found</p></div>';
+  } else {
+    // Group by date
+    var byDate = {};
+    filtered.forEach(function(t){ (byDate[t.date]=byDate[t.date]||[]).push(t); });
+    Object.keys(byDate).sort(function(a,b){return b.localeCompare(a);}).forEach(function(date) {
+      var dayInc = byDate[date].filter(function(t){return t.type==='income';}).reduce(function(s,t){return s+t.amount;},0);
+      var dayExp = byDate[date].filter(function(t){return t.type==='expense';}).reduce(function(s,t){return s+t.amount;},0);
+      var dayNet = dayInc - dayExp;
+      html += '<div class="txn-date-header"><span>'+fmtDate(date)+'</span>' +
+        '<span style="color:'+(dayNet>=0?'var(--income-color)':'var(--expense-color)')+'">'+fmtMoney(dayNet)+'</span></div>';
+      byDate[date].forEach(function(t){ html += txnHtml(t); });
+    });
+  }
+  document.getElementById('transactions-list').innerHTML = html;
+}
+
+function txnHtml(t) {
+  var icon, label, sublabel, amountStr, amountClass;
+  if (t.type === 'expense') {
+    icon = catIcon(t.category); label = t.category||'Expense';
+    sublabel = (t.note||'—') + (t.account ? ' · '+t.account : '');
+    amountStr = '−'+fmtMoney(t.amount); amountClass = 'expense';
+  } else if (t.type === 'income') {
+    icon = catIcon(t.category); label = t.category||'Income';
+    sublabel = (t.note||'—') + (t.account ? ' · '+t.account : '');
+    amountStr = '+'+fmtMoney(t.amount); amountClass = 'income';
+  } else {
+    icon = '↔️'; label = 'Transfer';
+    sublabel = (t.fromAccount||'?')+' → '+(t.toAccount||'?') + (t.note ? ' · '+t.note : '');
+    amountStr = fmtMoney(t.amount); amountClass = 'transfer';
+  }
+  var onclickAttr = '';
+  if (t.type==='expense')  onclickAttr = 'onclick="openEditExpense('+t.rowIndex+')"';
+  if (t.type==='income')   onclickAttr = 'onclick="openEditIncome('+t.rowIndex+')"';
+  return '<div class="txn-item" '+onclickAttr+'>' +
+    '<div class="txn-icon '+t.type+'">'+icon+'</div>' +
+    '<div class="txn-info"><div class="txn-cat">'+label+'</div><div class="txn-sub">'+sublabel+'</div></div>' +
+    '<div class="txn-right"><div class="txn-amount '+amountClass+'">'+amountStr+'</div><div class="txn-acct">'+fmtDate(t.date)+'</div></div>' +
+  '</div>';
+}
+
+// ════════════════════════════════════════════
+//  ACCOUNTS PAGE
+// ════════════════════════════════════════════
+function renderAccountsPage() {
+  var html = '';
+  if (!accounts.length) {
+    html = '<div class="empty"><div class="empty-icon">💳</div><p>No accounts yet. Add your first account below.</p></div>';
+  } else {
+    accounts.forEach(function(a) {
+      var neg = a.balance < 0 ? ' neg' : '';
+      html += '<div class="acc-page-card">' +
+        '<div class="acc-page-row">' +
+          '<div class="acc-page-icon">'+acctIcon(a.type)+'</div>' +
+          '<div class="acc-page-info"><div class="acc-page-name">'+a.name+'</div><div class="acc-page-type">'+typeLabel(a.type)+'</div></div>' +
+          '<div class="acc-page-balance'+neg+'">'+fmtMoney(a.balance)+'</div>' +
+        '</div>' +
+        '<div class="acc-page-actions">' +
+          '<button class="acc-edit-btn" onclick="openEditAccount('+a.rowIndex+')">✏️ Edit</button>' +
+          '<button class="acc-del-btn"  onclick="deleteAccount('+a.rowIndex+',\''+escQ(a.name)+'\')">🗑️ Delete</button>' +
+        '</div>' +
+      '</div>';
+    });
+  }
+  document.getElementById('accounts-page-list').innerHTML = html;
+}
+
+function typeLabel(t) { return {cash:'Cash',bank:'Bank Account',investment:'Investment / Savings',wallet:'Digital Wallet'}[t] || t; }
+
+// ════════════════════════════════════════════
+//  ADD / EDIT EXPENSE
+// ════════════════════════════════════════════
+function openAddChooser() { closeModal('chooser-modal'); openModal('chooser-modal'); }
+
+function openExpenseForm(rowIndex) {
+  closeModal('chooser-modal');
+  editingExpenseRow = rowIndex || null;
+  document.getElementById('expense-modal-title').textContent = rowIndex ? 'Edit Expense' : 'Add Expense';
+  document.getElementById('save-expense-btn').textContent = rowIndex ? 'Update Expense' : 'Save Expense';
+  document.getElementById('delete-expense-btn').style.display = rowIndex ? 'block' : 'none';
+
+  if (rowIndex) {
+    var t = transactions.find(function(x){ return x.type==='expense' && x.rowIndex===rowIndex; });
+    document.getElementById('fe-amount').value = t ? t.amount : '';
+    document.getElementById('fe-note').value   = t ? (t.note||'') : '';
+    document.getElementById('fe-date').value   = t ? t.date : todayStr();
+    renderCatGrid('fe-cat-grid', expCategories, t ? t.category : null);
+    renderAcctList('fe-acct-list', t ? t.account : null);
+  } else {
+    document.getElementById('fe-amount').value = '';
+    document.getElementById('fe-note').value   = '';
+    document.getElementById('fe-date').value   = todayStr();
+    renderCatGrid('fe-cat-grid', expCategories, null);
+    renderAcctList('fe-acct-list', null);
+  }
+  openModal('expense-modal');
+  setTimeout(function(){ document.getElementById('fe-amount').focus(); }, 300);
+}
+
+function openEditExpense(rowIndex) { openExpenseForm(rowIndex); }
+
+function saveExpense() {
+  var amount = parseFloat(document.getElementById('fe-amount').value);
+  if (!amount || amount<=0) { toast('Enter a valid amount'); return; }
+  var cat  = getSelectedCat('fe-cat-grid');
+  var acct = getSelectedAcct('fe-acct-list');
+  if (!cat)  { toast('Select a category'); return; }
+  if (!acct) { toast('Select an account'); return; }
+  var note = document.getElementById('fe-note').value.trim();
+  var date = document.getElementById('fe-date').value || todayStr();
+  var payload = { amount, category:cat, account:acct, note, date };
+  if (editingExpenseRow) { payload.action='updateExpense'; payload.rowIndex=editingExpenseRow; }
+  else { payload.action='addExpense'; }
+  document.getElementById('save-expense-btn').textContent = 'Saving…';
+  api(payload).then(function(res) {
+    if (res.ok) { closeModal('expense-modal'); toast(editingExpenseRow?'Updated!':'Expense added!'); loadAll(); }
+    else { toast('Error: '+(res.error||'?')); }
+    document.getElementById('save-expense-btn').textContent = editingExpenseRow?'Update Expense':'Save Expense';
+  }).catch(function(){ toast('Connection error'); document.getElementById('save-expense-btn').textContent='Save Expense'; });
+}
+
+function deleteCurrentExpense() {
+  if (!editingExpenseRow || !confirm('Delete this expense?')) return;
+  api({action:'deleteExpense', rowIndex:editingExpenseRow}).then(function(res) {
+    if (res.ok) { closeModal('expense-modal'); toast('Deleted'); loadAll(); }
+    else { toast('Error: '+res.error); }
+  });
+}
+
+// ════════════════════════════════════════════
+//  ADD / EDIT INCOME
+// ════════════════════════════════════════════
+function openIncomeForm(rowIndex) {
+  closeModal('chooser-modal');
+  editingIncomeRow = rowIndex || null;
+  document.getElementById('income-modal-title').textContent = rowIndex ? 'Edit Income' : 'Add Income';
+  document.getElementById('save-income-btn').textContent = rowIndex ? 'Update Income' : 'Save Income';
+  document.getElementById('delete-income-btn').style.display = rowIndex ? 'block' : 'none';
+
+  if (rowIndex) {
+    var t = transactions.find(function(x){ return x.type==='income' && x.rowIndex===rowIndex; });
+    document.getElementById('fi-amount').value = t ? t.amount : '';
+    document.getElementById('fi-note').value   = t ? (t.note||'') : '';
+    document.getElementById('fi-date').value   = t ? t.date : todayStr();
+    renderCatGrid('fi-cat-grid', incCategories, t ? t.category : null);
+    renderAcctList('fi-acct-list', t ? t.account : null);
+  } else {
+    document.getElementById('fi-amount').value = '';
+    document.getElementById('fi-note').value   = '';
+    document.getElementById('fi-date').value   = todayStr();
+    renderCatGrid('fi-cat-grid', incCategories, null);
+    renderAcctList('fi-acct-list', null);
+  }
+  openModal('income-modal');
+  setTimeout(function(){ document.getElementById('fi-amount').focus(); }, 300);
+}
+
+function openEditIncome(rowIndex) { openIncomeForm(rowIndex); }
+
+function saveIncome() {
+  var amount = parseFloat(document.getElementById('fi-amount').value);
+  if (!amount || amount<=0) { toast('Enter a valid amount'); return; }
+  var cat  = getSelectedCat('fi-cat-grid');
+  var acct = getSelectedAcct('fi-acct-list');
+  if (!cat)  { toast('Select a category'); return; }
+  if (!acct) { toast('Select an account'); return; }
+  var note = document.getElementById('fi-note').value.trim();
+  var date = document.getElementById('fi-date').value || todayStr();
+  var payload = { amount, category:cat, account:acct, note, date };
+  if (editingIncomeRow) { payload.action='updateIncome'; payload.rowIndex=editingIncomeRow; }
+  else { payload.action='addIncome'; }
+  document.getElementById('save-income-btn').textContent = 'Saving…';
+  api(payload).then(function(res) {
+    if (res.ok) { closeModal('income-modal'); toast(editingIncomeRow?'Updated!':'Income added!'); loadAll(); }
+    else { toast('Error: '+(res.error||'?')); }
+    document.getElementById('save-income-btn').textContent = editingIncomeRow?'Update Income':'Save Income';
+  }).catch(function(){ toast('Connection error'); document.getElementById('save-income-btn').textContent='Save Income'; });
+}
+
+function deleteCurrentIncome() {
+  if (!editingIncomeRow || !confirm('Delete this income?')) return;
+  api({action:'deleteIncome', rowIndex:editingIncomeRow}).then(function(res) {
+    if (res.ok) { closeModal('income-modal'); toast('Deleted'); loadAll(); }
+    else { toast('Error: '+res.error); }
+  });
+}
+
+// ════════════════════════════════════════════
+//  TRANSFER
+// ════════════════════════════════════════════
+function openTransferForm() {
+  closeModal('chooser-modal');
+  document.getElementById('ft-amount').value = '';
+  document.getElementById('ft-note').value   = '';
+  document.getElementById('ft-date').value   = todayStr();
+  var opts = accounts.map(function(a){ return '<option value="'+escQ(a.name)+'">'+acctIcon(a.type)+' '+a.name+'</option>'; }).join('');
+  document.getElementById('ft-from').innerHTML = opts;
+  document.getElementById('ft-to').innerHTML   = opts;
+  // default to different accounts if possible
+  if (accounts.length > 1) document.getElementById('ft-to').selectedIndex = 1;
+  openModal('transfer-modal');
+}
+
+function saveTransfer() {
+  var amount = parseFloat(document.getElementById('ft-amount').value);
+  if (!amount || amount<=0) { toast('Enter a valid amount'); return; }
+  var from = document.getElementById('ft-from').value;
+  var to   = document.getElementById('ft-to').value;
+  if (from === to) { toast('From and To accounts must be different'); return; }
+  var note = document.getElementById('ft-note').value.trim();
+  var date = document.getElementById('ft-date').value || todayStr();
+  document.getElementById('save-transfer-btn').textContent = 'Saving…';
+  api({ action:'addTransfer', amount, fromAccount:from, toAccount:to, note, date }).then(function(res) {
+    if (res.ok) { closeModal('transfer-modal'); toast('Transfer saved!'); loadAll(); }
+    else { toast('Error: '+(res.error||'?')); }
+    document.getElementById('save-transfer-btn').textContent = 'Save Transfer';
+  }).catch(function(){ toast('Connection error'); document.getElementById('save-transfer-btn').textContent='Save Transfer'; });
+}
+
+// ════════════════════════════════════════════
+//  ACCOUNTS CRUD
+// ════════════════════════════════════════════
+function openAddAccount() {
+  editingAccountRow = null;
+  document.getElementById('account-modal-title').textContent = 'Add Account';
+  document.getElementById('save-account-btn').textContent = 'Add Account';
+  document.getElementById('fa-name').value    = '';
+  document.getElementById('fa-type').value    = 'bank';
+  document.getElementById('fa-balance').value = '';
+  openModal('account-modal');
+}
+
+function openEditAccount(rowIndex) {
+  var a = accounts.find(function(x){ return x.rowIndex===rowIndex; });
+  if (!a) return;
+  editingAccountRow = rowIndex;
+  document.getElementById('account-modal-title').textContent = 'Edit Account';
+  document.getElementById('save-account-btn').textContent = 'Save Changes';
+  document.getElementById('fa-name').value    = a.name;
+  document.getElementById('fa-type').value    = a.type;
+  document.getElementById('fa-balance').value = a.startingBalance;
+  openModal('account-modal');
+}
+
+function saveAccount() {
+  var name    = document.getElementById('fa-name').value.trim();
+  var type    = document.getElementById('fa-type').value;
+  var balance = parseFloat(document.getElementById('fa-balance').value) || 0;
+  if (!name) { toast('Enter an account name'); return; }
+  var payload = { name, type, startingBalance:balance };
+  if (editingAccountRow) { payload.action='updateAccount'; payload.rowIndex=editingAccountRow; }
+  else { payload.action='addAccount'; }
+  document.getElementById('save-account-btn').textContent = 'Saving…';
+  api(payload).then(function(res) {
+    if (res.ok) { closeModal('account-modal'); toast(editingAccountRow?'Account updated!':'Account added!'); loadAll(); }
+    else { toast('Error: '+(res.error||'?')); }
+    document.getElementById('save-account-btn').textContent = editingAccountRow?'Save Changes':'Add Account';
+  });
+}
+
+function deleteAccount(rowIndex, name) {
+  if (!confirm('Delete account "'+name+'"?\nThis won\'t delete transactions linked to it.')) return;
+  api({action:'deleteAccount', rowIndex:rowIndex}).then(function(res) {
+    if (res.ok) { toast('Account deleted'); loadAll(); }
+    else { toast('Error: '+res.error); }
+  });
+}
+
+// ════════════════════════════════════════════
+//  SETTINGS — CATEGORIES
+// ════════════════════════════════════════════
+function renderSettingsCats() {
+  var expHtml = expCategories.map(function(c) {
+    return '<div style="display:flex;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">' +
+      '<span style="flex:1;font-size:0.85rem">'+catIcon(c.name)+' '+c.name+'</span>' +
+      '<button onclick="deleteExpCat('+c.rowIndex+',\''+escQ(c.name)+'\')" style="background:none;border:none;color:var(--expense-color);cursor:pointer;font-size:1rem">🗑️</button>' +
+    '</div>';
+  }).join('');
+  document.getElementById('settings-exp-cats').innerHTML = expHtml || '<p style="font-size:0.8rem;color:var(--text2)">No categories</p>';
+
+  var incHtml = incCategories.map(function(c) {
+    return '<div style="display:flex;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">' +
+      '<span style="flex:1;font-size:0.85rem">'+catIcon(c.name)+' '+c.name+'</span>' +
+      '<button onclick="deleteIncCat('+c.rowIndex+',\''+escQ(c.name)+'\')" style="background:none;border:none;color:var(--expense-color);cursor:pointer;font-size:1rem">🗑️</button>' +
+    '</div>';
+  }).join('');
+  document.getElementById('settings-inc-cats').innerHTML = incHtml || '<p style="font-size:0.8rem;color:var(--text2)">No categories</p>';
+}
+
+function promptAddCategory(type) {
+  var name = prompt('New '+(type==='income'?'income':'expense')+' category name:');
+  if (!name || !name.trim()) return;
+  var action = type==='income' ? 'addIncomeCategory' : 'addCategory';
+  api({action:action, name:name.trim()}).then(function(res) {
+    if (res.ok) {
+      toast('Category added');
+      if (type==='income') api({action:'getIncomeCategories'}).then(function(r){ if(r.ok){incCategories=r.categories;renderSettingsCats();} });
+      else api({action:'getCategories'}).then(function(r){ if(r.ok){expCategories=r.categories;renderSettingsCats();} });
+    } else { toast('Error: '+res.error); }
+  });
+}
+
+function deleteExpCat(rowIndex, name) {
+  if (!confirm('Delete "'+name+'"?')) return;
+  api({action:'deleteCategory', rowIndex:rowIndex}).then(function(res){
+    if(res.ok){toast('Deleted'); api({action:'getCategories'}).then(function(r){if(r.ok){expCategories=r.categories;renderSettingsCats();}});}
+    else{toast('Error: '+res.error);}
+  });
+}
+function deleteIncCat(rowIndex, name) {
+  if (!confirm('Delete "'+name+'"?')) return;
+  api({action:'deleteIncomeCategory', rowIndex:rowIndex}).then(function(res){
+    if(res.ok){toast('Deleted'); api({action:'getIncomeCategories'}).then(function(r){if(r.ok){incCategories=r.categories;renderSettingsCats();}});}
+    else{toast('Error: '+res.error);}
+  });
+}
+
+// ════════════════════════════════════════════
+//  SETTINGS
+// ════════════════════════════════════════════
+function openSettings() {
+  document.getElementById('settings-url').value = SCRIPT_URL;
+  renderSettingsCats();
+  openModal('settings-modal');
+}
+
+// ════════════════════════════════════════════
+//  FORM HELPERS
+// ════════════════════════════════════════════
+function renderCatGrid(gridId, cats, selected) {
+  var html = cats.map(function(c) {
+    var sel = selected===c.name ? ' selected' : '';
+    return '<div class="cat-option'+sel+'" onclick="selectCat(this)">' +
+      '<span class="cat-opt-icon">'+catIcon(c.name)+'</span>'+c.name+'</div>';
+  }).join('');
+  document.getElementById(gridId).innerHTML = html || '<p style="font-size:0.8rem;color:var(--text2)">No categories. Add some in Settings.</p>';
+}
+
+function selectCat(el) {
+  el.closest('.cat-grid').querySelectorAll('.cat-option').forEach(function(x){x.classList.remove('selected');});
+  el.classList.add('selected');
+}
+
+function getSelectedCat(gridId) {
+  var sel = document.getElementById(gridId).querySelector('.cat-option.selected');
+  if (!sel) return null;
+  return sel.textContent.trim().replace(/^\p{Emoji}/u,'').trim();
+}
+
+function renderAcctList(listId, selected) {
+  var html = accounts.map(function(a) {
+    var sel = selected===a.name ? ' selected' : '';
+    return '<div class="acct-option'+sel+'" onclick="selectAcct(this)">'+acctIcon(a.type)+' '+a.name+'</div>';
+  }).join('');
+  document.getElementById(listId).innerHTML = html || '<p style="font-size:0.8rem;color:var(--text2)">No accounts yet. Add one in Accounts tab first.</p>';
+}
+
+function selectAcct(el) {
+  el.closest('.acct-list').querySelectorAll('.acct-option').forEach(function(x){x.classList.remove('selected');});
+  el.classList.add('selected');
+}
+
+function getSelectedAcct(listId) {
+  var sel = document.getElementById(listId).querySelector('.acct-option.selected');
+  if (!sel) return null;
+  // strip icon prefix (first char if emoji)
+  return sel.textContent.trim().replace(/^.\s/,'');
+}
+
+// ════════════════════════════════════════════
+//  MODAL HELPERS
+// ════════════════════════════════════════════
+function openModal(id) {
+  var el = document.getElementById(id);
+  el.classList.add('open');
+  el.onclick = function(e){ if(e.target===el){ el.classList.remove('open'); } };
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ════════════════════════════════════════════
+//  TOAST
+// ════════════════════════════════════════════
+var toastTimer;
+function toast(msg) {
+  var el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ el.classList.remove('show'); }, 2500);
+}
+
+// ════════════════════════════════════════════
+//  UTILS
+// ════════════════════════════════════════════
+function escQ(s) { return String(s).replace(/'/g,"\\'"); }
+</script>
+</body>
+</html>
