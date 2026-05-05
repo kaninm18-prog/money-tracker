@@ -75,12 +75,21 @@ function jsonResponse(data) {
 
 function formatDate(val) {
   if (!val) return "";
-  if (val instanceof Date) return Utilities.formatDate(val, "GMT+7", "yyyy-MM-dd");
+  // Apps Script date objects from getValues() don't pass instanceof Date in V8 —
+  // check for object type instead, then use Utilities.formatDate to format correctly.
+  if (typeof val === 'object') return Utilities.formatDate(val, "GMT+7", "yyyy-MM-dd");
   return String(val).slice(0, 10);
 }
 
 function toFloat(v) { return parseFloat(v) || 0; }
 function toBool(v)  { return v === true || v === "true" || v === "TRUE" || v === 1; }
+
+// Parse year and month directly from "yyyy-MM-dd" — avoids all timezone issues with new Date()
+function dateMatchesMonth(dateStr, m, y) {
+  if (!dateStr || dateStr.length < 7) return false;
+  return parseInt(dateStr.substring(0, 4)) === y &&
+         parseInt(dateStr.substring(5, 7)) === m;
+}
 
 function sheetToRows(sh, mapper) {
   var data = sh.getDataRange().getValues();
@@ -168,10 +177,8 @@ function getExpenses(p) {
     };
   });
   if (p.month && p.year) {
-    rows = rows.filter(function(r) {
-      var dt = new Date(r.date + "T00:00:00");
-      return dt.getMonth()+1 === parseInt(p.month) && dt.getFullYear() === parseInt(p.year);
-    });
+    var fm = parseInt(p.month), fy = parseInt(p.year);
+    rows = rows.filter(function(r) { return dateMatchesMonth(r.date, fm, fy); });
   }
   rows.reverse();
   return jsonResponse({ ok: true, expenses: rows });
@@ -210,10 +217,8 @@ function getIncome(p) {
     return { rowIndex: ri, date: formatDate(d[0]), amount: toFloat(d[1]), category: d[2], note: d[3], account: d[4] };
   });
   if (p.month && p.year) {
-    rows = rows.filter(function(r) {
-      var dt = new Date(r.date + "T00:00:00");
-      return dt.getMonth()+1 === parseInt(p.month) && dt.getFullYear() === parseInt(p.year);
-    });
+    var fm = parseInt(p.month), fy = parseInt(p.year);
+    rows = rows.filter(function(r) { return dateMatchesMonth(r.date, fm, fy); });
   }
   rows.reverse();
   return jsonResponse({ ok: true, income: rows });
@@ -249,10 +254,8 @@ function getTransfers(p) {
     return { rowIndex: ri, date: formatDate(d[0]), amount: toFloat(d[1]), fromAccount: d[2], toAccount: d[3], note: d[4] };
   });
   if (p.month && p.year) {
-    rows = rows.filter(function(r) {
-      var dt = new Date(r.date + "T00:00:00");
-      return dt.getMonth()+1 === parseInt(p.month) && dt.getFullYear() === parseInt(p.year);
-    });
+    var fm = parseInt(p.month), fy = parseInt(p.year);
+    rows = rows.filter(function(r) { return dateMatchesMonth(r.date, fm, fy); });
   }
   rows.reverse();
   return jsonResponse({ ok: true, transfers: rows });
@@ -453,8 +456,7 @@ function getAllTransactions(p) {
   var y = p.year  ? parseInt(p.year)  : 0;
   function inPeriod(dateStr) {
     if (!m || !y) return true;
-    var dt = new Date(dateStr + "T00:00:00");
-    return dt.getMonth()+1 === m && dt.getFullYear() === y;
+    return dateMatchesMonth(dateStr, m, y);
   }
   var txns = [];
   sheetToRows(getSheet(SHEET.EXPENSES), function(d, ri) {
@@ -480,8 +482,7 @@ function getAllTransactions(p) {
 function getSummary(p) {
   var m = parseInt(p.month), y = parseInt(p.year);
   function inMonth(dateStr) {
-    var dt = new Date(dateStr + "T00:00:00");
-    return dt.getMonth()+1 === m && dt.getFullYear() === y;
+    return dateMatchesMonth(dateStr, m, y);
   }
   var totalExpense = 0, totalIncome = 0;
   sheetToRows(getSheet(SHEET.EXPENSES), function(d){ return { date: formatDate(d[0]), amount: toFloat(d[1]) }; })
@@ -493,3 +494,4 @@ function getSummary(p) {
     totalIncome:  Math.round(totalIncome*100)/100,
     net:          Math.round((totalIncome-totalExpense)*100)/100 });
 }
+
