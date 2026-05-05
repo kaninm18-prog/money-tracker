@@ -45,9 +45,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .header-month-nav { display:flex; align-items:center; gap:10px; margin-top:12px; }
 .header-month-nav button { background:rgba(255,255,255,.2); border:none; color:#fff; width:28px; height:28px; border-radius:50%; cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; }
 .header-month-label { font-size:0.95rem; font-weight:600; flex:1; text-align:center; }
-.header-networth { text-align:center; padding:12px 0 0; }
+.header-networth { text-align:center; padding:12px 0 0; cursor:pointer; user-select:none; }
 .header-networth-label { font-size:0.7rem; opacity:0.75; text-transform:uppercase; letter-spacing:.08em; }
 .header-networth-amount { font-size:2.4rem; font-weight:700; line-height:1.2; }
+.header-networth-tap { font-size:0.65rem; opacity:0.55; margin-top:1px; }
 .header-networth-sub { font-size:0.75rem; opacity:0.7; margin-top:2px; }
 
 /* ── Credit Card Reminder Banner ── */
@@ -232,6 +233,60 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .page { display:none; }
 .page.active { display:block; }
 
+/* ── Recurring Badge ── */
+.recurring-badge { display:inline-block; font-size:0.6rem; font-weight:700; background:var(--primary-light); color:var(--primary); padding:1px 6px; border-radius:8px; margin-left:4px; vertical-align:middle; }
+.project-badge { display:inline-block; font-size:0.6rem; font-weight:700; background:#fff8e6; color:var(--transfer-color); padding:1px 6px; border-radius:8px; margin-left:4px; vertical-align:middle; }
+
+/* ── Project Cards ── */
+.project-card { background:var(--surface); border-radius:var(--radius); padding:15px; margin-bottom:10px; box-shadow:var(--shadow-sm); }
+.project-card-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
+.project-card-name { font-size:0.95rem; font-weight:700; }
+.project-card-dates { font-size:0.72rem; color:var(--text2); margin-top:2px; }
+.project-card-amount { text-align:right; }
+.project-card-spent { font-size:1rem; font-weight:700; color:var(--expense-color); }
+.project-card-budget { font-size:0.72rem; color:var(--text2); }
+.project-progress-wrap { height:6px; background:var(--border); border-radius:3px; margin-bottom:10px; }
+.project-progress-bar { height:100%; border-radius:3px; background:var(--primary); transition:width .4s; }
+.project-progress-bar.over { background:var(--expense-color); }
+.project-actions { display:flex; gap:6px; padding-top:10px; border-top:1px solid var(--border); }
+.project-actions button { flex:1; padding:7px; border:none; border-radius:8px; font-size:0.8rem; font-weight:600; cursor:pointer; }
+
+/* ── Receivable Items ── */
+.recv-item { background:var(--surface); border-radius:var(--radius-sm); padding:13px; margin-bottom:8px; box-shadow:var(--shadow-sm); display:flex; gap:10px; align-items:flex-start; }
+.recv-icon { font-size:1.4rem; flex-shrink:0; }
+.recv-info { flex:1; }
+.recv-counterparty { font-size:0.9rem; font-weight:700; }
+.recv-note { font-size:0.76rem; color:var(--text2); margin-top:1px; }
+.recv-meta { font-size:0.72rem; color:var(--text2); margin-top:3px; }
+.recv-right { text-align:right; flex-shrink:0; }
+.recv-amount { font-size:1rem; font-weight:700; color:var(--income-color); }
+.recv-status { font-size:0.7rem; font-weight:600; padding:2px 8px; border-radius:10px; margin-top:3px; display:inline-block; }
+.recv-status.pending { background:#fff8e6; color:var(--transfer-color); }
+.recv-status.settled { background:#e6faf0; color:var(--income-color); }
+.recv-settle-btn { margin-top:6px; background:var(--income-color); color:#fff; border:none; border-radius:8px; padding:5px 10px; font-size:0.75rem; font-weight:600; cursor:pointer; }
+.recv-del-btn { margin-top:4px; background:none; color:var(--expense-color); border:none; font-size:0.75rem; cursor:pointer; display:block; }
+
+/* ── Balance Mode Picker ── */
+.balance-mode-list { display:flex; flex-direction:column; gap:6px; }
+.balance-mode-opt { display:flex; align-items:center; gap:12px; padding:12px; border-radius:var(--radius-sm); border:1.5px solid var(--border); cursor:pointer; background:var(--surface2); }
+.balance-mode-opt.selected { border-color:var(--primary); background:var(--primary-light); }
+.balance-mode-opt input { accent-color:var(--primary); }
+.balance-mode-label { font-size:0.88rem; font-weight:600; }
+.balance-mode-desc { font-size:0.72rem; color:var(--text2); }
+
+/* ── Toggle Switch ── */
+.toggle-row { display:flex; align-items:center; justify-content:space-between; padding:4px 0; }
+.toggle-label { font-size:0.88rem; font-weight:500; }
+.toggle { position:relative; display:inline-block; width:40px; height:22px; }
+.toggle input { opacity:0; width:0; height:0; }
+.toggle-slider { position:absolute; inset:0; background:var(--border); border-radius:11px; transition:.2s; cursor:pointer; }
+.toggle-slider:before { content:''; position:absolute; width:18px; height:18px; left:2px; top:2px; background:#fff; border-radius:50%; transition:.2s; }
+.toggle input:checked + .toggle-slider { background:var(--primary); }
+.toggle input:checked + .toggle-slider:before { transform:translateX(18px); }
+
+/* ── Form sub-row ── */
+.form-sub { background:var(--surface2); border-radius:var(--radius-sm); padding:10px 12px; margin-top:8px; border:1px solid var(--border); }
+
 /* ── Setup ── */
 #setup-screen { position:fixed; inset:0; background:linear-gradient(135deg,#6c63ff 0%,#9b59b6 100%); z-index:1000; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:28px; color:#fff; text-align:center; }
 #setup-screen h1 { font-size:1.9rem; margin-bottom:6px; }
@@ -279,9 +334,10 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
       <div class="header-month-label" id="header-month-label"></div>
       <button onclick="changeMonth(1)">›</button>
     </div>
-    <div class="header-networth">
-      <div class="header-networth-label">Total Net Worth</div>
+    <div class="header-networth" onclick="cycleBalanceMode()">
+      <div class="header-networth-label" id="header-balance-label">Total Net Worth</div>
       <div class="header-networth-amount" id="header-networth">฿0</div>
+      <div class="header-networth-tap">tap to switch view</div>
       <div class="header-networth-sub" id="header-networth-sub"></div>
     </div>
   </div>
@@ -345,6 +401,27 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
       <div id="accounts-page-list"><div class="loading-wrap"><div class="spinner"></div></div></div>
       <button class="btn btn-primary" onclick="openAddAccount()">+ Add Account</button>
     </div>
+
+    <!-- Projects & Receivables -->
+    <div id="page-projects" class="page">
+      <div class="type-tabs" style="margin-bottom:14px">
+        <button class="type-tab active" id="proj-tab-projects"   onclick="setProjectsTab('projects')">📁 Projects</button>
+        <button class="type-tab"        id="proj-tab-receivables" onclick="setProjectsTab('receivables')">🤝 Receivables</button>
+      </div>
+      <!-- Projects sub-page -->
+      <div id="proj-panel-projects">
+        <div id="projects-list"><div class="loading-wrap"><div class="spinner"></div></div></div>
+        <button class="btn btn-primary" onclick="openAddProject()">+ New Project</button>
+      </div>
+      <!-- Receivables sub-page -->
+      <div id="proj-panel-receivables" style="display:none">
+        <div class="type-tabs" style="margin-bottom:10px">
+          <button class="type-tab active" id="recv-tab-pending"  onclick="setRecvTab('pending')">Pending</button>
+          <button class="type-tab"        id="recv-tab-settled" onclick="setRecvTab('settled')">Settled</button>
+        </div>
+        <div id="receivables-list"><div class="loading-wrap"><div class="spinner"></div></div></div>
+      </div>
+    </div>
   </main>
 
   <!-- Bottom Nav -->
@@ -359,8 +436,8 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
     <button class="nav-btn" id="nav-accounts" onclick="showPage('accounts')">
       <span class="nav-icon">💳</span><span>Accounts</span>
     </button>
-    <button class="nav-btn" onclick="openSettings()">
-      <span class="nav-icon">⚙️</span><span>Settings</span>
+    <button class="nav-btn" id="nav-projects" onclick="showPage('projects')">
+      <span class="nav-icon">💼</span><span>Projects</span>
     </button>
   </nav>
 </div>
@@ -370,10 +447,11 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title">What do you want to add?</div>
-    <div class="type-chooser">
+    <div class="type-chooser" style="grid-template-columns:1fr 1fr">
       <button class="type-choice expense-choice"  onclick="openExpenseForm()"><span class="tc-icon">💸</span>Expense</button>
       <button class="type-choice income-choice"   onclick="openIncomeForm()"><span class="tc-icon">💰</span>Income</button>
       <button class="type-choice transfer-choice" onclick="openTransferForm()"><span class="tc-icon">↔️</span>Transfer</button>
+      <button class="type-choice" style="background:#f0fdf4;color:#16a34a" onclick="openReceivableForm()"><span class="tc-icon">🤝</span>Receivable</button>
     </div>
   </div>
 </div>
@@ -404,6 +482,26 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
     <div class="form-group">
       <label class="form-label">Date</label>
       <input type="date" class="form-control" id="fe-date">
+    </div>
+    <div class="form-group">
+      <div class="toggle-row">
+        <span class="toggle-label">🔁 Recurring expense</span>
+        <label class="toggle"><input type="checkbox" id="fe-recurring" onchange="toggleRecurringFields()"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="form-sub" id="fe-recurring-sub" style="display:none">
+        <label class="form-label">Recurrence</label>
+        <select class="form-control" id="fe-recurrence-period">
+          <option value="monthly">Monthly</option>
+          <option value="yearly">Yearly</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group" id="fe-project-group">
+      <label class="form-label">📁 Project (optional)</label>
+      <select class="form-control" id="fe-project">
+        <option value="">— No project (regular expense) —</option>
+      </select>
+      <div style="font-size:0.7rem;color:var(--text2);margin-top:3px">Project expenses are excluded from monthly stats</div>
     </div>
     <button class="btn btn-danger" onclick="saveExpense()" id="save-expense-btn">Save Expense</button>
     <div style="height:8px"></div>
@@ -536,11 +634,99 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
   </div>
 </div>
 
+<!-- ══ Receivable Modal ══ -->
+<div class="modal-overlay" id="receivable-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Add Receivable</div>
+    <div class="form-group">
+      <label class="form-label">Type</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="recv-type-grid">
+        <div class="acct-option selected" onclick="selectRecvType(this,'advance')">🤝 Advance Payment<div style="font-size:0.7rem;color:inherit;margin-top:2px;opacity:.7">You paid for someone</div></div>
+        <div class="acct-option" onclick="selectRecvType(this,'work')">💼 Work Expense<div style="font-size:0.7rem;color:inherit;margin-top:2px;opacity:.7">PTTEP will reimburse</div></div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Amount (฿)</label>
+      <div class="amount-wrap"><span class="amount-prefix">฿</span>
+        <input type="number" class="form-control" id="fr-amount" placeholder="0" inputmode="decimal">
+      </div>
+    </div>
+    <div class="form-group" id="fr-counterparty-group">
+      <label class="form-label">Paid for (who owes you?)</label>
+      <input type="text" class="form-control" id="fr-counterparty" placeholder="e.g. John, Team dinner">
+    </div>
+    <div class="form-group" id="fr-reimb-group" style="display:none">
+      <label class="form-label">Reimbursed by</label>
+      <input type="text" class="form-control" id="fr-reimbursedby" placeholder="e.g. PTTEP" value="PTTEP">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Note</label>
+      <input type="text" class="form-control" id="fr-note" placeholder="e.g. Osaka hotel, Conference fee">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Date</label>
+      <input type="date" class="form-control" id="fr-date">
+    </div>
+    <button class="btn btn-primary" style="background:#16a34a" onclick="saveReceivable()" id="save-recv-btn">Save Receivable</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('receivable-modal')">Cancel</button>
+  </div>
+</div>
+
+<!-- ══ Add Project Modal ══ -->
+<div class="modal-overlay" id="project-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="project-modal-title">New Project</div>
+    <div class="form-group">
+      <label class="form-label">Project Name</label>
+      <input type="text" class="form-control" id="fp-name" placeholder="e.g. Osaka Trip 2026">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Budget (฿) — optional</label>
+      <div class="amount-wrap"><span class="amount-prefix">฿</span>
+        <input type="number" class="form-control" id="fp-budget" placeholder="0" inputmode="decimal">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group">
+        <label class="form-label">Start Date</label>
+        <input type="date" class="form-control" id="fp-start">
+      </div>
+      <div class="form-group">
+        <label class="form-label">End Date (optional)</label>
+        <input type="date" class="form-control" id="fp-end">
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="saveProject()" id="save-project-btn">Create Project</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('project-modal')">Cancel</button>
+  </div>
+</div>
+
 <!-- ══ Settings Modal ══ -->
 <div class="modal-overlay" id="settings-modal">
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title">Settings</div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Home Screen Balance</div>
+      <div class="balance-mode-list" id="balance-mode-list">
+        <div class="balance-mode-opt selected" onclick="setBalanceMode('net_worth')">
+          <input type="radio" name="bm" value="net_worth" checked>
+          <div><div class="balance-mode-label">Net Worth</div><div class="balance-mode-desc">Total assets minus liabilities</div></div>
+        </div>
+        <div class="balance-mode-opt" onclick="setBalanceMode('monthly_balance')">
+          <input type="radio" name="bm" value="monthly_balance">
+          <div><div class="balance-mode-label">Monthly Balance</div><div class="balance-mode-desc">This month's income minus regular expenses</div></div>
+        </div>
+        <div class="balance-mode-opt" onclick="setBalanceMode('available_cash')">
+          <input type="radio" name="bm" value="available_cash">
+          <div><div class="balance-mode-label">Available Cash</div><div class="balance-mode-desc">Cash + bank accounts only</div></div>
+        </div>
+      </div>
+    </div>
     <div class="card" style="margin-bottom:12px">
       <div class="card-title">Script Connection</div>
       <div class="form-group">
@@ -580,11 +766,22 @@ var accounts     = [];
 var totalBalance = 0;
 var expCategories  = [];
 var incCategories  = [];
-var transactions = []; // combined for current month
-var activeTypeTab = 'all';
+var transactions = [];
+var projects     = [];
+var receivables  = [];
+var activeTypeTab    = 'all';
+var activeProjectsTab = 'projects';
+var activeRecvTab    = 'pending';
 var editingExpenseRow  = null;
 var editingIncomeRow   = null;
 var editingAccountRow  = null;
+var editingProjectRow  = null;
+var balanceMode  = localStorage.getItem('balanceMode') || 'net_worth';
+var BALANCE_MODES = {
+  net_worth:       { label: 'Net Worth',       sub: 'all assets minus liabilities' },
+  monthly_balance: { label: 'Monthly Balance', sub: 'income minus expenses this month' },
+  available_cash:  { label: 'Available Cash',  sub: 'cash & bank accounts only' }
+};
 
 var MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 var ACCT_ICONS  = { cash:'💵', bank:'🏦', investment:'📈', wallet:'📱', credit:'💳' };
@@ -653,13 +850,16 @@ function loadAll() {
     api({action:'getAccounts'}),
     api({action:'getCategories'}),
     api({action:'getIncomeCategories'}),
-    api({action:'getAllTransactions', month:viewMonth, year:viewYear})
+    api({action:'getAllTransactions', month:viewMonth, year:viewYear}),
+    api({action:'getProjects'}),
+    api({action:'getReceivables'})
   ]).then(function(results) {
-    var accRes=results[0], catRes=results[1], incCatRes=results[2], txnRes=results[3];
-    if (accRes.ok)    { accounts=accRes.accounts; totalBalance=accRes.totalBalance; }
-    if (catRes.ok)    { expCategories=catRes.categories; }
-    if (incCatRes.ok) { incCategories=incCatRes.categories; }
-    if (txnRes.ok)    { transactions=txnRes.transactions; }
+    if (results[0].ok) { accounts=results[0].accounts; totalBalance=results[0].totalBalance; }
+    if (results[1].ok) { expCategories=results[1].categories; }
+    if (results[2].ok) { incCategories=results[2].categories; }
+    if (results[3].ok) { transactions=results[3].transactions; }
+    if (results[4].ok) { projects=results[4].projects; }
+    if (results[5].ok) { receivables=results[5].receivables; }
     renderAll();
   }).catch(function(e){ toast('Connection error'); console.error(e); });
 }
@@ -679,7 +879,7 @@ function loadAccounts() {
 // ════════════════════════════════════════════
 //  NAVIGATION
 // ════════════════════════════════════════════
-var PAGES = ['dashboard','transactions','accounts'];
+var PAGES = ['dashboard','transactions','accounts','projects'];
 
 function showPage(name) {
   PAGES.forEach(function(p) {
@@ -710,6 +910,10 @@ function renderAll() {
   renderTransactions();
   renderFilterBar();
   renderSettingsCats();
+  renderProjectsPage();
+  renderReceivables();
+  populateProjectDropdown();
+  syncBalanceModeUI();
 }
 
 // ════════════════════════════════════════════
@@ -764,9 +968,11 @@ function renderReminders() {
 //  ACCOUNT CARDS (top strip)
 // ════════════════════════════════════════════
 function renderAccountCards() {
-  document.getElementById('header-networth').textContent = fmtMoney(totalBalance);
-  var subtitle = accounts.length + ' account' + (accounts.length!==1?'s':'');
-  document.getElementById('header-networth-sub').textContent = subtitle;
+  var bal = computeBalance();
+  var modeInfo = BALANCE_MODES[balanceMode] || BALANCE_MODES.net_worth;
+  document.getElementById('header-balance-label').textContent = modeInfo.label.toUpperCase();
+  document.getElementById('header-networth').textContent = fmtMoney(bal);
+  document.getElementById('header-networth-sub').textContent = modeInfo.sub;
 
   var html = '';
   accounts.forEach(function(a) {
@@ -796,12 +1002,57 @@ function renderAccountCards() {
 }
 
 // ════════════════════════════════════════════
+//  BALANCE MODE
+// ════════════════════════════════════════════
+function computeBalance() {
+  var mode = balanceMode;
+  if (mode === 'monthly_balance') {
+    var inc = transactions.filter(function(t){return t.type==='income';}).reduce(function(s,t){return s+t.amount;},0);
+    var exp = transactions.filter(function(t){return t.type==='expense'&&!t.projectId;}).reduce(function(s,t){return s+t.amount;},0);
+    return inc - exp;
+  }
+  if (mode === 'available_cash') {
+    return accounts.filter(function(a){return a.type==='cash'||a.type==='bank';}).reduce(function(s,a){return s+a.balance;},0);
+  }
+  return totalBalance; // net_worth default
+}
+
+function cycleBalanceMode() {
+  var modes = ['net_worth','monthly_balance','available_cash'];
+  var idx = modes.indexOf(balanceMode);
+  balanceMode = modes[(idx+1) % modes.length];
+  localStorage.setItem('balanceMode', balanceMode);
+  syncBalanceModeUI();
+  renderAccountCards(); // re-renders header balance
+}
+
+function setBalanceMode(mode) {
+  balanceMode = mode;
+  localStorage.setItem('balanceMode', mode);
+  syncBalanceModeUI();
+  renderAccountCards();
+}
+
+function syncBalanceModeUI() {
+  // Settings radio list
+  document.querySelectorAll('.balance-mode-opt').forEach(function(el){
+    var radio = el.querySelector('input');
+    var active = radio && radio.value === balanceMode;
+    el.classList.toggle('selected', active);
+    if (radio) radio.checked = active;
+  });
+}
+
+// ════════════════════════════════════════════
 //  DASHBOARD
 // ════════════════════════════════════════════
 function renderDashboard() {
-  var expenses  = transactions.filter(function(t){return t.type==='expense';});
-  var incomes   = transactions.filter(function(t){return t.type==='income';});
-  var totalExp  = expenses.reduce(function(s,t){return s+t.amount;},0);
+  // Separate regular vs project expenses
+  var expenses        = transactions.filter(function(t){return t.type==='expense';});
+  var regularExpenses = expenses.filter(function(t){return !t.projectId;});
+  var projectExpenses = expenses.filter(function(t){return !!t.projectId;});
+  var incomes         = transactions.filter(function(t){return t.type==='income';});
+  var totalExp  = regularExpenses.reduce(function(s,t){return s+t.amount;},0);
   var totalInc  = incomes.reduce(function(s,t){return s+t.amount;},0);
   var net       = totalInc - totalExp;
 
@@ -811,9 +1062,9 @@ function renderDashboard() {
   netEl.textContent = fmtMoney(net);
   netEl.className = 'pill-val pill-net ' + (net >= 0 ? 'pos' : 'neg');
 
-  // Category breakdown (expenses only)
+  // Category breakdown (regular expenses only, excluding project expenses)
   var bycat = {};
-  expenses.forEach(function(e){ bycat[e.category]=(bycat[e.category]||0)+e.amount; });
+  regularExpenses.forEach(function(e){ bycat[e.category]=(bycat[e.category]||0)+e.amount; });
   var sorted = Object.keys(bycat).sort(function(a,b){return bycat[b]-bycat[a];}).slice(0,6);
   var maxAmt = sorted.length ? bycat[sorted[0]] : 1;
   var html = '';
@@ -907,7 +1158,10 @@ function renderTransactions() {
 function txnHtml(t) {
   var icon, label, sublabel, amountStr, amountClass;
   if (t.type === 'expense') {
-    icon = catIcon(t.category); label = t.category||'Expense';
+    icon = catIcon(t.category);
+    label = (t.category||'Expense') +
+      (t.isRecurring ? '<span class="recurring-badge">🔁 '+t.recurrencePeriod+'</span>' : '') +
+      (t.projectId   ? '<span class="project-badge">📁 '+t.projectId+'</span>' : '');
     sublabel = (t.note||'—') + (t.account ? ' · '+t.account : '');
     amountStr = '−'+fmtMoney(t.amount); amountClass = 'expense';
   } else if (t.type === 'income') {
@@ -1002,10 +1256,17 @@ function openExpenseForm(rowIndex) {
     document.getElementById('fe-date').value   = t ? t.date : todayStr();
     renderCatGrid('fe-cat-grid', expCategories, t ? t.category : null);
     renderAcctList('fe-acct-list', t ? t.account : null);
+    document.getElementById('fe-recurring').checked = t ? !!t.isRecurring : false;
+    document.getElementById('fe-recurrence-period').value = t ? (t.recurrencePeriod||'monthly') : 'monthly';
+    document.getElementById('fe-recurring-sub').style.display = (t && t.isRecurring) ? 'block' : 'none';
+    document.getElementById('fe-project').value = t ? (t.projectId||'') : '';
   } else {
     document.getElementById('fe-amount').value = '';
     document.getElementById('fe-note').value   = '';
     document.getElementById('fe-date').value   = todayStr();
+    document.getElementById('fe-recurring').checked = false;
+    document.getElementById('fe-recurring-sub').style.display = 'none';
+    document.getElementById('fe-project').value = '';
     renderCatGrid('fe-cat-grid', expCategories, null);
     renderAcctList('fe-acct-list', null);
   }
@@ -1022,9 +1283,13 @@ function saveExpense() {
   var acct = getSelectedAcct('fe-acct-list');
   if (!cat)  { toast('Select a category'); return; }
   if (!acct) { toast('Select an account'); return; }
-  var note = document.getElementById('fe-note').value.trim();
-  var date = document.getElementById('fe-date').value || todayStr();
-  var payload = { amount, category:cat, account:acct, note, date };
+  var note      = document.getElementById('fe-note').value.trim();
+  var date      = document.getElementById('fe-date').value || todayStr();
+  var recurring = document.getElementById('fe-recurring').checked;
+  var recPeriod = document.getElementById('fe-recurrence-period').value;
+  var projectId = document.getElementById('fe-project').value;
+  var payload   = { amount, category:cat, account:acct, note, date,
+    isRecurring: recurring, recurrencePeriod: recurring ? recPeriod : '', projectId: projectId };
   if (editingExpenseRow) { payload.action='updateExpense'; payload.rowIndex=editingExpenseRow; }
   else { payload.action='addExpense'; }
   document.getElementById('save-expense-btn').textContent = 'Saving…';
@@ -1322,6 +1587,215 @@ function toast(msg) {
   el.textContent = msg; el.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(function(){ el.classList.remove('show'); }, 2500);
+}
+
+// ════════════════════════════════════════════
+//  PROJECTS PAGE
+// ════════════════════════════════════════════
+function setProjectsTab(tab) {
+  activeProjectsTab = tab;
+  ['projects','receivables'].forEach(function(t){
+    document.getElementById('proj-tab-'+t).classList.toggle('active', t===tab);
+    document.getElementById('proj-panel-'+t).style.display = t===tab ? 'block' : 'none';
+  });
+}
+
+function renderProjectsPage() {
+  var html = '';
+  if (!projects.length) {
+    html = '<div class="empty"><div class="empty-icon">📁</div><p>No projects yet.<br>Use projects to track trip or event costs separately from monthly expenses.</p></div>';
+  } else {
+    projects.forEach(function(p) {
+      var pct = p.budget > 0 ? Math.min(100, Math.round(p.spent/p.budget*100)) : 0;
+      var over = p.budget > 0 && p.spent > p.budget;
+      var dateRange = (p.startDate ? fmtDate(p.startDate) : '') + (p.endDate ? ' – '+fmtDate(p.endDate) : '');
+      html += '<div class="project-card">' +
+        '<div class="project-card-header">' +
+          '<div><div class="project-card-name">📁 '+p.name+'</div><div class="project-card-dates">'+dateRange+'</div></div>' +
+          '<div class="project-card-amount"><div class="project-card-spent">'+fmtMoney(p.spent)+'</div>' +
+            (p.budget ? '<div class="project-card-budget">of '+fmtMoney(p.budget)+'</div>' : '') +
+          '</div>' +
+        '</div>' +
+        (p.budget ? '<div class="project-progress-wrap"><div class="project-progress-bar'+(over?' over':'')+'" style="width:'+pct+'%"></div></div>' : '') +
+        '<div class="project-actions">' +
+          '<button class="acc-edit-btn" onclick="openEditProject('+p.rowIndex+')">✏️ Edit</button>' +
+          '<button class="acc-del-btn" onclick="deleteProject('+p.rowIndex+',\''+escQ(p.name)+'\')">🗑️ Delete</button>' +
+        '</div>' +
+      '</div>';
+    });
+  }
+  document.getElementById('projects-list').innerHTML = html;
+}
+
+function openAddProject() {
+  editingProjectRow = null;
+  document.getElementById('project-modal-title').textContent = 'New Project';
+  document.getElementById('save-project-btn').textContent = 'Create Project';
+  document.getElementById('fp-name').value  = '';
+  document.getElementById('fp-budget').value = '';
+  document.getElementById('fp-start').value = todayStr();
+  document.getElementById('fp-end').value   = '';
+  openModal('project-modal');
+}
+
+function openEditProject(rowIndex) {
+  var p = projects.find(function(x){ return x.rowIndex===rowIndex; });
+  if (!p) return;
+  editingProjectRow = rowIndex;
+  document.getElementById('project-modal-title').textContent = 'Edit Project';
+  document.getElementById('save-project-btn').textContent = 'Save Changes';
+  document.getElementById('fp-name').value   = p.name;
+  document.getElementById('fp-budget').value = p.budget || '';
+  document.getElementById('fp-start').value  = p.startDate || '';
+  document.getElementById('fp-end').value    = p.endDate || '';
+  openModal('project-modal');
+}
+
+function saveProject() {
+  var name = document.getElementById('fp-name').value.trim();
+  if (!name) { toast('Enter a project name'); return; }
+  var payload = {
+    name: name,
+    budget:    parseFloat(document.getElementById('fp-budget').value) || 0,
+    startDate: document.getElementById('fp-start').value,
+    endDate:   document.getElementById('fp-end').value
+  };
+  if (editingProjectRow) { payload.action='updateProject'; payload.rowIndex=editingProjectRow; }
+  else { payload.action='addProject'; }
+  document.getElementById('save-project-btn').textContent = 'Saving…';
+  api(payload).then(function(res) {
+    if (res.ok) {
+      closeModal('project-modal');
+      toast(editingProjectRow ? 'Project updated!' : 'Project created!');
+      api({action:'getProjects'}).then(function(r){ if(r.ok){ projects=r.projects; renderProjectsPage(); populateProjectDropdown(); } });
+    } else { toast('Error: '+res.error); }
+    document.getElementById('save-project-btn').textContent = editingProjectRow ? 'Save Changes' : 'Create Project';
+  });
+}
+
+function deleteProject(rowIndex, name) {
+  if (!confirm('Delete project "'+name+'"?\nExpenses logged to this project will remain but lose their project tag.')) return;
+  api({action:'deleteProject', rowIndex:rowIndex}).then(function(res){
+    if (res.ok) { toast('Deleted'); api({action:'getProjects'}).then(function(r){ if(r.ok){ projects=r.projects; renderProjectsPage(); populateProjectDropdown(); } }); }
+    else { toast('Error: '+res.error); }
+  });
+}
+
+function populateProjectDropdown() {
+  var opts = '<option value="">— No project (regular expense) —</option>';
+  projects.forEach(function(p){ opts += '<option value="'+escQ(p.name)+'">📁 '+p.name+'</option>'; });
+  var sel = document.getElementById('fe-project');
+  if (sel) sel.innerHTML = opts;
+}
+
+// ════════════════════════════════════════════
+//  RECEIVABLES
+// ════════════════════════════════════════════
+var activeRecvFilter = 'pending';
+
+function setRecvTab(tab) {
+  activeRecvFilter = tab;
+  ['pending','settled'].forEach(function(t){
+    document.getElementById('recv-tab-'+t).classList.toggle('active', t===tab);
+  });
+  renderReceivables();
+}
+
+function renderReceivables() {
+  var filtered = receivables.filter(function(r){ return r.status === activeRecvFilter; });
+  var html = '';
+  if (!filtered.length) {
+    var emptyMsg = activeRecvFilter==='pending' ? 'No pending receivables 🎉' : 'No settled receivables yet';
+    html = '<div class="empty"><div class="empty-icon">🤝</div><p>'+emptyMsg+'</p></div>';
+  } else {
+    var total = filtered.reduce(function(s,r){return s+r.amount;},0);
+    html += '<div style="font-size:0.8rem;font-weight:700;color:var(--income-color);text-align:right;margin-bottom:8px">Total: '+fmtMoney(total)+'</div>';
+    filtered.forEach(function(r) {
+      var typeLabel = r.type==='work' ? '💼 Work Expense' : '🤝 Advance';
+      var reimbInfo = r.reimbursedBy ? ' · Reimbursed by: '+r.reimbursedBy : (r.counterparty ? ' · Paid for: '+r.counterparty : '');
+      html += '<div class="recv-item">' +
+        '<div class="recv-icon">'+(r.type==='work'?'💼':'🤝')+'</div>' +
+        '<div class="recv-info">' +
+          '<div class="recv-counterparty">'+(r.reimbursedBy||r.counterparty||'—')+'</div>' +
+          '<div class="recv-note">'+(r.note||'—')+'</div>' +
+          '<div class="recv-meta">'+fmtDate(r.date)+reimbInfo+'</div>' +
+          (r.status==='pending' ? '<button class="recv-settle-btn" onclick="settleReceivable('+r.rowIndex+')">✓ Mark Settled</button>' : '<div style="font-size:0.72rem;color:var(--text2);margin-top:4px">Settled '+fmtDate(r.settledDate)+'</div>') +
+          '<button class="recv-del-btn" onclick="deleteReceivable('+r.rowIndex+')">🗑️ Delete</button>' +
+        '</div>' +
+        '<div class="recv-right"><div class="recv-amount">'+fmtMoney(r.amount)+'</div><div class="recv-status '+r.status+'">'+r.status+'</div></div>' +
+      '</div>';
+    });
+  }
+  document.getElementById('receivables-list').innerHTML = html;
+}
+
+function openReceivableForm() {
+  closeModal('chooser-modal');
+  document.getElementById('fr-amount').value       = '';
+  document.getElementById('fr-counterparty').value = '';
+  document.getElementById('fr-reimbursedby').value = 'PTTEP';
+  document.getElementById('fr-note').value         = '';
+  document.getElementById('fr-date').value         = todayStr();
+  // default to advance
+  document.querySelectorAll('#recv-type-grid .acct-option').forEach(function(el,i){ el.classList.toggle('selected',i===0); });
+  document.getElementById('fr-counterparty-group').style.display = 'block';
+  document.getElementById('fr-reimb-group').style.display = 'none';
+  openModal('receivable-modal');
+}
+
+function selectRecvType(el, type) {
+  document.querySelectorAll('#recv-type-grid .acct-option').forEach(function(x){ x.classList.remove('selected'); });
+  el.classList.add('selected');
+  document.getElementById('fr-counterparty-group').style.display = type==='advance' ? 'block' : 'none';
+  document.getElementById('fr-reimb-group').style.display        = type==='work'    ? 'block' : 'none';
+}
+
+function saveReceivable() {
+  var amount = parseFloat(document.getElementById('fr-amount').value);
+  if (!amount || amount<=0) { toast('Enter a valid amount'); return; }
+  var typeEls = document.querySelectorAll('#recv-type-grid .acct-option.selected');
+  var type = typeEls.length ? (typeEls[0].textContent.includes('Work') ? 'work' : 'advance') : 'advance';
+  document.getElementById('save-recv-btn').textContent = 'Saving…';
+  api({
+    action: 'addReceivable',
+    amount: amount,
+    type: type,
+    counterparty: document.getElementById('fr-counterparty').value.trim(),
+    reimbursedBy: document.getElementById('fr-reimbursedby').value.trim(),
+    note: document.getElementById('fr-note').value.trim(),
+    date: document.getElementById('fr-date').value || todayStr()
+  }).then(function(res){
+    if (res.ok) {
+      closeModal('receivable-modal');
+      toast('Receivable saved!');
+      api({action:'getReceivables'}).then(function(r){ if(r.ok){ receivables=r.receivables; renderReceivables(); } });
+    } else { toast('Error: '+res.error); }
+    document.getElementById('save-recv-btn').textContent = 'Save Receivable';
+  });
+}
+
+function settleReceivable(rowIndex) {
+  if (!confirm('Mark this as settled (money received)?')) return;
+  api({action:'settleReceivable', rowIndex:rowIndex, settledDate:todayStr()}).then(function(res){
+    if (res.ok) { toast('Marked as settled ✓'); api({action:'getReceivables'}).then(function(r){ if(r.ok){ receivables=r.receivables; renderReceivables(); } }); }
+    else { toast('Error: '+res.error); }
+  });
+}
+
+function deleteReceivable(rowIndex) {
+  if (!confirm('Delete this receivable?')) return;
+  api({action:'deleteReceivable', rowIndex:rowIndex}).then(function(res){
+    if (res.ok) { toast('Deleted'); api({action:'getReceivables'}).then(function(r){ if(r.ok){ receivables=r.receivables; renderReceivables(); } }); }
+    else { toast('Error: '+res.error); }
+  });
+}
+
+// ════════════════════════════════════════════
+//  RECURRING EXPENSE TOGGLE
+// ════════════════════════════════════════════
+function toggleRecurringFields() {
+  var on = document.getElementById('fe-recurring').checked;
+  document.getElementById('fe-recurring-sub').style.display = on ? 'block' : 'none';
 }
 
 // ════════════════════════════════════════════
