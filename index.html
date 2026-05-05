@@ -841,8 +841,11 @@ function updateScriptUrl() {
 //  API
 // ════════════════════════════════════════════
 function api(payload) {
-  return fetch(SCRIPT_URL, { method:'POST', body:JSON.stringify(payload) })
-    .then(function(r){ return r.json(); });
+  return fetch(SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(payload)
+  }).then(function(r){ return r.json(); });
 }
 
 function loadAll() {
@@ -1564,8 +1567,8 @@ function selectAcct(el) {
 function getSelectedAcct(listId) {
   var sel = document.getElementById(listId).querySelector('.acct-option.selected');
   if (!sel) return null;
-  // strip icon prefix (first char if emoji)
-  return sel.textContent.trim().replace(/^.\s/,'');
+  // strip icon prefix (first char if emoji) — must use /u flag so . matches full surrogate-pair emoji
+  return sel.textContent.trim().replace(/^.\s/u,'');
 }
 
 // ════════════════════════════════════════════
