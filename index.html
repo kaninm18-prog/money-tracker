@@ -655,7 +655,7 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 <div class="modal-overlay" id="transfer-modal">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">Transfer Between Accounts</div>
+    <div class="modal-title" id="transfer-modal-title">Transfer Between Accounts</div>
     <div class="form-group">
       <label class="form-label">Amount (฿)</label>
       <div class="amount-wrap"><span class="amount-prefix">฿</span>
@@ -679,6 +679,8 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
       <input type="date" class="form-control" id="ft-date">
     </div>
     <button class="btn btn-primary" onclick="saveTransfer()" id="save-transfer-btn" style="background:var(--transfer-color)">Save Transfer</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" id="delete-transfer-btn" onclick="deleteCurrentTransfer()" style="display:none">Delete Transfer</button>
     <div style="height:8px"></div>
     <button class="btn btn-ghost" onclick="closeModal('transfer-modal')">Cancel</button>
   </div>
@@ -743,7 +745,7 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 <div class="modal-overlay" id="receivable-modal">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">Add Receivable</div>
+    <div class="modal-title" id="receivable-modal-title">Add Receivable</div>
     <div class="form-group">
       <label class="form-label">Type</label>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="recv-type-grid">
@@ -774,6 +776,8 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
       <input type="date" class="form-control" id="fr-date">
     </div>
     <button class="btn btn-primary" style="background:#16a34a" onclick="saveReceivable()" id="save-recv-btn">Save Receivable</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" id="delete-recv-btn" onclick="deleteCurrentReceivable()" style="display:none">Delete Receivable</button>
     <div style="height:8px"></div>
     <button class="btn btn-ghost" onclick="closeModal('receivable-modal')">Cancel</button>
   </div>
@@ -868,7 +872,7 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 <div class="modal-overlay" id="installment-modal">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">Add Installment Plan</div>
+    <div class="modal-title" id="installment-modal-title">Add Installment Plan</div>
     <div class="form-group">
       <label class="form-label">Description</label>
       <input type="text" class="form-control" id="fin-desc" placeholder="e.g. iPhone 15 Pro">
@@ -913,6 +917,8 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
       </select>
     </div>
     <button class="btn btn-primary" onclick="saveInstallmentPlan()" id="save-installment-btn">Add Plan</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" id="delete-installment-btn" onclick="deleteCurrentInstallment()" style="display:none">Delete Plan</button>
     <div style="height:8px"></div>
     <button class="btn btn-ghost" onclick="closeModal('installment-modal')">Cancel</button>
   </div>
@@ -988,7 +994,10 @@ var accountsEditMode = false;
 var activeTypeTab    = 'all';
 var activeProjectsTab = 'projects';
 var activeRecvTab    = 'pending';
-var editingExpenseRow  = null;
+var editingExpenseRow      = null;
+var editingTransferRow     = null;
+var editingReceivableRow   = null;
+var editingInstallmentRow  = null;
 var editingIncomeRow   = null;
 var editingAccountRow  = null;
 var editingProjectRow  = null;
@@ -1419,6 +1428,7 @@ function txnHtml(t) {
   var onclickAttr = '';
   if (t.type==='expense')  onclickAttr = 'onclick="openEditExpense('+t.rowIndex+')"';
   if (t.type==='income')   onclickAttr = 'onclick="openEditIncome('+t.rowIndex+')"';
+  if (t.type==='transfer') onclickAttr = 'onclick="openEditTransfer('+t.rowIndex+')"';
   return '<div class="txn-item" '+onclickAttr+'>' +
     '<div class="txn-icon '+t.type+'">'+icon+'</div>' +
     '<div class="txn-info"><div class="txn-cat">'+label+'</div><div class="txn-sub">'+sublabel+'</div></div>' +
@@ -1623,18 +1633,34 @@ function deleteCurrentIncome() {
 // ════════════════════════════════════════════
 //  TRANSFER
 // ════════════════════════════════════════════
-function openTransferForm() {
+function openTransferForm(rowIndex) {
   closeModal('chooser-modal');
-  document.getElementById('ft-amount').value = '';
-  document.getElementById('ft-note').value   = '';
-  document.getElementById('ft-date').value   = todayStr();
+  editingTransferRow = rowIndex || null;
+  document.getElementById('transfer-modal-title').textContent = rowIndex ? 'Edit Transfer' : 'Transfer Between Accounts';
+  document.getElementById('save-transfer-btn').textContent    = rowIndex ? 'Update Transfer' : 'Save Transfer';
+  document.getElementById('delete-transfer-btn').style.display = rowIndex ? 'block' : 'none';
   var opts = accounts.map(function(a){ return '<option value="'+escQ(a.name)+'">'+acctIcon(a.type)+' '+a.name+'</option>'; }).join('');
   document.getElementById('ft-from').innerHTML = opts;
   document.getElementById('ft-to').innerHTML   = opts;
-  // default to different accounts if possible
-  if (accounts.length > 1) document.getElementById('ft-to').selectedIndex = 1;
+  if (rowIndex) {
+    var t = transactions.find(function(x){ return x.type==='transfer' && x.rowIndex===rowIndex; });
+    if (t) {
+      document.getElementById('ft-amount').value = t.amount;
+      document.getElementById('ft-note').value   = t.note || '';
+      document.getElementById('ft-date').value   = t.date || todayStr();
+      document.getElementById('ft-from').value   = t.fromAccount || '';
+      document.getElementById('ft-to').value     = t.toAccount   || '';
+    }
+  } else {
+    document.getElementById('ft-amount').value = '';
+    document.getElementById('ft-note').value   = '';
+    document.getElementById('ft-date').value   = todayStr();
+    if (accounts.length > 1) document.getElementById('ft-to').selectedIndex = 1;
+  }
   openModal('transfer-modal');
 }
+
+function openEditTransfer(rowIndex) { openTransferForm(rowIndex); }
 
 function saveTransfer() {
   var amount = parseFloat(document.getElementById('ft-amount').value);
@@ -1644,12 +1670,23 @@ function saveTransfer() {
   if (from === to) { toast('From and To accounts must be different'); return; }
   var note = document.getElementById('ft-note').value.trim();
   var date = document.getElementById('ft-date').value || todayStr();
+  var action = editingTransferRow ? 'updateTransfer' : 'addTransfer';
+  var payload = { action, amount, fromAccount:from, toAccount:to, note, date };
+  if (editingTransferRow) payload.rowIndex = editingTransferRow;
   document.getElementById('save-transfer-btn').textContent = 'Saving…';
-  api({ action:'addTransfer', amount, fromAccount:from, toAccount:to, note, date }).then(function(res) {
-    if (res.ok) { closeModal('transfer-modal'); toast('Transfer saved!'); loadAll(); }
+  api(payload).then(function(res) {
+    if (res.ok) { closeModal('transfer-modal'); toast(editingTransferRow ? 'Updated!' : 'Transfer saved!'); loadAll(); }
     else { toast('Error: '+(res.error||'?')); }
-    document.getElementById('save-transfer-btn').textContent = 'Save Transfer';
+    document.getElementById('save-transfer-btn').textContent = editingTransferRow ? 'Update Transfer' : 'Save Transfer';
   }).catch(function(){ toast('Connection error'); document.getElementById('save-transfer-btn').textContent='Save Transfer'; });
+}
+
+function deleteCurrentTransfer() {
+  if (!editingTransferRow || !confirm('Delete this transfer?')) return;
+  api({action:'deleteTransfer', rowIndex:editingTransferRow}).then(function(res) {
+    if (res.ok) { closeModal('transfer-modal'); toast('Deleted'); loadAll(); }
+    else { toast('Error: '+res.error); }
+  });
 }
 
 // ════════════════════════════════════════════
@@ -1974,6 +2011,7 @@ function renderReceivables() {
           '<div class="recv-note">'+(r.note||'—')+'</div>' +
           '<div class="recv-meta">'+fmtDate(r.date)+reimbInfo+'</div>' +
           (r.status==='pending' ? '<button class="recv-settle-btn" onclick="settleReceivable('+r.rowIndex+')">✓ Mark Settled</button>' : '<div style="font-size:0.72rem;color:var(--text2);margin-top:4px">Settled '+fmtDate(r.settledDate)+'</div>') +
+          '<button class="recv-settle-btn" style="background:var(--text2);margin-right:4px" onclick="openEditReceivable('+r.rowIndex+')">✏️ Edit</button>' +
           '<button class="recv-del-btn" onclick="deleteReceivable('+r.rowIndex+')">🗑️ Delete</button>' +
         '</div>' +
         '<div class="recv-right"><div class="recv-amount">'+fmtMoney(r.amount)+'</div><div class="recv-status '+r.status+'">'+r.status+'</div></div>' +
@@ -1983,19 +2021,39 @@ function renderReceivables() {
   document.getElementById('receivables-list').innerHTML = html;
 }
 
-function openReceivableForm() {
+function openReceivableForm(rowIndex) {
   closeModal('chooser-modal');
-  document.getElementById('fr-amount').value       = '';
-  document.getElementById('fr-counterparty').value = '';
-  document.getElementById('fr-reimbursedby').value = 'PTTEP';
-  document.getElementById('fr-note').value         = '';
-  document.getElementById('fr-date').value         = todayStr();
-  // default to advance
-  document.querySelectorAll('#recv-type-grid .acct-option').forEach(function(el,i){ el.classList.toggle('selected',i===0); });
-  document.getElementById('fr-counterparty-group').style.display = 'block';
-  document.getElementById('fr-reimb-group').style.display = 'none';
+  editingReceivableRow = rowIndex || null;
+  document.getElementById('receivable-modal-title').textContent = rowIndex ? 'Edit Receivable' : 'Add Receivable';
+  document.getElementById('save-recv-btn').textContent          = rowIndex ? 'Update Receivable' : 'Save Receivable';
+  document.getElementById('delete-recv-btn').style.display      = rowIndex ? 'block' : 'none';
+  if (rowIndex) {
+    var r = receivables.find(function(x){ return x.rowIndex===rowIndex; });
+    if (r) {
+      document.getElementById('fr-amount').value       = r.amount;
+      document.getElementById('fr-counterparty').value = r.counterparty || '';
+      document.getElementById('fr-reimbursedby').value = r.reimbursedBy || 'PTTEP';
+      document.getElementById('fr-note').value         = r.note || '';
+      document.getElementById('fr-date').value         = r.date || todayStr();
+      var isWork = r.type === 'work';
+      document.querySelectorAll('#recv-type-grid .acct-option').forEach(function(el,i){ el.classList.toggle('selected', isWork ? i===1 : i===0); });
+      document.getElementById('fr-counterparty-group').style.display = isWork ? 'none' : 'block';
+      document.getElementById('fr-reimb-group').style.display        = isWork ? 'block' : 'none';
+    }
+  } else {
+    document.getElementById('fr-amount').value       = '';
+    document.getElementById('fr-counterparty').value = '';
+    document.getElementById('fr-reimbursedby').value = 'PTTEP';
+    document.getElementById('fr-note').value         = '';
+    document.getElementById('fr-date').value         = todayStr();
+    document.querySelectorAll('#recv-type-grid .acct-option').forEach(function(el,i){ el.classList.toggle('selected',i===0); });
+    document.getElementById('fr-counterparty-group').style.display = 'block';
+    document.getElementById('fr-reimb-group').style.display = 'none';
+  }
   openModal('receivable-modal');
 }
+
+function openEditReceivable(rowIndex) { openReceivableForm(rowIndex); }
 
 function selectRecvType(el, type) {
   document.querySelectorAll('#recv-type-grid .acct-option').forEach(function(x){ x.classList.remove('selected'); });
@@ -2009,22 +2067,31 @@ function saveReceivable() {
   if (!amount || amount<=0) { toast('Enter a valid amount'); return; }
   var typeEls = document.querySelectorAll('#recv-type-grid .acct-option.selected');
   var type = typeEls.length ? (typeEls[0].textContent.includes('Work') ? 'work' : 'advance') : 'advance';
-  document.getElementById('save-recv-btn').textContent = 'Saving…';
-  api({
-    action: 'addReceivable',
-    amount: amount,
-    type: type,
+  var payload = {
+    action: editingReceivableRow ? 'updateReceivable' : 'addReceivable',
+    amount: amount, type: type,
     counterparty: document.getElementById('fr-counterparty').value.trim(),
     reimbursedBy: document.getElementById('fr-reimbursedby').value.trim(),
     note: document.getElementById('fr-note').value.trim(),
     date: document.getElementById('fr-date').value || todayStr()
-  }).then(function(res){
+  };
+  if (editingReceivableRow) payload.rowIndex = editingReceivableRow;
+  document.getElementById('save-recv-btn').textContent = 'Saving…';
+  api(payload).then(function(res){
     if (res.ok) {
       closeModal('receivable-modal');
-      toast('Receivable saved!');
+      toast(editingReceivableRow ? 'Updated!' : 'Receivable saved!');
       api({action:'getReceivables'}).then(function(r){ if(r.ok){ receivables=r.receivables; renderReceivables(); } });
     } else { toast('Error: '+res.error); }
-    document.getElementById('save-recv-btn').textContent = 'Save Receivable';
+    document.getElementById('save-recv-btn').textContent = editingReceivableRow ? 'Update Receivable' : 'Save Receivable';
+  });
+}
+
+function deleteCurrentReceivable() {
+  if (!editingReceivableRow || !confirm('Delete this receivable?')) return;
+  api({action:'deleteReceivable', rowIndex:editingReceivableRow}).then(function(res){
+    if (res.ok) { closeModal('receivable-modal'); toast('Deleted'); api({action:'getReceivables'}).then(function(r){ if(r.ok){ receivables=r.receivables; renderReceivables(); } }); }
+    else { toast('Error: '+res.error); }
   });
 }
 
@@ -2111,6 +2178,7 @@ function renderInstallments() {
         (statusCls==='active'?
           '<div class="inst-actions">'+
             (paymentDue ? '<button class="btn btn-primary" style="font-size:0.82rem;padding:7px 12px" onclick="markInstallmentPaid('+p.rowIndex+')">✓ Mark Inst '+(paid+1)+' Paid</button>' : '')+
+            '<button class="acc-edit-btn" onclick="openAddInstallmentPlan('+p.rowIndex+')">✏️ Edit</button>'+
             '<button class="acc-edit-btn" onclick="cancelInstallmentPlan('+p.rowIndex+')">Cancel Plan</button>'+
           '</div>' : '')+
       '</div>';
@@ -2120,14 +2188,32 @@ function renderInstallments() {
   if (listEl) listEl.innerHTML = html;
 }
 
-function openAddInstallmentPlan() {
-  document.getElementById('fin-desc').value = '';
-  document.getElementById('fin-merchant').value = '';
-  document.getElementById('fin-purchase-date').value = todayStr();
-  document.getElementById('fin-total').value = '';
-  document.getElementById('fin-months').value = '';
-  document.getElementById('fin-first-date').value = todayStr();
-  document.getElementById('fin-preview').style.display = 'none';
+function openAddInstallmentPlan(rowIndex) {
+  editingInstallmentRow = rowIndex || null;
+  document.getElementById('installment-modal-title').textContent = rowIndex ? 'Edit Installment Plan' : 'Add Installment Plan';
+  document.getElementById('save-installment-btn').textContent    = rowIndex ? 'Update Plan' : 'Add Plan';
+  document.getElementById('delete-installment-btn').style.display = rowIndex ? 'block' : 'none';
+  if (rowIndex) {
+    var p = installmentPlans.find(function(x){ return x.rowIndex===rowIndex; });
+    if (p) {
+      document.getElementById('fin-desc').value          = p.description || '';
+      document.getElementById('fin-merchant').value      = p.merchant || '';
+      document.getElementById('fin-purchase-date').value = p.purchaseDate || todayStr();
+      document.getElementById('fin-total').value         = p.totalAmount || '';
+      document.getElementById('fin-months').value        = p.installmentCount || '';
+      document.getElementById('fin-first-date').value    = p.firstInstallmentDate || todayStr();
+      document.getElementById('fin-preview').style.display = 'block';
+      document.getElementById('fin-preview').textContent = fmtMoney(p.installmentAmount) + ' per month for ' + p.installmentCount + ' months';
+    }
+  } else {
+    document.getElementById('fin-desc').value = '';
+    document.getElementById('fin-merchant').value = '';
+    document.getElementById('fin-purchase-date').value = todayStr();
+    document.getElementById('fin-total').value = '';
+    document.getElementById('fin-months').value = '';
+    document.getElementById('fin-first-date').value = todayStr();
+    document.getElementById('fin-preview').style.display = 'none';
+  }
 
   // Populate account dropdown
   var acctOpts = accounts.map(function(a){ return '<option value="'+escQ(a.name)+'">'+acctIcon(a.type)+' '+a.name+'</option>'; }).join('');
@@ -2171,34 +2257,54 @@ function saveInstallmentPlan() {
   if (!firstDate) { toast('Select first installment date'); return; }
 
   var payload = {
-    action: 'addInstallmentPlan',
+    action: editingInstallmentRow ? 'updateInstallmentPlan' : 'addInstallmentPlan',
     description: desc,
     merchant: document.getElementById('fin-merchant').value.trim(),
     purchaseDate: document.getElementById('fin-purchase-date').value,
     totalAmount: total,
-    totalMonths: months,
-    monthlyAmount: total / months,
+    installmentCount: months,
+    installmentAmount: total / months,
     firstInstallmentDate: firstDate,
     account: acct,
     category: cat,
     projectId: document.getElementById('fin-project').value
   };
+  if (editingInstallmentRow) {
+    payload.rowIndex = editingInstallmentRow;
+    var existing = installmentPlans.find(function(x){ return x.rowIndex===editingInstallmentRow; });
+    payload.installmentsPaid = existing ? existing.installmentsPaid : 0;
+    payload.status = existing ? existing.status : 'active';
+  }
 
   document.getElementById('save-installment-btn').textContent = 'Saving…';
   api(payload).then(function(res){
     if (res.ok) {
       closeModal('installment-modal');
-      toast('Installment plan added!');
+      toast(editingInstallmentRow ? 'Plan updated!' : 'Installment plan added!');
       api({action:'getInstallmentPlans'}).then(function(r){ if(r.ok){ installmentPlans=r.installmentPlans||[]; renderInstallments(); } });
     } else { toast('Error: '+(res.error||'?')); }
-    document.getElementById('save-installment-btn').textContent = 'Add Plan';
+    document.getElementById('save-installment-btn').textContent = editingInstallmentRow ? 'Update Plan' : 'Add Plan';
   }).catch(function(){ toast('Connection error'); document.getElementById('save-installment-btn').textContent = 'Add Plan'; });
 }
 
 function cancelInstallmentPlan(rowIndex) {
   if (!confirm('Cancel this installment plan? History will be kept.')) return;
-  api({action:'updateInstallmentPlan', rowIndex:rowIndex, status:'cancelled'}).then(function(res){
+  var existing = installmentPlans.find(function(x){ return x.rowIndex===rowIndex; });
+  if (!existing) return;
+  api({action:'updateInstallmentPlan', rowIndex:rowIndex, status:'cancelled',
+       description:existing.description, totalAmount:existing.totalAmount,
+       installmentCount:existing.installmentCount, firstInstallmentDate:existing.firstInstallmentDate,
+       account:existing.account, category:existing.category, installmentsPaid:existing.installmentsPaid
+  }).then(function(res){
     if (res.ok) { toast('Plan cancelled'); api({action:'getInstallmentPlans'}).then(function(r){ if(r.ok){ installmentPlans=r.installmentPlans||[]; renderInstallments(); } }); }
+    else { toast('Error: '+res.error); }
+  });
+}
+
+function deleteCurrentInstallment() {
+  if (!editingInstallmentRow || !confirm('Permanently delete this installment plan? This cannot be undone.')) return;
+  api({action:'deleteInstallmentPlan', rowIndex:editingInstallmentRow}).then(function(res){
+    if (res.ok) { closeModal('installment-modal'); toast('Plan deleted'); api({action:'getInstallmentPlans'}).then(function(r){ if(r.ok){ installmentPlans=r.installmentPlans||[]; renderInstallments(); } }); }
     else { toast('Error: '+res.error); }
   });
 }
@@ -2293,13 +2399,6 @@ function saveBudget() {
   if (!category) { toast('Select a category'); return; }
   if (!limit || limit <= 0) { toast('Enter a valid limit'); return; }
   var rowIndex = document.getElementById('budget-modal').dataset.rowIndex;
-  var payload = {
-    action: 'setBudget',
-    category: category,
-    monthlyLimit: limit,
-    alertThreshold: (parseInt(document.getElementById('fb-threshold').value) || 80) / 100,
-    appliesToProjects: document.getElementById('fb-include-projects').checked
-  };
   if (rowIndex) payload.rowIndex = parseInt(rowIndex);
   document.getElementById('save-budget-btn').textContent = 'Saving…';
   api(payload).then(function(res){
@@ -2360,8 +2459,6 @@ function renderAnnualSummaryContent(res) {
   var savingsRate = totalInc > 0 ? Math.round(surplus / totalInc * 100) : 0;
   var monthly = res.monthly || [];
   var catBreakdown = res.categoryBreakdown || [];
-
-  // Bar chart
   var maxVal = 0;
   monthly.forEach(function(m){ if((m.income||0)>maxVal) maxVal=m.income; if((m.expenses||0)>maxVal) maxVal=m.expenses; });
   if (maxVal === 0) maxVal = 1;
@@ -2369,48 +2466,17 @@ function renderAnnualSummaryContent(res) {
   var barsHtml = monthly.map(function(m, i){
     var incH = Math.round((m.income||0)/maxVal*76);
     var expH = Math.round((m.expenses||0)/maxVal*76);
-    return '<div class="month-bar-group">' +
-      '<div class="month-bar-pair">' +
-        '<div class="month-bar-inc" style="height:'+incH+'px"></div>' +
-        '<div class="month-bar-exp" style="height:'+expH+'px"></div>' +
-      '</div>' +
-      '<div class="month-bar-lbl">'+(shortMonths[i]||'')+'</div>' +
-    '</div>';
+    return '<div class="month-bar-group"><div class="month-bar-pair"><div class="month-bar-inc" style="height:'+incH+'px"></div><div class="month-bar-exp" style="height:'+expH+'px"></div></div><div class="month-bar-lbl">'+(shortMonths[i]||'')+'</div></div>';
   }).join('');
-
-  // Category breakdown
   var catHtml = catBreakdown.slice(0,8).map(function(c){
     var pct = totalExp > 0 ? Math.round((c.amount||0)/totalExp*100) : 0;
-    return '<div class="annual-cat-row">' +
-      '<div class="annual-cat-icon">'+catIcon(c.category)+'</div>' +
-      '<div class="annual-cat-name">'+escQ(c.category||'Other')+'</div>' +
-      '<div class="annual-cat-pct">'+pct+'%</div>' +
-      '<div class="annual-cat-amt">'+fmtMoney(c.amount||0)+'</div>' +
-    '</div>';
+    return '<div class="annual-cat-row"><div class="annual-cat-icon">'+catIcon(c.category)+'</div><div class="annual-cat-name">'+escQ(c.category||'Other')+'</div><div class="annual-cat-pct">'+pct+'%</div><div class="annual-cat-amt">'+fmtMoney(c.amount||0)+'</div></div>';
   }).join('');
-
   var srColor = savingsRate >= 20 ? 'var(--income-color)' : savingsRate >= 0 ? 'var(--transfer-color)' : 'var(--expense-color)';
-
-  var html = '<div class="savings-rate-hero">' +
-    '<div class="savings-rate-pct">'+savingsRate+'%</div>' +
-    '<div class="savings-rate-label">Savings Rate</div>' +
-  '</div>' +
-  '<div class="annual-metric-grid">' +
-    '<div class="annual-metric"><div class="annual-metric-val" style="color:var(--income-color)">'+fmtMoney(totalInc)+'</div><div class="annual-metric-label">Total Income</div></div>' +
-    '<div class="annual-metric"><div class="annual-metric-val" style="color:var(--expense-color)">'+fmtMoney(totalExp)+'</div><div class="annual-metric-label">Total Expenses</div></div>' +
-    '<div class="annual-metric"><div class="annual-metric-val" style="color:'+(surplus>=0?'var(--income-color)':'var(--expense-color)')+'">'+fmtMoney(surplus)+'</div><div class="annual-metric-label">'+(surplus>=0?'Surplus':'Deficit')+'</div></div>' +
-    '<div class="annual-metric"><div class="annual-metric-val" style="color:'+srColor+'">'+savingsRate+'%</div><div class="annual-metric-label">Saved</div></div>' +
-  '</div>' +
-  '<div class="card" style="margin-bottom:12px">' +
-    '<div class="card-title">Month by Month</div>' +
-    '<div style="display:flex;gap:10px;font-size:0.68rem;color:var(--text2);margin-bottom:6px"><span style="color:var(--income-color)">▌ Income</span><span style="color:var(--expense-color)">▌ Expenses</span></div>' +
-    '<div class="month-bars">'+barsHtml+'</div>' +
-  '</div>' +
-  '<div class="card">' +
-    '<div class="card-title">Category Breakdown</div>' +
-    (catHtml || '<div class="empty" style="padding:20px"><p>No expense data</p></div>') +
-  '</div>';
-
+  var html = '<div class="savings-rate-hero"><div class="savings-rate-pct">'+savingsRate+'%</div><div class="savings-rate-label">Savings Rate</div></div>' +
+    '<div class="annual-metric-grid"><div class="annual-metric"><div class="annual-metric-val" style="color:var(--income-color)">'+fmtMoney(totalInc)+'</div><div class="annual-metric-label">Total Income</div></div><div class="annual-metric"><div class="annual-metric-val" style="color:var(--expense-color)">'+fmtMoney(totalExp)+'</div><div class="annual-metric-label">Total Expenses</div></div><div class="annual-metric"><div class="annual-metric-val" style="color:'+(surplus>=0?'var(--income-color)':'var(--expense-color)')+'">'+fmtMoney(surplus)+'</div><div class="annual-metric-label">'+(surplus>=0?'Surplus':'Deficit')+'</div></div><div class="annual-metric"><div class="annual-metric-val" style="color:'+srColor+'">'+savingsRate+'%</div><div class="annual-metric-label">Saved</div></div></div>' +
+    '<div class="card" style="margin-bottom:12px"><div class="card-title">Month by Month</div><div style="display:flex;gap:10px;font-size:0.68rem;color:var(--text2);margin-bottom:6px"><span style="color:var(--income-color)">▌ Income</span><span style="color:var(--expense-color)">▌ Expenses</span></div><div class="month-bars">'+barsHtml+'</div></div>' +
+    '<div class="card"><div class="card-title">Category Breakdown</div>'+(catHtml || '<div class="empty" style="padding:20px"><p>No expense data</p></div>')+'</div>';
   document.getElementById('annual-summary-content').innerHTML = html;
 }
 
@@ -2421,23 +2487,13 @@ function exportMonth() {
   if (typeof XLSX === 'undefined') { toast('SheetJS not loaded'); return; }
   var txnRows = [['Date','Type','Category','Amount','Account','Note']];
   transactions.forEach(function(t){
-    txnRows.push([
-      t.date||'',
-      t.type||'',
-      t.type==='transfer'?'Transfer':(t.category||''),
-      t.amount||0,
-      t.type==='transfer'?(t.fromAccount+' → '+t.toAccount):(t.account||''),
-       t.note||''
-    ]);
+    txnRows.push([t.date||'',t.type||'',t.type==='transfer'?'Transfer':(t.category||''),t.amount||0,t.type==='transfer'?(t.fromAccount+' → '+t.toAccount):(t.account||''),t.note||'']);
   });
-
   var acctRows = [['Account','Type','Balance']];
   accounts.forEach(function(a){ acctRows.push([a.name, a.type, a.balance||0]); });
-
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(txnRows), 'Transactions');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(acctRows), 'Accounts');
-
   var fname = 'MoneyTracker_'+viewYear+'_'+pad(viewMonth)+'.xlsx';
   XLSX.writeFile(wb, fname);
   toast('Exported: '+fname);
@@ -2449,26 +2505,15 @@ function exportYear() {
   api({action:'getAnnualSummary', year:viewYear}).then(function(res){
     var summaryRows = [['Month','Income','Expenses','Net']];
     if (res.ok && res.monthly) {
-      res.monthly.forEach(function(m, i){
-        summaryRows.push([MONTH_NAMES[i], m.income||0, m.expenses||0, (m.income||0)-(m.expenses||0)]);
-      });
+      res.monthly.forEach(function(m, i){ summaryRows.push([MONTH_NAMES[i], m.income||0, m.expenses||0, (m.income||0)-(m.expenses||0)]); });
     }
-
     var txnRows = [['Date','Type','Category','Amount','Account','Note']];
     transactions.forEach(function(t){
-      txnRows.push([
-        t.date||'', t.type||'',
-        t.type==='transfer'?'Transfer':(t.category||''),
-        t.amount||0,
-        t.type==='transfer'?(t.fromAccount+' → '+t.toAccount):(t.account||''),
-        t.note||''
-      ]);
+      txnRows.push([t.date||'',t.type||'',t.type==='transfer'?'Transfer':(t.category||''),t.amount||0,t.type==='transfer'?(t.fromAccount+' → '+t.toAccount):(t.account||''),t.note||'']);
     });
-
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(txnRows), 'Transactions');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'Monthly Summary');
-
     var fname = 'MoneyTracker_'+viewYear+'.xlsx';
     XLSX.writeFile(wb, fname);
     toast('Exported: '+fname);

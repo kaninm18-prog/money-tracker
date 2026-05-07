@@ -143,6 +143,7 @@ function doPost(e) {
       case "deleteIncome":           return deleteIncome(p);
       case "addTransfer":            return addTransfer(p);
       case "getTransfers":           return getTransfers(p);
+      case "updateTransfer":         return updateTransfer(p);
       case "deleteTransfer":         return deleteTransfer(p);
       case "getAccounts":            return getAccounts();
       case "addAccount":             return addAccount(p);
@@ -161,6 +162,7 @@ function doPost(e) {
       case "getReceivables":         return getReceivables();
       case "addReceivable":          return addReceivable(p);
       case "settleReceivable":       return settleReceivable(p);
+      case "updateReceivable":       return updateReceivable(p);
       case "deleteReceivable":       return deleteReceivable(p);
       case "getAllTransactions":      return getAllTransactions(p);
       case "getSummary":             return getSummary(p);
@@ -295,6 +297,17 @@ function getTransfers(p) {
   }
   rows.reverse();
   return jsonResponse({ ok: true, transfers: rows });
+}
+
+function updateTransfer(p) {
+  var sh  = getSheet(SHEET.TRANSFERS);
+  var row = parseInt(p.rowIndex);
+  if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
+  sh.getRange(row, 1, 1, 5).setValues([[
+    p.date || todayStr(), toFloat(p.amount),
+    p.fromAccount || "", p.toAccount || "", p.note || ""
+  ]]);
+  return jsonResponse({ ok: true });
 }
 
 function deleteTransfer(p) {
@@ -467,6 +480,19 @@ function addReceivable(p) {
     "pending", ""
   ]);
   return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
+}
+
+function updateReceivable(p) {
+  var sh  = getSheet(SHEET.RECEIVABLES);
+  var row = parseInt(p.rowIndex);
+  if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
+  // Keep existing status/settledDate (cols 7-8), only update cols 1-6
+  sh.getRange(row, 1, 1, 6).setValues([[
+    p.date || todayStr(), toFloat(p.amount),
+    p.counterparty || "", p.type || "advance",
+    p.note || "", p.reimbursedBy || ""
+  ]]);
+  return jsonResponse({ ok: true });
 }
 
 function settleReceivable(p) {
@@ -746,19 +772,4 @@ function deleteBudget(p) {
 
 function getAnnualSummary(p) {
   var y = parseInt(p.year) || new Date().getFullYear();
-  var expenses = sheetToRows(getSheet(SHEET.EXPENSES), function(d) {
-    return { date: formatDate(d[0]), amount: toFloat(d[1]), category: d[2], projectId: d[7] || '' };
-  }).filter(function(r) { return r.date && parseInt(r.date.substring(0, 4)) === y; });
-
-  var incomes = sheetToRows(getSheet(SHEET.INCOME), function(d) {
-    return { date: formatDate(d[0]), amount: toFloat(d[1]), category: d[2] };
-  }).filter(function(r) { return r.date && parseInt(r.date.substring(0, 4)) === y; });
-
-  // Monthly breakdown (12 months)
-  var monthly = [];
-  for (var mo = 1; mo <= 12; mo++) {
-    var mRegExp  = expenses.filter(function(e){ return dateMatchesMonth(e.date, mo, y) && !e.projectId; })
-                           .reduce(function(s,e){ return s+e.amount; }, 0);
-    var mProjExp = expenses.filter(function(e){ return dateMatchesMonth(e.date, mo, y) && !!e.projectId; })
-                           .reduce(function(s,e){ return s+e.amount; }, 0);
-    var mInc     = inco
+  var expe
