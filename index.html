@@ -2437,4 +2437,14 @@ function exportYear() {
     });
 
     var wb = XLSX.utils.book_new();
-    XLSX.utils.
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(txnRows), 'Transactions');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'Monthly Summary');
+
+    var fname = 'MoneyTracker_'+viewYear+'.xlsx';
+    XLSX.writeFile(wb, fname);
+    toast('Exported: '+fname);
+  }).catch(function(){ toast('Export failed'); });
+}
+</script>
+</body>
+</html>
