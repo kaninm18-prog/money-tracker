@@ -169,6 +169,7 @@ function doPost(e) {
       case "updateInstallmentPlan":  return updateInstallmentPlan(p);
       case "deleteInstallmentPlan":  return deleteInstallmentPlan(p);
       case "checkInstallments":      return checkInstallments();
+      case "markInstallmentPaid":    return markInstallmentPaid(p);
       case "getBudgets":             return getBudgets(p);
       case "setBudget":              return setBudget(p);
       case "deleteBudget":           return deleteBudget(p);
@@ -318,16 +319,17 @@ function getAccounts() {
   var expSh  = getSheet(SHEET.EXPENSES);
   var incSh  = getSheet(SHEET.INCOME);
   var trfSh  = getSheet(SHEET.TRANSFERS);
-  var expRows = sheetToRows(expSh, function(d){ return { amount: toFloat(d[1]), account: d[4] }; });
-  var incRows = sheetToRows(incSh, function(d){ return { amount: toFloat(d[1]), account: d[4] }; });
-  var trfRows = sheetToRows(trfSh, function(d){ return { amount: toFloat(d[1]), from: d[2], to: d[3] }; });
+  var expRows = sheetToRows(expSh, function(d){ return { amount: toFloat(d[1]), account: String(d[4]||'').trim() }; });
+  var incRows = sheetToRows(incSh, function(d){ return { amount: toFloat(d[1]), account: String(d[4]||'').trim() }; });
+  var trfRows = sheetToRows(trfSh, function(d){ return { amount: toFloat(d[1]), from: String(d[2]||'').trim(), to: String(d[3]||'').trim() }; });
   accounts.forEach(function(acc) {
+    var n = String(acc.name||'').trim();
     var bal = acc.startingBalance;
-    incRows.forEach(function(r){ if (r.account === acc.name) bal += r.amount; });
-    expRows.forEach(function(r){ if (r.account === acc.name) bal -= r.amount; });
+    incRows.forEach(function(r){ if (r.account === n) bal += r.amount; });
+    expRows.forEach(function(r){ if (r.account === n) bal -= r.amount; });
     trfRows.forEach(function(r){
-      if (r.from === acc.name) bal -= r.amount;
-      if (r.to   === acc.name) bal += r.amount;
+      if (r.from === n) bal -= r.amount;
+      if (r.to   === n) bal += r.amount;
     });
     acc.balance = Math.round(bal * 100) / 100;
   });
@@ -643,6 +645,46 @@ function checkInstallments() {
   return jsonResponse({ ok: true, generated: generated });
 }
 
+// Manually mark the next due installment as paid for a specific plan
+function markInstallmentPaid(p) {
+  var sh    = getSheet(SHEET.INSTALLMENTS);
+  var expSh = getSheet(SHEET.EXPENSES);
+  var row   = parseInt(p.rowIndex);
+  if (row < 2) return jsonResponse({ ok: false, error: 'Invalid row' });
+
+  var data  = sh.getRange(row, 1, 1, 12).getValues()[0];
+  var plan  = {
+    description:          data[0],
+    installmentCount:     parseInt(data[4]) || 0,
+    installmentAmount:    toFloat(data[5]),
+    firstInstallmentDate: formatDate(data[6]),
+    account:              data[7],
+    category:             data[8],
+    projectId:            data[9] || '',
+    status:               data[10] || 'active',
+    installmentsPaid:     parseInt(data[11]) || 0
+  };
+
+  if (plan.status !== 'active') return jsonResponse({ ok: false, error: 'Plan is not active' });
+  if (plan.installmentsPaid >= plan.installmentCount) return jsonResponse({ ok: false, error: 'All installments already paid' });
+
+  var instNum  = plan.installmentsPaid + 1;
+  var instDate = addMonths(plan.firstInstallmentDate, plan.installmentsPaid);
+  var note     = '[Inst ' + instNum + '/' + plan.installmentCount + '] ' + plan.description;
+  expSh.appendRow([
+    instDate, plan.installmentAmount,
+    plan.category || 'Shopping', note,
+    plan.account || '', 'FALSE', '', plan.projectId || ''
+  ]);
+
+  var newPaid = plan.installmentsPaid + 1;
+  sh.getRange(row, 12, 1, 1).setValue(newPaid);
+  if (newPaid >= plan.installmentCount) {
+    sh.getRange(row, 11, 1, 1).setValue('completed');
+  }
+  return jsonResponse({ ok: true, instNum: instNum, instDate: instDate });
+}
+
 // ── CATEGORY BUDGETS ─────────────────────────────────────────
 
 function getBudgets(p) {
@@ -719,42 +761,4 @@ function getAnnualSummary(p) {
                            .reduce(function(s,e){ return s+e.amount; }, 0);
     var mProjExp = expenses.filter(function(e){ return dateMatchesMonth(e.date, mo, y) && !!e.projectId; })
                            .reduce(function(s,e){ return s+e.amount; }, 0);
-    var mInc     = incomes.filter(function(e){ return dateMatchesMonth(e.date, mo, y); })
-                          .reduce(function(s,e){ return s+e.amount; }, 0);
-    var mNet     = mInc - mRegExp - mProjExp;
-    monthly.push({
-      month: mo,
-      income:          Math.round(mInc*100)/100,
-      regularExpenses: Math.round(mRegExp*100)/100,
-      projectExpenses: Math.round(mProjExp*100)/100,
-      net:             Math.round(mNet*100)/100,
-      savingsRate:     mInc > 0 ? Math.round(mNet/mInc*100) : 0
-    });
-  }
-
-  // Category breakdown (all expenses)
-  var byCat = {};
-  expenses.forEach(function(e){ byCat[e.category] = (byCat[e.category]||0) + e.amount; });
-  var categories = Object.keys(byCat).map(function(c){
-    return { category: c, amount: Math.round(byCat[c]*100)/100 };
-  }).sort(function(a,b){ return b.amount - a.amount; });
-
-  var totalIncome   = Math.round(incomes.reduce(function(s,e){ return s+e.amount; }, 0)*100)/100;
-  var totalRegExp   = Math.round(expenses.filter(function(e){ return !e.projectId; }).reduce(function(s,e){ return s+e.amount; }, 0)*100)/100;
-  var totalProjExp  = Math.round(expenses.filter(function(e){ return !!e.projectId; }).reduce(function(s,e){ return s+e.amount; }, 0)*100)/100;
-  var totalExp      = Math.round((totalRegExp + totalProjExp)*100)/100;
-  var surplus       = Math.round((totalIncome - totalExp)*100)/100;
-  var savingsRate   = totalIncome > 0 ? Math.round(surplus/totalIncome*100) : 0;
-
-  return jsonResponse({ ok: true,
-    year: y,
-    totalIncome:          totalIncome,
-    totalRegularExpenses: totalRegExp,
-    totalProjectExpenses: totalProjExp,
-    totalExpenses:        totalExp,
-    surplus:              surplus,
-    savingsRate:          savingsRate,
-    monthly:              monthly,
-    categories:           categories
-  });
-}
+    var mInc     = inco

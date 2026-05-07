@@ -2080,26 +2080,38 @@ function renderInstallments() {
   if (!installmentPlans.length) {
     html = '<div class="empty"><div class="empty-icon">📅</div><p>No installment plans yet.<br>Add a plan to track monthly payments.</p></div>';
   } else {
+    var today = todayStr();
     installmentPlans.forEach(function(p) {
-      var paid = p.paidCount || 0;
-      var total = p.totalMonths || 1;
-      var pct = Math.min(100, Math.round(paid / total * 100));
-      var remaining = (p.totalAmount||0) - (paid * (p.monthlyAmount||0));
+      var paid    = p.installmentsPaid || 0;
+      var total   = p.installmentCount || 1;
+      var pct     = Math.min(100, Math.round(paid / total * 100));
+      var remaining = p.remainingAmount || 0;
       var statusCls = p.status || 'active';
+      var nextDate  = p.nextInstallmentDate || '';
+
+      // A payment is due (or overdue) if next date exists and is <= today
+      var paymentDue = statusCls === 'active' && nextDate && nextDate <= today;
+      // Status label for the due-payment row
+      var dueLabel = paymentDue
+        ? '<span style="color:var(--expense-color);font-weight:600">⚠️ Inst '+(paid+1)+'/'+total+' due '+fmtDate(nextDate)+'</span>'
+        : (nextDate ? '<span style="color:var(--income-color)">✅ Up to date · Next: '+fmtDate(nextDate)+'</span>' : '');
+
       html += '<div class="inst-card '+(statusCls==='cancelled'?'cancelled':statusCls==='completed'?'completed':'')+'">'+
         '<div class="inst-card-header">'+
           '<div><div class="inst-card-desc">'+escQ(p.description||'')+'</div>'+(p.merchant?'<div class="inst-card-merchant">'+escQ(p.merchant)+'</div>':'')+
           '</div>'+
           '<span class="inst-badge '+statusCls+'">'+statusCls+'</span>'+
         '</div>'+
-        '<div class="inst-detail-row"><span>Monthly</span><span>'+fmtMoney(p.monthlyAmount)+'</span></div>'+
+        '<div class="inst-detail-row"><span>Monthly</span><span>'+fmtMoney(p.installmentAmount)+'</span></div>'+
         '<div class="inst-detail-row"><span>Progress</span><span>'+paid+' / '+total+' paid</span></div>'+
-        '<div class="inst-detail-row"><span>Remaining</span><span>'+fmtMoney(Math.max(0,remaining))+'</span></div>'+
-        (p.nextDate?'<div class="inst-detail-row"><span>Next</span><span>'+fmtDate(p.nextDate)+'</span></div>':'')+
+        '<div class="inst-detail-row"><span>Remaining</span><span>'+fmtMoney(remaining)+'</span></div>'+
+        (p.account?'<div class="inst-detail-row"><span>Account</span><span>'+escQ(p.account)+'</span></div>':'')+
+        (dueLabel?'<div class="inst-detail-row" style="margin-top:4px">'+dueLabel+'</div>':'')+
         '<div class="inst-progress"><div class="inst-progress-bar'+(statusCls==='completed'?' done':'')+'" style="width:'+pct+'%"></div></div>'+
         (statusCls==='active'?
           '<div class="inst-actions">'+
-            '<button class="acc-edit-btn" onclick="cancelInstallmentPlan(\''+escQ(p.id||'')+'\')">Cancel Plan</button>'+
+            (paymentDue ? '<button class="btn btn-primary" style="font-size:0.82rem;padding:7px 12px" onclick="markInstallmentPaid('+p.rowIndex+')">✓ Mark Inst '+(paid+1)+' Paid</button>' : '')+
+            '<button class="acc-edit-btn" onclick="cancelInstallmentPlan('+p.rowIndex+')">Cancel Plan</button>'+
           '</div>' : '')+
       '</div>';
     });
@@ -2183,12 +2195,29 @@ function saveInstallmentPlan() {
   }).catch(function(){ toast('Connection error'); document.getElementById('save-installment-btn').textContent = 'Add Plan'; });
 }
 
-function cancelInstallmentPlan(id) {
+function cancelInstallmentPlan(rowIndex) {
   if (!confirm('Cancel this installment plan? History will be kept.')) return;
-  api({action:'cancelInstallmentPlan', id:id}).then(function(res){
+  api({action:'updateInstallmentPlan', rowIndex:rowIndex, status:'cancelled'}).then(function(res){
     if (res.ok) { toast('Plan cancelled'); api({action:'getInstallmentPlans'}).then(function(r){ if(r.ok){ installmentPlans=r.installmentPlans||[]; renderInstallments(); } }); }
     else { toast('Error: '+res.error); }
   });
+}
+
+function markInstallmentPaid(rowIndex) {
+  if (!confirm('Record this month\'s installment payment as an expense now?')) return;
+  api({action:'markInstallmentPaid', rowIndex:rowIndex}).then(function(res){
+    if (res.ok) {
+      toast('Installment ' + res.instNum + ' marked paid ✓');
+      // Refresh installment list and accounts (balance changes)
+      Promise.all([
+        api({action:'getInstallmentPlans'}),
+        api({action:'getAccounts'})
+      ]).then(function(results){
+        if (results[0].ok) { installmentPlans = results[0].installmentPlans||[]; renderInstallments(); }
+        if (results[1].ok) { accounts = results[1].accounts; totalBalance = results[1].totalBalance; renderDashboard(); renderAccounts(); }
+      });
+    } else { toast('Error: '+(res.error||'?')); }
+  }).catch(function(){ toast('Connection error'); });
 }
 
 // ════════════════════════════════════════════
@@ -2398,7 +2427,7 @@ function exportMonth() {
       t.type==='transfer'?'Transfer':(t.category||''),
       t.amount||0,
       t.type==='transfer'?(t.fromAccount+' → '+t.toAccount):(t.account||''),
-      t.note||''
+       t.note||''
     ]);
   });
 
