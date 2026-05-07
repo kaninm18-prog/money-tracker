@@ -544,6 +544,14 @@ function getAllTransactions(p) {
       fromAccount: d[2], toAccount: d[3], note: d[4] };
   }).forEach(function(r){ if (inPeriod(r.date)) txns.push(r); });
 
+  // Pending receivables: money went out, shown as deductions in history
+  sheetToRows(getSheet(SHEET.RECEIVABLES), function(d, ri) {
+    return { rowIndex: ri, type: "receivable", date: formatDate(d[0]), amount: toFloat(d[1]),
+      counterparty: String(d[2]||''), recvType: String(d[3]||'advance'),
+      note: String(d[4]||''), reimbursedBy: String(d[5]||''),
+      status: String(d[6]||'pending'), account: String(d[8]||'').trim() };
+  }).forEach(function(r){ if (r.status === 'pending' && inPeriod(r.date)) txns.push(r); });
+
   txns.sort(function(a,b){ return b.date.localeCompare(a.date); });
   return jsonResponse({ ok: true, transactions: txns });
 }
