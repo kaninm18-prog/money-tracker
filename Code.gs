@@ -63,7 +63,7 @@ function getSheet(name) {
         sh.appendRow(["Name","Budget","StartDate","EndDate"]);
         break;
       case SHEET.RECEIVABLES:
-        sh.appendRow(["Date","Amount","Counterparty","Type","Note","ReimbursedBy","Status","SettledDate"]);
+        sh.appendRow(["Date","Amount","Counterparty","Type","Note","ReimbursedBy","Status","SettledDate","Account"]);
         break;
       case SHEET.INSTALLMENTS:
         sh.appendRow(["Description","PurchaseDate","Merchant","TotalAmount","InstallmentCount",
