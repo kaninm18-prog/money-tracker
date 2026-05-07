@@ -2086,7 +2086,7 @@ function renderInstallments() {
       var pct = Math.min(100, Math.round(paid / total * 100));
       var remaining = (p.totalAmount||0) - (paid * (p.monthlyAmount||0));
       var statusCls = p.status || 'active';
-      html += '<div class="inst-card '+(statusCls===\'cancelled\'?\'cancelled\':statusCls===\'completed\'?\'completed\':\'')+'">'+
+      html += '<div class="inst-card '+(statusCls==='cancelled'?'cancelled':statusCls==='completed'?'completed':'')+'">'+
         '<div class="inst-card-header">'+
           '<div><div class="inst-card-desc">'+escQ(p.description||'')+'</div>'+(p.merchant?'<div class="inst-card-merchant">'+escQ(p.merchant)+'</div>':'')+
           '</div>'+
@@ -2096,7 +2096,7 @@ function renderInstallments() {
         '<div class="inst-detail-row"><span>Progress</span><span>'+paid+' / '+total+' paid</span></div>'+
         '<div class="inst-detail-row"><span>Remaining</span><span>'+fmtMoney(Math.max(0,remaining))+'</span></div>'+
         (p.nextDate?'<div class="inst-detail-row"><span>Next</span><span>'+fmtDate(p.nextDate)+'</span></div>':'')+
-        '<div class="inst-progress"><div class="inst-progress-bar'+(statusCls===\'completed\'?\' done\':\'')+'\" style="width:'+pct+'%"></div></div>'+
+        '<div class="inst-progress"><div class="inst-progress-bar'+(statusCls==='completed'?' done':'')+'" style="width:'+pct+'%"></div></div>'+
         (statusCls==='active'?
           '<div class="inst-actions">'+
             '<button class="acc-edit-btn" onclick="cancelInstallmentPlan(\''+escQ(p.id||'')+'\')">Cancel Plan</button>'+
@@ -2218,19 +2218,20 @@ function renderBudgetPlanner() {
     html = '<div class="empty"><div class="empty-icon">📊</div><p>No budgets set yet.<br>Set a monthly limit for each category.</p></div>';
   } else {
     budgets.forEach(function(b) {
-      var pct = b.limit > 0 ? Math.min(100, Math.round((b.spent||0)/b.limit*100)) : 0;
-      var barCls = pct >= 90 ? 'red' : pct >= 60 ? 'amber' : '';
+      var pct = b.monthlyLimit > 0 ? Math.min(100, Math.round((b.spent||0)/b.monthlyLimit*100)) : 0;
+      var alertPct = Math.round((b.alertThreshold||0.8)*100);
+      var barCls = pct >= 90 ? 'red' : pct >= alertPct ? 'amber' : '';
       html += '<div class="budget-item">' +
         '<div class="budget-item-header">' +
           '<div class="budget-item-icon">'+catIcon(b.category)+'</div>' +
           '<div class="budget-item-name">'+escQ(b.category)+'</div>' +
-          '<div class="budget-item-pct" style="color:'+(pct>=90?'var(--expense-color)':pct>=60?'var(--transfer-color)':'var(--income-color)')+'">'+pct+'%</div>' +
+          '<div class="budget-item-pct" style="color:'+(pct>=90?'var(--expense-color)':pct>=alertPct?'var(--transfer-color)':'var(--income-color)')+'">'+pct+'%</div>' +
         '</div>' +
         '<div class="budget-bar-wrap"><div class="budget-bar '+barCls+'" style="width:'+pct+'%"></div></div>' +
-        '<div class="budget-item-footer"><span>'+fmtMoney(b.spent||0)+' spent</span><span>Limit: '+fmtMoney(b.limit)+'</span></div>' +
+        '<div class="budget-item-footer"><span>'+fmtMoney(b.spent||0)+' spent</span><span>Limit: '+fmtMoney(b.monthlyLimit)+'</span></div>' +
         '<div class="budget-item-actions">' +
-          '<button class="acc-edit-btn" onclick="openSetBudget(\''+escQ(b.category)+'\','+b.limit+','+(b.threshold||80)+','+(b.includeProjects?1:0)+')">✏️ Edit</button>' +
-          '<button class="acc-del-btn" onclick="deleteBudget(\''+escQ(b.category)+'\')">🗑️ Delete</button>' +
+          '<button class="acc-edit-btn" onclick="openSetBudget(\''+escQ(b.category)+'\','+b.monthlyLimit+','+alertPct+','+(b.appliesToProjects?1:0)+','+b.rowIndex+')">✏️ Edit</button>' +
+          '<button class="acc-del-btn" onclick="deleteBudget('+b.rowIndex+',\''+escQ(b.category)+'\')">🗑️ Delete</button>' +
         '</div>' +
       '</div>';
     });
@@ -2239,7 +2240,9 @@ function renderBudgetPlanner() {
   if (listEl) listEl.innerHTML = html;
 }
 
-function openSetBudget(category, limit, threshold, includeProjects) {
+function openSetBudget(category, limit, threshold, includeProjects, rowIndex) {
+  document.getElementById('budget-modal').dataset.rowIndex = rowIndex || '';
+
   // Populate category dropdown
   var catOpts = expCategories.map(function(c){ return '<option value="'+escQ(c.name)+'">'+catIcon(c.name)+' '+c.name+'</option>'; }).join('');
   document.getElementById('fb-category').innerHTML = catOpts || '<option value="">No categories</option>';
@@ -2260,13 +2263,15 @@ function saveBudget() {
   var limit = parseFloat(document.getElementById('fb-limit').value);
   if (!category) { toast('Select a category'); return; }
   if (!limit || limit <= 0) { toast('Enter a valid limit'); return; }
+  var rowIndex = document.getElementById('budget-modal').dataset.rowIndex;
   var payload = {
     action: 'setBudget',
     category: category,
-    limit: limit,
-    threshold: parseInt(document.getElementById('fb-threshold').value) || 80,
-    includeProjects: document.getElementById('fb-include-projects').checked
+    monthlyLimit: limit,
+    alertThreshold: (parseInt(document.getElementById('fb-threshold').value) || 80) / 100,
+    appliesToProjects: document.getElementById('fb-include-projects').checked
   };
+  if (rowIndex) payload.rowIndex = parseInt(rowIndex);
   document.getElementById('save-budget-btn').textContent = 'Saving…';
   api(payload).then(function(res){
     if (res.ok) {
@@ -2278,9 +2283,9 @@ function saveBudget() {
   }).catch(function(){ toast('Connection error'); document.getElementById('save-budget-btn').textContent = 'Save Budget'; });
 }
 
-function deleteBudget(category) {
+function deleteBudget(rowIndex, category) {
   if (!confirm('Remove budget for "'+category+'"?')) return;
-  api({action:'deleteBudget', category:category}).then(function(res){
+  api({action:'deleteBudget', rowIndex:rowIndex}).then(function(res){
     if (res.ok) { toast('Budget removed'); api({action:'getBudgets', month:viewMonth, year:viewYear}).then(function(r){ if(r.ok){ budgets=r.budgets||[]; renderBudgetPlanner(); } }); }
     else { toast('Error: '+res.error); }
   });
@@ -2432,14 +2437,4 @@ function exportYear() {
     });
 
     var wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(txnRows), 'Transactions');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'Monthly Summary');
-
-    var fname = 'MoneyTracker_'+viewYear+'.xlsx';
-    XLSX.writeFile(wb, fname);
-    toast('Exported: '+fname);
-  }).catch(function(){ toast('Export failed'); });
-}
-</script>
-</body>
-</html>
+    XLSX.utils.
