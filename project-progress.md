@@ -171,6 +171,44 @@ Receivables:      Date | Amount | Counterparty | Type | Note | ReimbursedBy | St
 
 ---
 
+## Session 5 — Bug Fixes & Feature Expansion (Sections 11–15)
+
+### Bug Fixes
+
+| Bug | Root Cause | Fix |
+|---|---|---|
+| Emoji saved into Account column in Sheets | `getSelectedAcct()` regex `/^.\s/` missing `u` flag — surrogate-pair emoji not stripped | Added `u` flag: `/^.\s/u` |
+| Transactions never showing | Apps Script V8 date objects from `getValues()` don't pass `instanceof Date` — `formatDate` fell to `String(val).slice(0,10)` returning `"Tue May 05"` | Changed check to `typeof val === 'object'` |
+| Month filter always empty | `new Date(dateStr+"T00:00:00")` timezone-sensitive in Apps Script V8 | Replaced with `dateMatchesMonth()` using direct string `substring` comparison |
+
+### Features Implemented
+
+**#12 — Account Edit Mode Toggle** — "Edit"/"Done" toggle on Accounts page; Edit/Delete buttons hidden by default; purple header tint in edit mode; mode resets on navigation.
+
+**#11 — Installment Plans** — New `InstallmentPlans` sheet; 3rd tab (📅 Installments) on Projects page; plan cards with progress, monthly amount, X/Y paid, remaining balance, next date; `checkInstallments()` auto-generates due expense rows on each app load.
+
+**#13 — Budget Planner** — New `CategoryBudgets` sheet; 4th tab (📊 Budget) on Projects page; per-category progress bars (green/amber/red); Set Budget modal with threshold setting.
+
+**#14 — Annual Summary** — "📊 Year in Review" button on Dashboard; full-screen modal with savings rate hero, income/expense grid, CSS month-by-month bars, category breakdown; year navigation.
+
+**#15 — Export to Excel** — SheetJS from CDN; Export This Month → `MoneyTracker_YYYY_MM.xlsx`; Export Full Year → `MoneyTracker_YYYY.xlsx`; Transactions + Monthly Summary sheets.
+
+### Google Sheets schema (v5 — current)
+```
+Expenses:         Date | Amount | Category | Note | Account | IsRecurring | RecurrencePeriod | ProjectId
+Income:           Date | Amount | Category | Note | Account
+Transfers:        Date | Amount | FromAccount | ToAccount | Note
+Accounts:         Name | Type | StartingBalance | CreditLimit | DueDay | StatementDay
+Categories:       Name
+IncomeCategories: Name
+Projects:         Name | Budget | StartDate | EndDate
+Receivables:      Date | Amount | Counterparty | Type | Note | ReimbursedBy | Status | SettledDate
+InstallmentPlans: Description | PurchaseDate | Merchant | TotalAmount | InstallmentCount | InstallmentAmount | FirstInstallmentDate | Account | Category | ProjectId | Status | InstallmentsPaid
+CategoryBudgets:  Category | MonthlyLimit | AlertThreshold | IsActive | AppliesToProjects
+```
+
+---
+
 ## Features Deferred (from logic doc)
 
 These were reviewed and confirmed non-conflicting — ready to implement in a future session:

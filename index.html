@@ -9,6 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Money Tracker">
 <title>Money Tracker</title>
 <link rel="manifest" href="manifest.json">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root {
   --primary: #6c63ff;
@@ -299,6 +300,86 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .setup-btn { width:100%; padding:13px; border:none; border-radius:var(--radius-sm); background:#fff; color:var(--primary); font-size:1rem; font-weight:700; cursor:pointer; }
 .setup-steps { margin-bottom:14px; }
 .setup-steps li { font-size:0.8rem; opacity:.85; margin-bottom:5px; list-style:decimal; margin-left:18px; }
+
+/* ── Accounts Edit Mode ── */
+.acct-edit-active { background:linear-gradient(135deg,rgba(108,99,255,.12),rgba(155,89,182,.10)); border-radius:var(--radius-sm); padding:8px 10px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
+.acct-page-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.acct-page-title { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text2); }
+.acc-page-actions { display:flex; gap:6px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
+.acc-page-actions.hidden { display:none; }
+
+/* ── Installment Plan Cards ── */
+.inst-card { background:var(--surface); border-radius:var(--radius); padding:15px; margin-bottom:10px; box-shadow:var(--shadow-sm); border-left:4px solid var(--primary); }
+.inst-card.cancelled { border-left-color:var(--text2); opacity:.7; }
+.inst-card.completed { border-left-color:var(--income-color); }
+.inst-card-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; }
+.inst-card-desc { font-size:0.95rem; font-weight:700; }
+.inst-card-merchant { font-size:0.75rem; color:var(--text2); margin-top:2px; }
+.inst-badge { font-size:0.68rem; font-weight:700; padding:2px 8px; border-radius:10px; white-space:nowrap; }
+.inst-badge.active { background:var(--primary-light); color:var(--primary); }
+.inst-badge.completed { background:#e6faf0; color:var(--income-color); }
+.inst-badge.cancelled { background:var(--border); color:var(--text2); }
+.inst-detail-row { display:flex; justify-content:space-between; font-size:0.78rem; color:var(--text2); margin-bottom:4px; }
+.inst-detail-row span:last-child { font-weight:600; color:var(--text); }
+.inst-progress { height:6px; background:var(--border); border-radius:3px; margin:8px 0; }
+.inst-progress-bar { height:100%; border-radius:3px; background:var(--primary); transition:width .4s; }
+.inst-progress-bar.done { background:var(--income-color); }
+.inst-actions { display:flex; gap:6px; padding-top:10px; border-top:1px solid var(--border); margin-top:8px; }
+.inst-actions button { flex:1; padding:7px; border:none; border-radius:8px; font-size:0.8rem; font-weight:600; cursor:pointer; }
+.inst-summary { background:var(--primary-light); border-radius:var(--radius-sm); padding:12px 14px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; }
+.inst-summary-label { font-size:0.75rem; color:var(--primary); font-weight:600; }
+.inst-summary-val { font-size:1.05rem; font-weight:700; color:var(--primary); }
+.inst-preview { background:var(--surface2); border-radius:var(--radius-sm); padding:10px 12px; margin-top:8px; font-size:0.88rem; color:var(--primary); font-weight:600; text-align:center; border:1.5px solid var(--primary-light); }
+
+/* ── Budget Planner ── */
+.budget-overview { background:linear-gradient(135deg,var(--primary),#9b59b6); color:#fff; border-radius:var(--radius); padding:16px; margin-bottom:12px; }
+.budget-overview-title { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; opacity:.8; margin-bottom:8px; }
+.budget-overview-row { display:flex; justify-content:space-between; align-items:flex-end; }
+.budget-overview-spent { font-size:1.8rem; font-weight:700; }
+.budget-overview-limit { font-size:0.85rem; opacity:.8; }
+.budget-overview-pct { font-size:1rem; font-weight:700; }
+.budget-item { background:var(--surface); border-radius:var(--radius-sm); padding:13px; margin-bottom:8px; box-shadow:var(--shadow-sm); }
+.budget-item-header { display:flex; align-items:center; margin-bottom:8px; }
+.budget-item-icon { font-size:1.3rem; margin-right:8px; }
+.budget-item-name { flex:1; font-size:0.9rem; font-weight:600; }
+.budget-item-pct { font-size:0.85rem; font-weight:700; }
+.budget-bar-wrap { height:8px; background:var(--border); border-radius:4px; margin-bottom:6px; }
+.budget-bar { height:100%; border-radius:4px; background:var(--income-color); transition:width .4s; }
+.budget-bar.amber { background:var(--transfer-color); }
+.budget-bar.red { background:var(--expense-color); }
+.budget-item-footer { display:flex; justify-content:space-between; font-size:0.76rem; color:var(--text2); }
+.budget-item-actions { display:flex; gap:6px; margin-top:8px; padding-top:8px; border-top:1px solid var(--border); }
+.budget-item-actions button { flex:1; padding:6px; border:none; border-radius:8px; font-size:0.78rem; font-weight:600; cursor:pointer; }
+
+/* ── Annual Summary Modal ── */
+.annual-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:300; align-items:flex-start; justify-content:center; overflow-y:auto; }
+.annual-modal-overlay.open { display:flex; }
+.annual-modal { background:var(--surface); width:100%; max-width:500px; min-height:100dvh; padding:20px 18px calc(var(--nav-h) + 20px); animation:slideUp .28s ease; }
+.annual-modal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+.annual-modal-title { font-size:1.2rem; font-weight:700; }
+.year-nav { display:flex; align-items:center; gap:10px; }
+.year-nav button { background:var(--surface2); border:1.5px solid var(--border); border-radius:8px; padding:4px 10px; cursor:pointer; font-size:1rem; }
+.year-nav-label { font-size:1.1rem; font-weight:700; color:var(--primary); min-width:52px; text-align:center; }
+.savings-rate-hero { text-align:center; padding:20px; background:linear-gradient(135deg,var(--primary),#9b59b6); border-radius:var(--radius); color:#fff; margin-bottom:16px; }
+.savings-rate-pct { font-size:3.5rem; font-weight:700; line-height:1; }
+.savings-rate-label { font-size:0.78rem; opacity:.8; margin-top:4px; text-transform:uppercase; letter-spacing:.08em; }
+.annual-metric-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px; }
+.annual-metric { background:var(--surface); border-radius:var(--radius-sm); padding:12px; box-shadow:var(--shadow-sm); text-align:center; }
+.annual-metric-val { font-size:1.1rem; font-weight:700; }
+.annual-metric-label { font-size:0.68rem; color:var(--text2); margin-top:2px; text-transform:uppercase; letter-spacing:.06em; }
+.month-bars { display:flex; align-items:flex-end; gap:4px; height:100px; padding:0 4px; margin-bottom:6px; }
+.month-bar-group { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; }
+.month-bar-pair { display:flex; align-items:flex-end; gap:1px; height:80px; width:100%; justify-content:center; }
+.month-bar-inc { background:var(--income-color); border-radius:2px 2px 0 0; width:48%; min-height:2px; transition:height .4s; }
+.month-bar-exp { background:var(--expense-color); border-radius:2px 2px 0 0; width:48%; min-height:2px; transition:height .4s; }
+.month-bar-lbl { font-size:0.55rem; color:var(--text2); }
+.annual-cat-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
+.annual-cat-row:last-child { border-bottom:none; }
+.annual-cat-icon { font-size:1.1rem; width:28px; text-align:center; }
+.annual-cat-name { flex:1; font-size:0.85rem; }
+.annual-cat-pct { font-size:0.75rem; color:var(--text2); min-width:36px; text-align:right; }
+.annual-cat-amt { font-size:0.9rem; font-weight:700; min-width:80px; text-align:right; }
+.year-review-btn { background:var(--primary-light); border:none; border-radius:var(--radius-sm); color:var(--primary); font-size:0.88rem; font-weight:600; padding:12px 16px; width:100%; cursor:pointer; margin-bottom:12px; display:flex; align-items:center; justify-content:center; gap:8px; }
 </style>
 </head>
 <body>
@@ -369,6 +450,8 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
         </div>
       </div>
 
+      <button class="year-review-btn" onclick="showAnnualSummary(viewYear)">📊 Year in Review — <span id="year-review-yr"></span></button>
+
       <div class="card">
         <div class="card-title">Spending by Category <a href="#" onclick="showPage('transactions');return false;">See all</a></div>
         <div id="cat-breakdown"><div class="loading-wrap"><div class="spinner"></div></div></div>
@@ -398,15 +481,25 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 
     <!-- Accounts -->
     <div id="page-accounts" class="page">
+      <div id="acct-page-header" class="acct-page-header">
+        <span class="acct-page-title">My Accounts</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" id="acct-edit-toggle-btn" onclick="toggleAccountsEditMode()">Edit</button>
+          <button class="btn btn-primary btn-sm" onclick="openAddAccount()">+ Add Account</button>
+        </div>
+      </div>
       <div id="accounts-page-list"><div class="loading-wrap"><div class="spinner"></div></div></div>
-      <button class="btn btn-primary" onclick="openAddAccount()">+ Add Account</button>
     </div>
 
     <!-- Projects & Receivables -->
     <div id="page-projects" class="page">
-      <div class="type-tabs" style="margin-bottom:14px">
-        <button class="type-tab active" id="proj-tab-projects"   onclick="setProjectsTab('projects')">📁 Projects</button>
-        <button class="type-tab"        id="proj-tab-receivables" onclick="setProjectsTab('receivables')">🤝 Receivables</button>
+      <div style="overflow-x:auto;margin-bottom:14px">
+        <div class="type-tabs" style="min-width:360px">
+          <button class="type-tab active" id="proj-tab-projects"      onclick="setProjectsTab('projects')">📁 Projects</button>
+          <button class="type-tab"        id="proj-tab-receivables"   onclick="setProjectsTab('receivables')">🤝 Receivables</button>
+          <button class="type-tab"        id="proj-tab-installments"  onclick="setProjectsTab('installments')">📅 Installments</button>
+          <button class="type-tab"        id="proj-tab-budget"        onclick="setProjectsTab('budget')">📊 Budget</button>
+        </div>
       </div>
       <!-- Projects sub-page -->
       <div id="proj-panel-projects">
@@ -420,6 +513,18 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
           <button class="type-tab"        id="recv-tab-settled" onclick="setRecvTab('settled')">Settled</button>
         </div>
         <div id="receivables-list"><div class="loading-wrap"><div class="spinner"></div></div></div>
+      </div>
+      <!-- Installments sub-page -->
+      <div id="proj-panel-installments" style="display:none">
+        <div id="installments-summary" class="inst-summary" style="display:none"></div>
+        <div id="installments-list"><div class="loading-wrap"><div class="spinner"></div></div></div>
+        <button class="btn btn-primary" onclick="openAddInstallmentPlan()">+ Add Plan</button>
+      </div>
+      <!-- Budget sub-page -->
+      <div id="proj-panel-budget" style="display:none">
+        <div id="budget-overview-card"></div>
+        <div id="budget-list"><div class="loading-wrap"><div class="spinner"></div></div></div>
+        <button class="btn btn-primary" onclick="openSetBudget()">+ Set Budget</button>
       </div>
     </div>
   </main>
@@ -747,8 +852,116 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
       <div style="height:8px"></div>
       <button class="btn btn-ghost btn-sm" onclick="promptAddCategory('income')">+ Add Category</button>
     </div>
+    <div class="card" style="margin-top:12px;margin-bottom:12px">
+      <div class="card-title">Export Data</div>
+      <div class="btn-row">
+        <button class="btn btn-ghost btn-sm" onclick="exportMonth()">📥 Export This Month</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportYear()">📥 Export Full Year</button>
+      </div>
+    </div>
     <div style="height:10px"></div>
     <button class="btn btn-ghost" onclick="closeModal('settings-modal')">Close</button>
+  </div>
+</div>
+
+<!-- ══ Installment Plan Modal ══ -->
+<div class="modal-overlay" id="installment-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Add Installment Plan</div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <input type="text" class="form-control" id="fin-desc" placeholder="e.g. iPhone 15 Pro">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Merchant (optional)</label>
+      <input type="text" class="form-control" id="fin-merchant" placeholder="e.g. Apple Store">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Purchase Date</label>
+      <input type="date" class="form-control" id="fin-purchase-date">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group">
+        <label class="form-label">Total Amount (฿)</label>
+        <div class="amount-wrap"><span class="amount-prefix">฿</span>
+          <input type="number" class="form-control" id="fin-total" placeholder="0" inputmode="decimal" oninput="updateInstallmentPreview()">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Number of Months</label>
+        <input type="number" class="form-control" id="fin-months" placeholder="12" min="1" max="120" inputmode="numeric" oninput="updateInstallmentPreview()">
+      </div>
+    </div>
+    <div class="inst-preview" id="fin-preview" style="display:none"></div>
+    <div class="form-group" style="margin-top:10px">
+      <label class="form-label">First Installment Date</label>
+      <input type="date" class="form-control" id="fin-first-date">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Account</label>
+      <select class="form-control" id="fin-account"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Category</label>
+      <select class="form-control" id="fin-category"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Project (optional)</label>
+      <select class="form-control" id="fin-project">
+        <option value="">— No project —</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" onclick="saveInstallmentPlan()" id="save-installment-btn">Add Plan</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('installment-modal')">Cancel</button>
+  </div>
+</div>
+
+<!-- ══ Budget Modal ══ -->
+<div class="modal-overlay" id="budget-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="budget-modal-title">Set Budget</div>
+    <div class="form-group">
+      <label class="form-label">Category</label>
+      <select class="form-control" id="fb-category"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Monthly Limit (฿)</label>
+      <div class="amount-wrap"><span class="amount-prefix">฿</span>
+        <input type="number" class="form-control" id="fb-limit" placeholder="0" inputmode="decimal">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Alert Threshold (%)</label>
+      <input type="number" class="form-control" id="fb-threshold" value="80" min="1" max="100" inputmode="numeric">
+    </div>
+    <div class="form-group">
+      <div class="toggle-row">
+        <span class="toggle-label">Include project expenses</span>
+        <label class="toggle"><input type="checkbox" id="fb-include-projects"><span class="toggle-slider"></span></label>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="saveBudget()" id="save-budget-btn">Save Budget</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('budget-modal')">Cancel</button>
+  </div>
+</div>
+
+<!-- ══ Annual Summary Modal ══ -->
+<div class="annual-modal-overlay" id="annual-summary-modal">
+  <div class="annual-modal">
+    <div class="annual-modal-header">
+      <div class="annual-modal-title">📊 Year in Review</div>
+      <button class="btn btn-ghost btn-sm" onclick="closeAnnualSummary()">✕ Close</button>
+    </div>
+    <div class="year-nav" style="margin-bottom:16px">
+      <button onclick="changeAnnualYear(-1)">‹</button>
+      <div class="year-nav-label" id="annual-year-label">2025</div>
+      <button onclick="changeAnnualYear(1)">›</button>
+    </div>
+    <div id="annual-summary-content"><div class="loading-wrap"><div class="spinner"></div></div></div>
   </div>
 </div>
 
@@ -769,6 +982,9 @@ var incCategories  = [];
 var transactions = [];
 var projects     = [];
 var receivables  = [];
+var installmentPlans = [];
+var budgets = [];
+var accountsEditMode = false;
 var activeTypeTab    = 'all';
 var activeProjectsTab = 'projects';
 var activeRecvTab    = 'pending';
@@ -776,6 +992,8 @@ var editingExpenseRow  = null;
 var editingIncomeRow   = null;
 var editingAccountRow  = null;
 var editingProjectRow  = null;
+var editingBudgetId    = null;
+var annualSummaryYear  = new Date().getFullYear();
 var balanceMode  = localStorage.getItem('balanceMode') || 'net_worth';
 var BALANCE_MODES = {
   net_worth:       { label: 'Net Worth',       sub: 'all assets minus liabilities' },
@@ -849,27 +1067,37 @@ function api(payload) {
 }
 
 function loadAll() {
-  Promise.all([
-    api({action:'getAccounts'}),
-    api({action:'getCategories'}),
-    api({action:'getIncomeCategories'}),
-    api({action:'getAllTransactions', month:viewMonth, year:viewYear}),
-    api({action:'getProjects'}),
-    api({action:'getReceivables'})
-  ]).then(function(results) {
+  api({action:'checkInstallments'}).then(function() {
+    return Promise.all([
+      api({action:'getAccounts'}),
+      api({action:'getCategories'}),
+      api({action:'getIncomeCategories'}),
+      api({action:'getAllTransactions', month:viewMonth, year:viewYear}),
+      api({action:'getProjects'}),
+      api({action:'getReceivables'}),
+      api({action:'getInstallmentPlans'}),
+      api({action:'getBudgets', month:viewMonth, year:viewYear})
+    ]);
+  }).then(function(results) {
     if (results[0].ok) { accounts=results[0].accounts; totalBalance=results[0].totalBalance; }
     if (results[1].ok) { expCategories=results[1].categories; }
     if (results[2].ok) { incCategories=results[2].categories; }
     if (results[3].ok) { transactions=results[3].transactions; }
     if (results[4].ok) { projects=results[4].projects; }
     if (results[5].ok) { receivables=results[5].receivables; }
+    if (results[6].ok) { installmentPlans=results[6].installmentPlans||[]; }
+    if (results[7].ok) { budgets=results[7].budgets||[]; }
     renderAll();
   }).catch(function(e){ toast('Connection error'); console.error(e); });
 }
 
 function loadTransactions() {
-  return api({action:'getAllTransactions', month:viewMonth, year:viewYear}).then(function(res){
-    if (res.ok) { transactions=res.transactions; renderDashboard(); renderTransactions(); }
+  return Promise.all([
+    api({action:'getAllTransactions', month:viewMonth, year:viewYear}),
+    api({action:'getBudgets', month:viewMonth, year:viewYear})
+  ]).then(function(results){
+    if (results[0].ok) { transactions=results[0].transactions; renderDashboard(); renderTransactions(); }
+    if (results[1].ok) { budgets=results[1].budgets||[]; renderBudgetPlanner(); }
   });
 }
 
@@ -890,6 +1118,11 @@ function showPage(name) {
     var nb = document.getElementById('nav-'+p);
     if (nb) nb.classList.toggle('active', p===name);
   });
+  // Reset accounts edit mode when leaving accounts page
+  if (name !== 'accounts' && accountsEditMode) {
+    accountsEditMode = false;
+    renderAccountsPage();
+  }
 }
 
 function changeMonth(d) {
@@ -915,8 +1148,13 @@ function renderAll() {
   renderSettingsCats();
   renderProjectsPage();
   renderReceivables();
+  renderInstallments();
+  renderBudgetPlanner();
   populateProjectDropdown();
   syncBalanceModeUI();
+  // Update year review label
+  var yrEl = document.getElementById('year-review-yr');
+  if (yrEl) yrEl.textContent = viewYear;
 }
 
 // ════════════════════════════════════════════
@@ -1092,6 +1330,8 @@ function renderDashboard() {
   var rhtml = recent.length ? recent.map(txnHtml).join('') :
     '<div class="empty"><div class="empty-icon">📭</div><p>No activity this month</p></div>';
   document.getElementById('recent-list').innerHTML = rhtml;
+  var yrEl = document.getElementById('year-review-yr');
+  if (yrEl) yrEl.textContent = viewYear;
 }
 
 // ════════════════════════════════════════════
@@ -1189,7 +1429,18 @@ function txnHtml(t) {
 // ════════════════════════════════════════════
 //  ACCOUNTS PAGE
 // ════════════════════════════════════════════
+function toggleAccountsEditMode() {
+  accountsEditMode = !accountsEditMode;
+  renderAccountsPage();
+}
+
 function renderAccountsPage() {
+  // Update header style and button label
+  var headerEl = document.getElementById('acct-page-header');
+  var toggleBtn = document.getElementById('acct-edit-toggle-btn');
+  if (headerEl) headerEl.classList.toggle('acct-edit-active', accountsEditMode);
+  if (toggleBtn) toggleBtn.textContent = accountsEditMode ? 'Done' : 'Edit';
+
   var html = '';
   if (!accounts.length) {
     html = '<div class="empty"><div class="empty-icon">💳</div><p>No accounts yet. Add your first account below.</p></div>';
@@ -1214,10 +1465,10 @@ function renderAccountsPage() {
             (a.dueDay ? '<div class="acc-page-credit-row" style="margin-top:8px"><span>Next Due Date</span><span>'+dueTxt+'</span></div>' : '') +
             (a.statementDay ? '<div class="acc-page-credit-row"><span>Statement Date</span><span>'+a.statementDay+(a.statementDay===1?'st':a.statementDay===2?'nd':a.statementDay===3?'rd':'th')+' of each month</span></div>' : '') +
           '</div>' +
-          '<div class="acc-page-actions">' +
+          (accountsEditMode ? '<div class="acc-page-actions">' +
             '<button class="acc-edit-btn" onclick="openEditAccount('+a.rowIndex+')">✏️ Edit</button>' +
             '<button class="acc-del-btn"  onclick="deleteAccount('+a.rowIndex+',\''+escQ(a.name)+'\')">🗑️ Delete</button>' +
-          '</div>' +
+          '</div>' : '') +
         '</div>';
       } else {
         var neg = a.balance < 0 ? ' neg' : '';
@@ -1227,10 +1478,10 @@ function renderAccountsPage() {
             '<div class="acc-page-info"><div class="acc-page-name">'+a.name+'</div><div class="acc-page-type">'+typeLabel(a.type)+'</div></div>' +
             '<div class="acc-page-balance'+neg+'">'+fmtMoney(a.balance)+'</div>' +
           '</div>' +
-          '<div class="acc-page-actions">' +
+          (accountsEditMode ? '<div class="acc-page-actions">' +
             '<button class="acc-edit-btn" onclick="openEditAccount('+a.rowIndex+')">✏️ Edit</button>' +
             '<button class="acc-del-btn"  onclick="deleteAccount('+a.rowIndex+',\''+escQ(a.name)+'\')">🗑️ Delete</button>' +
-          '</div>' +
+          '</div>' : '') +
         '</div>';
       }
     });
@@ -1597,7 +1848,7 @@ function toast(msg) {
 // ════════════════════════════════════════════
 function setProjectsTab(tab) {
   activeProjectsTab = tab;
-  ['projects','receivables'].forEach(function(t){
+  ['projects','receivables','installments','budget'].forEach(function(t){
     document.getElementById('proj-tab-'+t).classList.toggle('active', t===tab);
     document.getElementById('proj-panel-'+t).style.display = t===tab ? 'block' : 'none';
   });
@@ -1805,6 +2056,390 @@ function toggleRecurringFields() {
 //  UTILS
 // ════════════════════════════════════════════
 function escQ(s) { return String(s).replace(/'/g,"\\'"); }
+
+// ════════════════════════════════════════════
+//  INSTALLMENT PLANS
+// ════════════════════════════════════════════
+function renderInstallments() {
+  var active = installmentPlans.filter(function(p){ return p.status === 'active'; });
+  var totalMonthly = active.reduce(function(s,p){ return s + (p.monthlyAmount||0); }, 0);
+
+  var summaryEl = document.getElementById('installments-summary');
+  if (summaryEl) {
+    if (active.length) {
+      summaryEl.style.display = 'flex';
+      summaryEl.innerHTML =
+        '<div><div class="inst-summary-label">Active Plans</div><div class="inst-summary-val">'+active.length+'</div></div>' +
+        '<div style="text-align:right"><div class="inst-summary-label">Monthly Commitment</div><div class="inst-summary-val">'+fmtMoney(totalMonthly)+'</div></div>';
+    } else {
+      summaryEl.style.display = 'none';
+    }
+  }
+
+  var html = '';
+  if (!installmentPlans.length) {
+    html = '<div class="empty"><div class="empty-icon">📅</div><p>No installment plans yet.<br>Add a plan to track monthly payments.</p></div>';
+  } else {
+    installmentPlans.forEach(function(p) {
+      var paid = p.paidCount || 0;
+      var total = p.totalMonths || 1;
+      var pct = Math.min(100, Math.round(paid / total * 100));
+      var remaining = (p.totalAmount||0) - (paid * (p.monthlyAmount||0));
+      var statusCls = p.status || 'active';
+      html += '<div class="inst-card '+(statusCls===\'cancelled\'?\'cancelled\':statusCls===\'completed\'?\'completed\':\'')+'">'+
+        '<div class="inst-card-header">'+
+          '<div><div class="inst-card-desc">'+escQ(p.description||'')+'</div>'+(p.merchant?'<div class="inst-card-merchant">'+escQ(p.merchant)+'</div>':'')+
+          '</div>'+
+          '<span class="inst-badge '+statusCls+'">'+statusCls+'</span>'+
+        '</div>'+
+        '<div class="inst-detail-row"><span>Monthly</span><span>'+fmtMoney(p.monthlyAmount)+'</span></div>'+
+        '<div class="inst-detail-row"><span>Progress</span><span>'+paid+' / '+total+' paid</span></div>'+
+        '<div class="inst-detail-row"><span>Remaining</span><span>'+fmtMoney(Math.max(0,remaining))+'</span></div>'+
+        (p.nextDate?'<div class="inst-detail-row"><span>Next</span><span>'+fmtDate(p.nextDate)+'</span></div>':'')+
+        '<div class="inst-progress"><div class="inst-progress-bar'+(statusCls===\'completed\'?\' done\':\'')+'\" style="width:'+pct+'%"></div></div>'+
+        (statusCls==='active'?
+          '<div class="inst-actions">'+
+            '<button class="acc-edit-btn" onclick="cancelInstallmentPlan(\''+escQ(p.id||'')+'\')">Cancel Plan</button>'+
+          '</div>' : '')+
+      '</div>';
+    });
+  }
+  var listEl = document.getElementById('installments-list');
+  if (listEl) listEl.innerHTML = html;
+}
+
+function openAddInstallmentPlan() {
+  document.getElementById('fin-desc').value = '';
+  document.getElementById('fin-merchant').value = '';
+  document.getElementById('fin-purchase-date').value = todayStr();
+  document.getElementById('fin-total').value = '';
+  document.getElementById('fin-months').value = '';
+  document.getElementById('fin-first-date').value = todayStr();
+  document.getElementById('fin-preview').style.display = 'none';
+
+  // Populate account dropdown
+  var acctOpts = accounts.map(function(a){ return '<option value="'+escQ(a.name)+'">'+acctIcon(a.type)+' '+a.name+'</option>'; }).join('');
+  document.getElementById('fin-account').innerHTML = acctOpts || '<option value="">No accounts</option>';
+
+  // Populate category dropdown
+  var catOpts = expCategories.map(function(c){ return '<option value="'+escQ(c.name)+'">'+catIcon(c.name)+' '+c.name+'</option>'; }).join('');
+  document.getElementById('fin-category').innerHTML = catOpts || '<option value="">No categories</option>';
+
+  // Populate project dropdown
+  var projOpts = '<option value="">— No project —</option>';
+  projects.forEach(function(p){ projOpts += '<option value="'+escQ(p.name)+'">📁 '+p.name+'</option>'; });
+  document.getElementById('fin-project').innerHTML = projOpts;
+
+  openModal('installment-modal');
+}
+
+function updateInstallmentPreview() {
+  var total = parseFloat(document.getElementById('fin-total').value) || 0;
+  var months = parseInt(document.getElementById('fin-months').value) || 0;
+  var previewEl = document.getElementById('fin-preview');
+  if (total > 0 && months > 0) {
+    var monthly = total / months;
+    previewEl.textContent = fmtMoney(monthly) + ' per month for ' + months + ' months';
+    previewEl.style.display = 'block';
+  } else {
+    previewEl.style.display = 'none';
+  }
+}
+
+function saveInstallmentPlan() {
+  var desc = document.getElementById('fin-desc').value.trim();
+  var total = parseFloat(document.getElementById('fin-total').value);
+  var months = parseInt(document.getElementById('fin-months').value);
+  var firstDate = document.getElementById('fin-first-date').value;
+  var acct = document.getElementById('fin-account').value;
+  var cat = document.getElementById('fin-category').value;
+  if (!desc) { toast('Enter a description'); return; }
+  if (!total || total <= 0) { toast('Enter a valid total amount'); return; }
+  if (!months || months < 1) { toast('Enter number of months'); return; }
+  if (!firstDate) { toast('Select first installment date'); return; }
+
+  var payload = {
+    action: 'addInstallmentPlan',
+    description: desc,
+    merchant: document.getElementById('fin-merchant').value.trim(),
+    purchaseDate: document.getElementById('fin-purchase-date').value,
+    totalAmount: total,
+    totalMonths: months,
+    monthlyAmount: total / months,
+    firstInstallmentDate: firstDate,
+    account: acct,
+    category: cat,
+    projectId: document.getElementById('fin-project').value
+  };
+
+  document.getElementById('save-installment-btn').textContent = 'Saving…';
+  api(payload).then(function(res){
+    if (res.ok) {
+      closeModal('installment-modal');
+      toast('Installment plan added!');
+      api({action:'getInstallmentPlans'}).then(function(r){ if(r.ok){ installmentPlans=r.installmentPlans||[]; renderInstallments(); } });
+    } else { toast('Error: '+(res.error||'?')); }
+    document.getElementById('save-installment-btn').textContent = 'Add Plan';
+  }).catch(function(){ toast('Connection error'); document.getElementById('save-installment-btn').textContent = 'Add Plan'; });
+}
+
+function cancelInstallmentPlan(id) {
+  if (!confirm('Cancel this installment plan? History will be kept.')) return;
+  api({action:'cancelInstallmentPlan', id:id}).then(function(res){
+    if (res.ok) { toast('Plan cancelled'); api({action:'getInstallmentPlans'}).then(function(r){ if(r.ok){ installmentPlans=r.installmentPlans||[]; renderInstallments(); } }); }
+    else { toast('Error: '+res.error); }
+  });
+}
+
+// ════════════════════════════════════════════
+//  BUDGET PLANNER
+// ════════════════════════════════════════════
+function renderBudgetPlanner() {
+  var totalLimit = budgets.reduce(function(s,b){ return s+(b.limit||0); }, 0);
+  var totalSpent = budgets.reduce(function(s,b){ return s+(b.spent||0); }, 0);
+  var overviewEl = document.getElementById('budget-overview-card');
+  if (overviewEl) {
+    if (budgets.length) {
+      var ovPct = totalLimit > 0 ? Math.round(totalSpent/totalLimit*100) : 0;
+      overviewEl.innerHTML = '<div class="budget-overview">' +
+        '<div class="budget-overview-title">Total Budget Overview</div>' +
+        '<div class="budget-overview-row">' +
+          '<div><div class="budget-overview-spent">'+fmtMoney(totalSpent)+'</div><div class="budget-overview-limit">of '+fmtMoney(totalLimit)+' limit</div></div>' +
+          '<div class="budget-overview-pct">'+ovPct+'%</div>' +
+        '</div>' +
+      '</div>';
+    } else {
+      overviewEl.innerHTML = '';
+    }
+  }
+
+  var html = '';
+  if (!budgets.length) {
+    html = '<div class="empty"><div class="empty-icon">📊</div><p>No budgets set yet.<br>Set a monthly limit for each category.</p></div>';
+  } else {
+    budgets.forEach(function(b) {
+      var pct = b.limit > 0 ? Math.min(100, Math.round((b.spent||0)/b.limit*100)) : 0;
+      var barCls = pct >= 90 ? 'red' : pct >= 60 ? 'amber' : '';
+      html += '<div class="budget-item">' +
+        '<div class="budget-item-header">' +
+          '<div class="budget-item-icon">'+catIcon(b.category)+'</div>' +
+          '<div class="budget-item-name">'+escQ(b.category)+'</div>' +
+          '<div class="budget-item-pct" style="color:'+(pct>=90?'var(--expense-color)':pct>=60?'var(--transfer-color)':'var(--income-color)')+'">'+pct+'%</div>' +
+        '</div>' +
+        '<div class="budget-bar-wrap"><div class="budget-bar '+barCls+'" style="width:'+pct+'%"></div></div>' +
+        '<div class="budget-item-footer"><span>'+fmtMoney(b.spent||0)+' spent</span><span>Limit: '+fmtMoney(b.limit)+'</span></div>' +
+        '<div class="budget-item-actions">' +
+          '<button class="acc-edit-btn" onclick="openSetBudget(\''+escQ(b.category)+'\','+b.limit+','+(b.threshold||80)+','+(b.includeProjects?1:0)+')">✏️ Edit</button>' +
+          '<button class="acc-del-btn" onclick="deleteBudget(\''+escQ(b.category)+'\')">🗑️ Delete</button>' +
+        '</div>' +
+      '</div>';
+    });
+  }
+  var listEl = document.getElementById('budget-list');
+  if (listEl) listEl.innerHTML = html;
+}
+
+function openSetBudget(category, limit, threshold, includeProjects) {
+  // Populate category dropdown
+  var catOpts = expCategories.map(function(c){ return '<option value="'+escQ(c.name)+'">'+catIcon(c.name)+' '+c.name+'</option>'; }).join('');
+  document.getElementById('fb-category').innerHTML = catOpts || '<option value="">No categories</option>';
+  if (category) {
+    document.getElementById('fb-category').value = category;
+    document.getElementById('budget-modal-title').textContent = 'Edit Budget';
+  } else {
+    document.getElementById('budget-modal-title').textContent = 'Set Budget';
+  }
+  document.getElementById('fb-limit').value = limit || '';
+  document.getElementById('fb-threshold').value = threshold || 80;
+  document.getElementById('fb-include-projects').checked = !!includeProjects;
+  openModal('budget-modal');
+}
+
+function saveBudget() {
+  var category = document.getElementById('fb-category').value;
+  var limit = parseFloat(document.getElementById('fb-limit').value);
+  if (!category) { toast('Select a category'); return; }
+  if (!limit || limit <= 0) { toast('Enter a valid limit'); return; }
+  var payload = {
+    action: 'setBudget',
+    category: category,
+    limit: limit,
+    threshold: parseInt(document.getElementById('fb-threshold').value) || 80,
+    includeProjects: document.getElementById('fb-include-projects').checked
+  };
+  document.getElementById('save-budget-btn').textContent = 'Saving…';
+  api(payload).then(function(res){
+    if (res.ok) {
+      closeModal('budget-modal');
+      toast('Budget saved!');
+      api({action:'getBudgets', month:viewMonth, year:viewYear}).then(function(r){ if(r.ok){ budgets=r.budgets||[]; renderBudgetPlanner(); } });
+    } else { toast('Error: '+(res.error||'?')); }
+    document.getElementById('save-budget-btn').textContent = 'Save Budget';
+  }).catch(function(){ toast('Connection error'); document.getElementById('save-budget-btn').textContent = 'Save Budget'; });
+}
+
+function deleteBudget(category) {
+  if (!confirm('Remove budget for "'+category+'"?')) return;
+  api({action:'deleteBudget', category:category}).then(function(res){
+    if (res.ok) { toast('Budget removed'); api({action:'getBudgets', month:viewMonth, year:viewYear}).then(function(r){ if(r.ok){ budgets=r.budgets||[]; renderBudgetPlanner(); } }); }
+    else { toast('Error: '+res.error); }
+  });
+}
+
+// ════════════════════════════════════════════
+//  ANNUAL SUMMARY
+// ════════════════════════════════════════════
+function showAnnualSummary(year) {
+  annualSummaryYear = year || viewYear;
+  document.getElementById('annual-year-label').textContent = annualSummaryYear;
+  document.getElementById('annual-summary-content').innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  var overlay = document.getElementById('annual-summary-modal');
+  overlay.classList.add('open');
+  overlay.onclick = function(e){ if(e.target===overlay){ closeAnnualSummary(); } };
+  fetchAndRenderAnnualSummary();
+}
+
+function closeAnnualSummary() {
+  document.getElementById('annual-summary-modal').classList.remove('open');
+}
+
+function changeAnnualYear(d) {
+  annualSummaryYear += d;
+  document.getElementById('annual-year-label').textContent = annualSummaryYear;
+  document.getElementById('annual-summary-content').innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  fetchAndRenderAnnualSummary();
+}
+
+function fetchAndRenderAnnualSummary() {
+  api({action:'getAnnualSummary', year:annualSummaryYear}).then(function(res){
+    if (!res.ok) { document.getElementById('annual-summary-content').innerHTML = '<div class="empty"><p>Could not load data</p></div>'; return; }
+    renderAnnualSummaryContent(res);
+  }).catch(function(){
+    document.getElementById('annual-summary-content').innerHTML = '<div class="empty"><p>Connection error</p></div>';
+  });
+}
+
+function renderAnnualSummaryContent(res) {
+  var totalInc = res.totalIncome || 0;
+  var totalExp = res.totalExpenses || 0;
+  var surplus = totalInc - totalExp;
+  var savingsRate = totalInc > 0 ? Math.round(surplus / totalInc * 100) : 0;
+  var monthly = res.monthly || [];
+  var catBreakdown = res.categoryBreakdown || [];
+
+  // Bar chart
+  var maxVal = 0;
+  monthly.forEach(function(m){ if((m.income||0)>maxVal) maxVal=m.income; if((m.expenses||0)>maxVal) maxVal=m.expenses; });
+  if (maxVal === 0) maxVal = 1;
+  var shortMonths = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+  var barsHtml = monthly.map(function(m, i){
+    var incH = Math.round((m.income||0)/maxVal*76);
+    var expH = Math.round((m.expenses||0)/maxVal*76);
+    return '<div class="month-bar-group">' +
+      '<div class="month-bar-pair">' +
+        '<div class="month-bar-inc" style="height:'+incH+'px"></div>' +
+        '<div class="month-bar-exp" style="height:'+expH+'px"></div>' +
+      '</div>' +
+      '<div class="month-bar-lbl">'+(shortMonths[i]||'')+'</div>' +
+    '</div>';
+  }).join('');
+
+  // Category breakdown
+  var catHtml = catBreakdown.slice(0,8).map(function(c){
+    var pct = totalExp > 0 ? Math.round((c.amount||0)/totalExp*100) : 0;
+    return '<div class="annual-cat-row">' +
+      '<div class="annual-cat-icon">'+catIcon(c.category)+'</div>' +
+      '<div class="annual-cat-name">'+escQ(c.category||'Other')+'</div>' +
+      '<div class="annual-cat-pct">'+pct+'%</div>' +
+      '<div class="annual-cat-amt">'+fmtMoney(c.amount||0)+'</div>' +
+    '</div>';
+  }).join('');
+
+  var srColor = savingsRate >= 20 ? 'var(--income-color)' : savingsRate >= 0 ? 'var(--transfer-color)' : 'var(--expense-color)';
+
+  var html = '<div class="savings-rate-hero">' +
+    '<div class="savings-rate-pct">'+savingsRate+'%</div>' +
+    '<div class="savings-rate-label">Savings Rate</div>' +
+  '</div>' +
+  '<div class="annual-metric-grid">' +
+    '<div class="annual-metric"><div class="annual-metric-val" style="color:var(--income-color)">'+fmtMoney(totalInc)+'</div><div class="annual-metric-label">Total Income</div></div>' +
+    '<div class="annual-metric"><div class="annual-metric-val" style="color:var(--expense-color)">'+fmtMoney(totalExp)+'</div><div class="annual-metric-label">Total Expenses</div></div>' +
+    '<div class="annual-metric"><div class="annual-metric-val" style="color:'+(surplus>=0?'var(--income-color)':'var(--expense-color)')+'">'+fmtMoney(surplus)+'</div><div class="annual-metric-label">'+(surplus>=0?'Surplus':'Deficit')+'</div></div>' +
+    '<div class="annual-metric"><div class="annual-metric-val" style="color:'+srColor+'">'+savingsRate+'%</div><div class="annual-metric-label">Saved</div></div>' +
+  '</div>' +
+  '<div class="card" style="margin-bottom:12px">' +
+    '<div class="card-title">Month by Month</div>' +
+    '<div style="display:flex;gap:10px;font-size:0.68rem;color:var(--text2);margin-bottom:6px"><span style="color:var(--income-color)">▌ Income</span><span style="color:var(--expense-color)">▌ Expenses</span></div>' +
+    '<div class="month-bars">'+barsHtml+'</div>' +
+  '</div>' +
+  '<div class="card">' +
+    '<div class="card-title">Category Breakdown</div>' +
+    (catHtml || '<div class="empty" style="padding:20px"><p>No expense data</p></div>') +
+  '</div>';
+
+  document.getElementById('annual-summary-content').innerHTML = html;
+}
+
+// ════════════════════════════════════════════
+//  EXPORT TO EXCEL
+// ════════════════════════════════════════════
+function exportMonth() {
+  if (typeof XLSX === 'undefined') { toast('SheetJS not loaded'); return; }
+  var txnRows = [['Date','Type','Category','Amount','Account','Note']];
+  transactions.forEach(function(t){
+    txnRows.push([
+      t.date||'',
+      t.type||'',
+      t.type==='transfer'?'Transfer':(t.category||''),
+      t.amount||0,
+      t.type==='transfer'?(t.fromAccount+' → '+t.toAccount):(t.account||''),
+      t.note||''
+    ]);
+  });
+
+  var acctRows = [['Account','Type','Balance']];
+  accounts.forEach(function(a){ acctRows.push([a.name, a.type, a.balance||0]); });
+
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(txnRows), 'Transactions');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(acctRows), 'Accounts');
+
+  var fname = 'MoneyTracker_'+viewYear+'_'+pad(viewMonth)+'.xlsx';
+  XLSX.writeFile(wb, fname);
+  toast('Exported: '+fname);
+}
+
+function exportYear() {
+  if (typeof XLSX === 'undefined') { toast('SheetJS not loaded'); return; }
+  toast('Fetching year data…');
+  api({action:'getAnnualSummary', year:viewYear}).then(function(res){
+    var summaryRows = [['Month','Income','Expenses','Net']];
+    if (res.ok && res.monthly) {
+      res.monthly.forEach(function(m, i){
+        summaryRows.push([MONTH_NAMES[i], m.income||0, m.expenses||0, (m.income||0)-(m.expenses||0)]);
+      });
+    }
+
+    var txnRows = [['Date','Type','Category','Amount','Account','Note']];
+    transactions.forEach(function(t){
+      txnRows.push([
+        t.date||'', t.type||'',
+        t.type==='transfer'?'Transfer':(t.category||''),
+        t.amount||0,
+        t.type==='transfer'?(t.fromAccount+' → '+t.toAccount):(t.account||''),
+        t.note||''
+      ]);
+    });
+
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(txnRows), 'Transactions');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'Monthly Summary');
+
+    var fname = 'MoneyTracker_'+viewYear+'.xlsx';
+    XLSX.writeFile(wb, fname);
+    toast('Exported: '+fname);
+  }).catch(function(){ toast('Export failed'); });
+}
 </script>
 </body>
 </html>
