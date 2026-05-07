@@ -68,6 +68,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .cc-reminder-detail { font-size:0.78rem; opacity:.85; }
 .cc-reminder-days { font-size:0.78rem; font-weight:700; background:rgba(255,255,255,.2); padding:2px 8px; border-radius:10px; }
 .cc-reminder-close { position:absolute; top:10px; right:12px; background:none; border:none; color:#fff; font-size:1.1rem; cursor:pointer; opacity:.7; }
+.cc-paid-btn { background:rgba(255,255,255,0.25); border:1px solid rgba(255,255,255,0.5); color:#fff; font-size:0.72rem; font-weight:700; padding:3px 10px; border-radius:12px; cursor:pointer; margin-left:8px; white-space:nowrap; }
+.cc-paid-btn:active { background:rgba(255,255,255,0.4); }
 
 /* ── Account Cards Row ── */
 .account-cards-wrap { overflow-x:auto; display:flex; gap:10px; padding:0 16px 4px; margin-top:10px; position:relative; z-index:10; }
@@ -1194,10 +1196,24 @@ function ccUsedPct(a) {
 // ════════════════════════════════════════════
 //  REMINDER BANNERS
 // ════════════════════════════════════════════
+function getCCPaidKey(name) {
+  var now = new Date();
+  return 'ccPaid_' + name + '_' + now.getFullYear() + '_' + (now.getMonth() + 1);
+}
+
+function markCCPaid(name) {
+  try { localStorage.setItem(getCCPaidKey(name), '1'); } catch(e) {}
+  renderReminders();
+}
+
+function isCCPaidThisMonth(name) {
+  try { return localStorage.getItem(getCCPaidKey(name)) === '1'; } catch(e) { return false; }
+}
+
 function renderReminders() {
   var cards = accounts.filter(function(a){ return a.type==='credit' && a.dueDay; });
   var due = cards.filter(function(a){
-    return daysUntil(nextDueDate(a.dueDay)) <= 3;
+    return daysUntil(nextDueDate(a.dueDay)) <= 3 && !isCCPaidThisMonth(a.name);
   });
   if (!due.length) { document.getElementById('cc-reminders').innerHTML = ''; return; }
 
@@ -1205,10 +1221,14 @@ function renderReminders() {
     var d = daysUntil(nextDueDate(a.dueDay));
     var label = d === 0 ? 'Due TODAY' : d === 1 ? 'Due TOMORROW' : 'Due in ' + d + ' days';
     var owed = ccOwed(a);
+    var safeName = a.name.replace(/'/g, "\\'");
     return '<div class="cc-reminder-item">' +
       '<div><div class="cc-reminder-name">💳 ' + a.name + '</div>' +
       '<div class="cc-reminder-detail">' + (owed > 0 ? 'Owed: ' + fmtMoney(owed) : 'Balance clear') + '</div></div>' +
-      '<div class="cc-reminder-days">' + label + '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px">' +
+        '<div class="cc-reminder-days">' + label + '</div>' +
+        '<button class="cc-paid-btn" onclick="markCCPaid(\'' + safeName + '\')">✓ Paid</button>' +
+      '</div>' +
     '</div>';
   }).join('');
 
