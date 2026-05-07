@@ -199,6 +199,8 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .type-choice.transfer-choice{ background:#fff8e6; color:var(--transfer-color); }
 
 /* ── Accounts Page ── */
+.acc-page-section-header { font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text2); padding:4px 2px 6px; margin-top:14px; border-bottom:1px solid var(--border); margin-bottom:8px; }
+.acc-page-section-header:first-child { margin-top:0; }
 .acc-page-card { background:var(--surface); border-radius:var(--radius); padding:15px; margin-bottom:10px; box-shadow:var(--shadow-sm); }
 .acc-page-card.is-credit { border-left:4px solid var(--expense-color); }
 .acc-page-row { display:flex; align-items:center; gap:12px; }
@@ -1492,45 +1494,65 @@ function renderAccountsPage() {
   if (!accounts.length) {
     html = '<div class="empty"><div class="empty-icon">💳</div><p>No accounts yet. Add your first account below.</p></div>';
   } else {
-    accounts.forEach(function(a) {
-      if (a.type === 'credit') {
-        var owed = ccOwed(a);
-        var pct  = ccUsedPct(a);
-        var nextDue = a.dueDay ? nextDueDate(a.dueDay) : null;
-        var daysLeft = nextDue ? daysUntil(nextDue) : null;
-        var dueTxt = nextDue ? fmtDate(nextDue.toISOString().slice(0,10)) + (daysLeft<=3?' ⚠️':'') : '—';
-        html += '<div class="acc-page-card is-credit">' +
-          '<div class="acc-page-row">' +
-            '<div class="acc-page-icon">💳</div>' +
-            '<div class="acc-page-info"><div class="acc-page-name">'+a.name+'</div><div class="acc-page-type">Credit Card</div></div>' +
-            '<div class="acc-page-balance neg">Owed<br>'+fmtMoney(owed)+'</div>' +
-          '</div>' +
-          '<div class="acc-page-credit-detail">' +
-            (a.creditLimit ? '<div class="acc-page-credit-row"><span>Credit Limit</span><span>'+fmtMoney(a.creditLimit)+'</span></div>' +
-              '<div class="acc-page-credit-row"><span>Available</span><span>'+fmtMoney(Math.max(0, a.creditLimit - owed))+'</span></div>' +
-              '<div class="acc-page-limit-bar-wrap"><div class="acc-page-limit-bar" style="width:'+pct+'%"></div></div>' : '') +
-            (a.dueDay ? '<div class="acc-page-credit-row" style="margin-top:8px"><span>Next Due Date</span><span>'+dueTxt+'</span></div>' : '') +
-            (a.statementDay ? '<div class="acc-page-credit-row"><span>Statement Date</span><span>'+a.statementDay+(a.statementDay===1?'st':a.statementDay===2?'nd':a.statementDay===3?'rd':'th')+' of each month</span></div>' : '') +
-          '</div>' +
-          (accountsEditMode ? '<div class="acc-page-actions">' +
-            '<button class="acc-edit-btn" onclick="openEditAccount('+a.rowIndex+')">✏️ Edit</button>' +
-            '<button class="acc-del-btn"  onclick="deleteAccount('+a.rowIndex+',\''+escQ(a.name)+'\')">🗑️ Delete</button>' +
-          '</div>' : '') +
-        '</div>';
-      } else {
-        var neg = a.balance < 0 ? ' neg' : '';
-        html += '<div class="acc-page-card">' +
-          '<div class="acc-page-row">' +
-            '<div class="acc-page-icon">'+acctIcon(a.type)+'</div>' +
-            '<div class="acc-page-info"><div class="acc-page-name">'+a.name+'</div><div class="acc-page-type">'+typeLabel(a.type)+'</div></div>' +
-            '<div class="acc-page-balance'+neg+'">'+fmtMoney(a.balance)+'</div>' +
-          '</div>' +
-          (accountsEditMode ? '<div class="acc-page-actions">' +
-            '<button class="acc-edit-btn" onclick="openEditAccount('+a.rowIndex+')">✏️ Edit</button>' +
-            '<button class="acc-del-btn"  onclick="deleteAccount('+a.rowIndex+',\''+escQ(a.name)+'\')">🗑️ Delete</button>' +
-          '</div>' : '') +
-        '</div>';
-      }
+    // Group by type in a defined order
+    var TYPE_ORDER = [
+      { key: 'bank',       label: '🏦 Bank Accounts' },
+      { key: 'credit',     label: '💳 Credit Cards' },
+      { key: 'cash',       label: '💵 Cash' },
+      { key: 'wallet',     label: '📱 Digital Wallets' },
+      { key: 'investment', label: '📈 Investments & Savings' }
+    ];
+    // Collect any types not in the predefined list
+    var knownTypes = TYPE_ORDER.map(function(g){ return g.key; });
+    var otherTypes = accounts
+      .map(function(a){ return a.type; })
+      .filter(function(t, i, arr){ return !knownTypes.includes(t) && arr.indexOf(t) === i; });
+    otherTypes.forEach(function(t){ TYPE_ORDER.push({ key: t, label: '🏛 ' + typeLabel(t) }); });
+
+    TYPE_ORDER.forEach(function(group) {
+      var groupAccts = accounts.filter(function(a){ return a.type === group.key; });
+      if (!groupAccts.length) return;
+      html += '<div class="acc-page-section-header">' + group.label + '</div>';
+      groupAccts.forEach(function(a) {
+        if (a.type === 'credit') {
+          var owed = ccOwed(a);
+          var pct  = ccUsedPct(a);
+          var nextDue = a.dueDay ? nextDueDate(a.dueDay) : null;
+          var daysLeft = nextDue ? daysUntil(nextDue) : null;
+          var dueTxt = nextDue ? fmtDate(nextDue.toISOString().slice(0,10)) + (daysLeft<=3?' ⚠️':'') : '—';
+          html += '<div class="acc-page-card is-credit">' +
+            '<div class="acc-page-row">' +
+              '<div class="acc-page-icon">💳</div>' +
+              '<div class="acc-page-info"><div class="acc-page-name">'+a.name+'</div><div class="acc-page-type">Credit Card</div></div>' +
+              '<div class="acc-page-balance neg">Owed<br>'+fmtMoney(owed)+'</div>' +
+            '</div>' +
+            '<div class="acc-page-credit-detail">' +
+              (a.creditLimit ? '<div class="acc-page-credit-row"><span>Credit Limit</span><span>'+fmtMoney(a.creditLimit)+'</span></div>' +
+                '<div class="acc-page-credit-row"><span>Available</span><span>'+fmtMoney(Math.max(0, a.creditLimit - owed))+'</span></div>' +
+                '<div class="acc-page-limit-bar-wrap"><div class="acc-page-limit-bar" style="width:'+pct+'%"></div></div>' : '') +
+              (a.dueDay ? '<div class="acc-page-credit-row" style="margin-top:8px"><span>Next Due Date</span><span>'+dueTxt+'</span></div>' : '') +
+              (a.statementDay ? '<div class="acc-page-credit-row"><span>Statement Date</span><span>'+a.statementDay+(a.statementDay===1?'st':a.statementDay===2?'nd':a.statementDay===3?'rd':'th')+' of each month</span></div>' : '') +
+            '</div>' +
+            (accountsEditMode ? '<div class="acc-page-actions">' +
+              '<button class="acc-edit-btn" onclick="openEditAccount('+a.rowIndex+')">✏️ Edit</button>' +
+              '<button class="acc-del-btn"  onclick="deleteAccount('+a.rowIndex+',\''+escQ(a.name)+'\')">🗑️ Delete</button>' +
+            '</div>' : '') +
+          '</div>';
+        } else {
+          var neg = a.balance < 0 ? ' neg' : '';
+          html += '<div class="acc-page-card">' +
+            '<div class="acc-page-row">' +
+              '<div class="acc-page-icon">'+acctIcon(a.type)+'</div>' +
+              '<div class="acc-page-info"><div class="acc-page-name">'+a.name+'</div><div class="acc-page-type">'+typeLabel(a.type)+'</div></div>' +
+              '<div class="acc-page-balance'+neg+'">'+fmtMoney(a.balance)+'</div>' +
+            '</div>' +
+            (accountsEditMode ? '<div class="acc-page-actions">' +
+              '<button class="acc-edit-btn" onclick="openEditAccount('+a.rowIndex+')">✏️ Edit</button>' +
+              '<button class="acc-del-btn"  onclick="deleteAccount('+a.rowIndex+',\''+escQ(a.name)+'\')">🗑️ Delete</button>' +
+            '</div>' : '') +
+          '</div>';
+        }
+      });
     });
   }
   document.getElementById('accounts-page-list').innerHTML = html;
