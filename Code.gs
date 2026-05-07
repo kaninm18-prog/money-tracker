@@ -9,7 +9,7 @@
 //    Categories       → Name
 //    IncomeCategories → Name
 //    Projects         → Name | Budget | StartDate | EndDate
-//    Receivables      → Date | Amount | Counterparty | Type | Note | ReimbursedBy | Status | SettledDate
+//    Receivables      → Date | Amount | Counterparty | Type | Note | ReimbursedBy | Status | SettledDate | Account
 //    InstallmentPlans → Description | PurchaseDate | Merchant | TotalAmount | InstallmentCount | InstallmentAmount | FirstInstallmentDate | Account | Category | ProjectId | Status | InstallmentsPaid
 //    CategoryBudgets  → Category | MonthlyLimit | AlertThreshold | IsActive | AppliesToProjects
 // ============================================================
@@ -299,6 +299,14 @@ function getTransfers(p) {
   return jsonResponse({ ok: true, transfers: rows });
 }
 
+function deleteTransfer(p) {
+  var sh  = getSheet(SHEET.TRANSFERS);
+  var row = parseInt(p.rowIndex);
+  if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
+  sh.deleteRow(row);
+  return jsonResponse({ ok: true });
+}
+
 function updateTransfer(p) {
   var sh  = getSheet(SHEET.TRANSFERS);
   var row = parseInt(p.rowIndex);
@@ -307,14 +315,6 @@ function updateTransfer(p) {
     p.date || todayStr(), toFloat(p.amount),
     p.fromAccount || "", p.toAccount || "", p.note || ""
   ]]);
-  return jsonResponse({ ok: true });
-}
-
-function deleteTransfer(p) {
-  var sh  = getSheet(SHEET.TRANSFERS);
-  var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
-  sh.deleteRow(row);
   return jsonResponse({ ok: true });
 }
 
@@ -678,7 +678,6 @@ function checkInstallments() {
   return jsonResponse({ ok: true, generated: generated });
 }
 
-// Manually mark the next due installment as paid for a specific plan
 function markInstallmentPaid(p) {
   var sh    = getSheet(SHEET.INSTALLMENTS);
   var expSh = getSheet(SHEET.EXPENSES);
@@ -764,4 +763,72 @@ function setBudget(p) {
   } else {
     sh.appendRow(vals);
   }
-  return jsonResponse({ ok: true, rowIndex: 
+  return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
+}
+
+function deleteBudget(p) {
+  var sh  = getSheet(SHEET.BUDGETS);
+  var row = parseInt(p.rowIndex);
+  if (row < 2) return jsonResponse({ ok: false, error: 'Invalid row' });
+  sh.deleteRow(row);
+  return jsonResponse({ ok: true });
+}
+
+// ── ANNUAL SUMMARY ───────────────────────────────────────────
+
+function getAnnualSummary(p) {
+  var y = parseInt(p.year) || new Date().getFullYear();
+  var expenses = sheetToRows(getSheet(SHEET.EXPENSES), function(d) {
+    return { date: formatDate(d[0]), amount: toFloat(d[1]), category: d[2], projectId: d[7] || '' };
+  }).filter(function(r) { return r.date && parseInt(r.date.substring(0, 4)) === y; });
+
+  var incomes = sheetToRows(getSheet(SHEET.INCOME), function(d) {
+    return { date: formatDate(d[0]), amount: toFloat(d[1]), category: d[2] };
+  }).filter(function(r) { return r.date && parseInt(r.date.substring(0, 4)) === y; });
+
+  // Monthly breakdown (12 months)
+  var monthly = [];
+  for (var mo = 1; mo <= 12; mo++) {
+    var mRegExp  = expenses.filter(function(e){ return dateMatchesMonth(e.date, mo, y) && !e.projectId; })
+                           .reduce(function(s,e){ return s+e.amount; }, 0);
+    var mProjExp = expenses.filter(function(e){ return dateMatchesMonth(e.date, mo, y) && !!e.projectId; })
+                           .reduce(function(s,e){ return s+e.amount; }, 0);
+    var mInc     = incomes.filter(function(e){ return dateMatchesMonth(e.date, mo, y); })
+                          .reduce(function(s,e){ return s+e.amount; }, 0);
+    var mNet     = mInc - mRegExp - mProjExp;
+    monthly.push({
+      month: mo,
+      income:          Math.round(mInc*100)/100,
+      regularExpenses: Math.round(mRegExp*100)/100,
+      projectExpenses: Math.round(mProjExp*100)/100,
+      net:             Math.round(mNet*100)/100,
+      savingsRate:     mInc > 0 ? Math.round(mNet/mInc*100) : 0
+    });
+  }
+
+  // Category breakdown (all expenses)
+  var byCat = {};
+  expenses.forEach(function(e){ byCat[e.category] = (byCat[e.category]||0) + e.amount; });
+  var categories = Object.keys(byCat).map(function(c){
+    return { category: c, amount: Math.round(byCat[c]*100)/100 };
+  }).sort(function(a,b){ return b.amount - a.amount; });
+
+  var totalIncome   = Math.round(incomes.reduce(function(s,e){ return s+e.amount; }, 0)*100)/100;
+  var totalRegExp   = Math.round(expenses.filter(function(e){ return !e.projectId; }).reduce(function(s,e){ return s+e.amount; }, 0)*100)/100;
+  var totalProjExp  = Math.round(expenses.filter(function(e){ return !!e.projectId; }).reduce(function(s,e){ return s+e.amount; }, 0)*100)/100;
+  var totalExp      = Math.round((totalRegExp + totalProjExp)*100)/100;
+  var surplus       = Math.round((totalIncome - totalExp)*100)/100;
+  var savingsRate   = totalIncome > 0 ? Math.round(surplus/totalIncome*100) : 0;
+
+  return jsonResponse({ ok: true,
+    year: y,
+    totalIncome:          totalIncome,
+    totalRegularExpenses: totalRegExp,
+    totalProjectExpenses: totalProjExp,
+    totalExpenses:        totalExp,
+    surplus:              surplus,
+    savingsRate:          savingsRate,
+    monthly:              monthly,
+    categories:           categories
+  });
+}
