@@ -332,9 +332,12 @@ function getAccounts() {
   var expSh  = getSheet(SHEET.EXPENSES);
   var incSh  = getSheet(SHEET.INCOME);
   var trfSh  = getSheet(SHEET.TRANSFERS);
-  var expRows = sheetToRows(expSh, function(d){ return { amount: toFloat(d[1]), account: String(d[4]||'').trim() }; });
-  var incRows = sheetToRows(incSh, function(d){ return { amount: toFloat(d[1]), account: String(d[4]||'').trim() }; });
-  var trfRows = sheetToRows(trfSh, function(d){ return { amount: toFloat(d[1]), from: String(d[2]||'').trim(), to: String(d[3]||'').trim() }; });
+  var expRows  = sheetToRows(expSh, function(d){ return { amount: toFloat(d[1]), account: String(d[4]||'').trim() }; });
+  var incRows  = sheetToRows(incSh, function(d){ return { amount: toFloat(d[1]), account: String(d[4]||'').trim() }; });
+  var trfRows  = sheetToRows(trfSh, function(d){ return { amount: toFloat(d[1]), from: String(d[2]||'').trim(), to: String(d[3]||'').trim() }; });
+  var recvRows = sheetToRows(getSheet(SHEET.RECEIVABLES), function(d){
+    return { amount: toFloat(d[1]), account: String(d[8]||'').trim(), status: String(d[6]||'pending').trim() };
+  });
   accounts.forEach(function(acc) {
     var n = String(acc.name||'').trim();
     var bal = acc.startingBalance;
@@ -344,6 +347,8 @@ function getAccounts() {
       if (r.from === n) bal -= r.amount;
       if (r.to   === n) bal += r.amount;
     });
+    // Pending receivables deduct from account (money went out; reverses when settled)
+    recvRows.forEach(function(r){ if (r.account === n && r.status === 'pending') bal -= r.amount; });
     acc.balance = Math.round(bal * 100) / 100;
   });
   var total = accounts.reduce(function(s, a){ return s + a.balance; }, 0);
@@ -465,7 +470,8 @@ function getReceivables() {
     return {
       rowIndex: ri, date: formatDate(d[0]), amount: toFloat(d[1]),
       counterparty: d[2], type: d[3], note: d[4],
-      reimbursedBy: d[5], status: d[6] || "pending", settledDate: formatDate(d[7])
+      reimbursedBy: d[5], status: d[6] || "pending", settledDate: formatDate(d[7]),
+      account: String(d[8]||'').trim()
     };
   });
   return jsonResponse({ ok: true, receivables: rows });
@@ -477,7 +483,7 @@ function addReceivable(p) {
     p.date || todayStr(), toFloat(p.amount),
     p.counterparty || "", p.type || "advance",
     p.note || "", p.reimbursedBy || "",
-    "pending", ""
+    "pending", "", p.account || ""
   ]);
   return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
 }
@@ -486,12 +492,13 @@ function updateReceivable(p) {
   var sh  = getSheet(SHEET.RECEIVABLES);
   var row = parseInt(p.rowIndex);
   if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
-  // Keep existing status/settledDate (cols 7-8), only update cols 1-6
+  // Keep existing status/settledDate (cols 7-8), update cols 1-6 and col 9 (account)
   sh.getRange(row, 1, 1, 6).setValues([[
     p.date || todayStr(), toFloat(p.amount),
     p.counterparty || "", p.type || "advance",
     p.note || "", p.reimbursedBy || ""
   ]]);
+  sh.getRange(row, 9, 1, 1).setValue(p.account || "");
   return jsonResponse({ ok: true });
 }
 
@@ -757,19 +764,4 @@ function setBudget(p) {
   } else {
     sh.appendRow(vals);
   }
-  return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
-}
-
-function deleteBudget(p) {
-  var sh  = getSheet(SHEET.BUDGETS);
-  var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: 'Invalid row' });
-  sh.deleteRow(row);
-  return jsonResponse({ ok: true });
-}
-
-// ── ANNUAL SUMMARY ───────────────────────────────────────────
-
-function getAnnualSummary(p) {
-  var y = parseInt(p.year) || new Date().getFullYear();
-  var expe
+  return jsonResponse({ ok: true, rowIndex: 

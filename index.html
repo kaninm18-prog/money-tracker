@@ -775,6 +775,12 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
       <label class="form-label">Date</label>
       <input type="date" class="form-control" id="fr-date">
     </div>
+    <div class="form-group">
+      <label class="form-label">Paid from account</label>
+      <select class="form-control" id="fr-recv-account">
+        <option value="">— Select account —</option>
+      </select>
+    </div>
     <button class="btn btn-primary" style="background:#16a34a" onclick="saveReceivable()" id="save-recv-btn">Save Receivable</button>
     <div style="height:8px"></div>
     <button class="btn btn-ghost" id="delete-recv-btn" onclick="deleteCurrentReceivable()" style="display:none">Delete Receivable</button>
@@ -2002,14 +2008,18 @@ function renderReceivables() {
     var total = filtered.reduce(function(s,r){return s+r.amount;},0);
     html += '<div style="font-size:0.8rem;font-weight:700;color:var(--income-color);text-align:right;margin-bottom:8px">Total: '+fmtMoney(total)+'</div>';
     filtered.forEach(function(r) {
-      var typeLabel = r.type==='work' ? '💼 Work Expense' : '🤝 Advance';
-      var reimbInfo = r.reimbursedBy ? ' · Reimbursed by: '+r.reimbursedBy : (r.counterparty ? ' · Paid for: '+r.counterparty : '');
+      // For advance: counterparty = who owes you. For work: reimbursedBy = who reimburses.
+      var displayName = r.type === 'work' ? (r.reimbursedBy || '—') : (r.counterparty || '—');
+      var subInfo = r.type === 'work'
+        ? (r.counterparty ? 'Paid for: ' + r.counterparty : '')
+        : (r.reimbursedBy ? 'Reimbursed by: ' + r.reimbursedBy : '');
+      var acctInfo = r.account ? ' · ' + r.account : '';
       html += '<div class="recv-item">' +
         '<div class="recv-icon">'+(r.type==='work'?'💼':'🤝')+'</div>' +
         '<div class="recv-info">' +
-          '<div class="recv-counterparty">'+(r.reimbursedBy||r.counterparty||'—')+'</div>' +
+          '<div class="recv-counterparty">'+displayName+'</div>' +
           '<div class="recv-note">'+(r.note||'—')+'</div>' +
-          '<div class="recv-meta">'+fmtDate(r.date)+reimbInfo+'</div>' +
+          '<div class="recv-meta">'+fmtDate(r.date)+(subInfo?' · '+subInfo:'')+acctInfo+'</div>' +
           (r.status==='pending' ? '<button class="recv-settle-btn" onclick="settleReceivable('+r.rowIndex+')">✓ Mark Settled</button>' : '<div style="font-size:0.72rem;color:var(--text2);margin-top:4px">Settled '+fmtDate(r.settledDate)+'</div>') +
           '<button class="recv-settle-btn" style="background:var(--text2);margin-right:4px" onclick="openEditReceivable('+r.rowIndex+')">✏️ Edit</button>' +
           '<button class="recv-del-btn" onclick="deleteReceivable('+r.rowIndex+')">🗑️ Delete</button>' +
@@ -2027,6 +2037,10 @@ function openReceivableForm(rowIndex) {
   document.getElementById('receivable-modal-title').textContent = rowIndex ? 'Edit Receivable' : 'Add Receivable';
   document.getElementById('save-recv-btn').textContent          = rowIndex ? 'Update Receivable' : 'Save Receivable';
   document.getElementById('delete-recv-btn').style.display      = rowIndex ? 'block' : 'none';
+  // Populate account dropdown
+  var acctSel = document.getElementById('fr-recv-account');
+  acctSel.innerHTML = '<option value="">— Select account —</option>';
+  accounts.forEach(function(a){ acctSel.innerHTML += '<option value="'+a.name+'">'+a.name+'</option>'; });
   if (rowIndex) {
     var r = receivables.find(function(x){ return x.rowIndex===rowIndex; });
     if (r) {
@@ -2035,6 +2049,7 @@ function openReceivableForm(rowIndex) {
       document.getElementById('fr-reimbursedby').value = r.reimbursedBy || 'PTTEP';
       document.getElementById('fr-note').value         = r.note || '';
       document.getElementById('fr-date').value         = r.date || todayStr();
+      acctSel.value = r.account || '';
       var isWork = r.type === 'work';
       document.querySelectorAll('#recv-type-grid .acct-option').forEach(function(el,i){ el.classList.toggle('selected', isWork ? i===1 : i===0); });
       document.getElementById('fr-counterparty-group').style.display = isWork ? 'none' : 'block';
@@ -2046,6 +2061,7 @@ function openReceivableForm(rowIndex) {
     document.getElementById('fr-reimbursedby').value = 'PTTEP';
     document.getElementById('fr-note').value         = '';
     document.getElementById('fr-date').value         = todayStr();
+    acctSel.value = '';
     document.querySelectorAll('#recv-type-grid .acct-option').forEach(function(el,i){ el.classList.toggle('selected',i===0); });
     document.getElementById('fr-counterparty-group').style.display = 'block';
     document.getElementById('fr-reimb-group').style.display = 'none';
@@ -2067,13 +2083,18 @@ function saveReceivable() {
   if (!amount || amount<=0) { toast('Enter a valid amount'); return; }
   var typeEls = document.querySelectorAll('#recv-type-grid .acct-option.selected');
   var type = typeEls.length ? (typeEls[0].textContent.includes('Work') ? 'work' : 'advance') : 'advance';
+  var account = document.getElementById('fr-recv-account').value;
+  // Only send the field relevant to each type; clear the other
+  var counterparty = type === 'advance' ? document.getElementById('fr-counterparty').value.trim() : '';
+  var reimbursedBy = type === 'work'    ? document.getElementById('fr-reimbursedby').value.trim() : '';
   var payload = {
     action: editingReceivableRow ? 'updateReceivable' : 'addReceivable',
     amount: amount, type: type,
-    counterparty: document.getElementById('fr-counterparty').value.trim(),
-    reimbursedBy: document.getElementById('fr-reimbursedby').value.trim(),
+    counterparty: counterparty,
+    reimbursedBy: reimbursedBy,
     note: document.getElementById('fr-note').value.trim(),
-    date: document.getElementById('fr-date').value || todayStr()
+    date: document.getElementById('fr-date').value || todayStr(),
+    account: account
   };
   if (editingReceivableRow) payload.rowIndex = editingReceivableRow;
   document.getElementById('save-recv-btn').textContent = 'Saving…';
@@ -2081,7 +2102,14 @@ function saveReceivable() {
     if (res.ok) {
       closeModal('receivable-modal');
       toast(editingReceivableRow ? 'Updated!' : 'Receivable saved!');
-      api({action:'getReceivables'}).then(function(r){ if(r.ok){ receivables=r.receivables; renderReceivables(); } });
+      // Refresh receivables + accounts (balance affected by pending receivable)
+      Promise.all([
+        api({action:'getReceivables'}),
+        api({action:'getAccounts'})
+      ]).then(function(results){
+        if (results[0].ok) { receivables = results[0].receivables; renderReceivables(); }
+        if (results[1].ok) { accounts = results[1].accounts; renderAccounts(); }
+      });
     } else { toast('Error: '+res.error); }
     document.getElementById('save-recv-btn').textContent = editingReceivableRow ? 'Update Receivable' : 'Save Receivable';
   });
@@ -2098,8 +2126,17 @@ function deleteCurrentReceivable() {
 function settleReceivable(rowIndex) {
   if (!confirm('Mark this as settled (money received)?')) return;
   api({action:'settleReceivable', rowIndex:rowIndex, settledDate:todayStr()}).then(function(res){
-    if (res.ok) { toast('Marked as settled ✓'); api({action:'getReceivables'}).then(function(r){ if(r.ok){ receivables=r.receivables; renderReceivables(); } }); }
-    else { toast('Error: '+res.error); }
+    if (res.ok) {
+      toast('Marked as settled ✓');
+      // Refresh both receivables and accounts (settling removes the pending balance deduction)
+      Promise.all([
+        api({action:'getReceivables'}),
+        api({action:'getAccounts'})
+      ]).then(function(results){
+        if (results[0].ok) { receivables = results[0].receivables; renderReceivables(); }
+        if (results[1].ok) { accounts = results[1].accounts; renderAccounts(); }
+      });
+    } else { toast('Error: '+res.error); }
   });
 }
 
