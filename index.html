@@ -1033,6 +1033,14 @@ function catColor(n, list) {
   return CAT_COLORS[Math.max(idx,0) % CAT_COLORS.length];
 }
 function acctIcon(type) { return ACCT_ICONS[type] || '💳'; }
+function sortedAccounts() {
+  var ORDER = ['bank','cash','wallet','investment','credit'];
+  return accounts.slice().sort(function(a, b) {
+    var ai = ORDER.indexOf(a.type), bi = ORDER.indexOf(b.type);
+    if (ai === -1) ai = 99; if (bi === -1) bi = 99;
+    return ai !== bi ? ai - bi : a.name.localeCompare(b.name);
+  });
+}
 function fmtMoney(n) { return "฿" + parseFloat(n||0).toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:2}); }
 function fmtDate(str) { if(!str)return''; var d=new Date(str+'T00:00:00'); return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); }
 function todayStr() { var d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
@@ -1255,7 +1263,7 @@ function renderAccountCards() {
   document.getElementById('header-networth-sub').textContent = modeInfo.sub;
 
   var html = '';
-  accounts.forEach(function(a) {
+  sortedAccounts().forEach(function(a) {
     if (a.type === 'credit') {
       var owed = ccOwed(a);
       var pct  = ccUsedPct(a);
@@ -1386,7 +1394,7 @@ function setTypeTab(tab) {
 
 function renderFilterBar() {
   var html = '<div class="filter-chip active" id="fchip-all" onclick="setAcctFilter(\'all\')">All Accounts</div>';
-  accounts.forEach(function(a){
+  sortedAccounts().forEach(function(a){
     html += '<div class="filter-chip" id="fchip-'+encodeId(a.name)+'" onclick="setAcctFilter(\''+escQ(a.name)+'\')">'+acctIcon(a.type)+' '+a.name+'</div>';
   });
   document.getElementById('filter-bar').innerHTML = html;
@@ -1698,7 +1706,7 @@ function openTransferForm(rowIndex) {
   document.getElementById('transfer-modal-title').textContent = rowIndex ? 'Edit Transfer' : 'Transfer Between Accounts';
   document.getElementById('save-transfer-btn').textContent    = rowIndex ? 'Update Transfer' : 'Save Transfer';
   document.getElementById('delete-transfer-btn').style.display = rowIndex ? 'block' : 'none';
-  var opts = accounts.map(function(a){ return '<option value="'+escQ(a.name)+'">'+acctIcon(a.type)+' '+a.name+'</option>'; }).join('');
+  var opts = sortedAccounts().map(function(a){ return '<option value="'+escQ(a.name)+'">'+acctIcon(a.type)+' '+a.name+'</option>'; }).join('');
   document.getElementById('ft-from').innerHTML = opts;
   document.getElementById('ft-to').innerHTML   = opts;
   if (rowIndex) {
@@ -1899,7 +1907,7 @@ function getSelectedCat(gridId) {
 }
 
 function renderAcctList(listId, selected) {
-  var html = accounts.map(function(a) {
+  var html = sortedAccounts().map(function(a) {
     var sel = selected===a.name ? ' selected' : '';
     return '<div class="acct-option'+sel+'" onclick="selectAcct(this)">'+acctIcon(a.type)+' '+a.name+'</div>';
   }).join('');
@@ -2093,7 +2101,7 @@ function openReceivableForm(rowIndex) {
   // Populate account dropdown
   var acctSel = document.getElementById('fr-recv-account');
   acctSel.innerHTML = '<option value="">— Select account —</option>';
-  accounts.forEach(function(a){ acctSel.innerHTML += '<option value="'+a.name+'">'+a.name+'</option>'; });
+  sortedAccounts().forEach(function(a){ acctSel.innerHTML += '<option value="'+a.name+'">'+acctIcon(a.type)+' '+a.name+'</option>'; });
   if (rowIndex) {
     var r = receivables.find(function(x){ return x.rowIndex===rowIndex; });
     if (r) {
@@ -2306,7 +2314,7 @@ function openAddInstallmentPlan(rowIndex) {
   }
 
   // Populate account dropdown
-  var acctOpts = accounts.map(function(a){ return '<option value="'+escQ(a.name)+'">'+acctIcon(a.type)+' '+a.name+'</option>'; }).join('');
+  var acctOpts = sortedAccounts().map(function(a){ return '<option value="'+escQ(a.name)+'">'+acctIcon(a.type)+' '+a.name+'</option>'; }).join('');
   document.getElementById('fin-account').innerHTML = acctOpts || '<option value="">No accounts</option>';
 
   // Populate category dropdown
@@ -2489,6 +2497,13 @@ function saveBudget() {
   if (!category) { toast('Select a category'); return; }
   if (!limit || limit <= 0) { toast('Enter a valid limit'); return; }
   var rowIndex = document.getElementById('budget-modal').dataset.rowIndex;
+  var payload = {
+    action: rowIndex ? 'setBudget' : 'setBudget',
+    category: category,
+    monthlyLimit: limit,
+    alertThreshold: (parseFloat(document.getElementById('fb-threshold').value) || 80) / 100,
+    appliesToProjects: document.getElementById('fb-include-projects').checked
+  };
   if (rowIndex) payload.rowIndex = parseInt(rowIndex);
   document.getElementById('save-budget-btn').textContent = 'Saving…';
   api(payload).then(function(res){
