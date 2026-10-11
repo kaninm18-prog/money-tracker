@@ -4,6 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#6c63ff">
+<meta name="color-scheme" content="light dark">
+<script>
+(function(){
+  var pref='auto';
+  try { pref = localStorage.getItem('themePref') || 'auto'; } catch(e) {}
+  var dark = pref==='dark' || (pref==='auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  var m=document.querySelector('meta[name="theme-color"]'); if (m) m.content = dark ? '#0f0f1a' : '#6c63ff';
+})();
+</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Money Tracker">
@@ -29,6 +39,39 @@
   --shadow: 0 4px 20px rgba(108,99,255,0.12);
   --shadow-sm: 0 2px 8px rgba(0,0,0,0.07);
   --nav-h: 66px;
+  --tint-expense: #ffeaea;
+  --tint-income: #e6faf0;
+  --tint-transfer: #fff8e6;
+  --tint-recv: #f0f4ff;
+  --tint-recv2: #f0fdf4;
+  --recv-green: #16a34a;
+  --header-grad: linear-gradient(135deg, #6c63ff 0%, #9b59b6 100%);
+  --on-surface-inv: #fff;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --primary: #7b73ff;
+  --primary-dark: #655dea;
+  --primary-light: #2a2750;
+  --income-color: #34d399;
+  --expense-color: #f87171;
+  --transfer-color: #fbbf24;
+  --bg: #0f0f1a;
+  --surface: #191929;
+  --surface2: #222236;
+  --text: #ececf8;
+  --text2: #9a9ab8;
+  --border: #2d2d47;
+  --shadow: 0 4px 20px rgba(0,0,0,0.45);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.4);
+  --tint-expense: rgba(248,113,113,0.16);
+  --tint-income: rgba(52,211,153,0.15);
+  --tint-transfer: rgba(251,191,36,0.15);
+  --tint-recv: rgba(123,115,255,0.18);
+  --tint-recv2: rgba(52,211,153,0.15);
+  --recv-green: #34d399;
+  --header-grad: linear-gradient(135deg, #3f39b8 0%, #6b3a86 100%);
+  --on-surface-inv: #0f0f1a;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100dvh; }
@@ -36,7 +79,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 /* ── Header ── */
 .header {
-  background: linear-gradient(135deg, #6c63ff 0%, #9b59b6 100%);
+  background: var(--header-grad);
   color: #fff; padding: 18px 18px 36px; position: relative; overflow: hidden;
 }
 .header::after { content:''; position:absolute; bottom:-20px; left:0; right:0; height:40px; background:var(--bg); border-radius:50% 50% 0 0 / 100% 100% 0 0; }
@@ -119,10 +162,10 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .txn-item { display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid var(--border); cursor:pointer; }
 .txn-item:last-child { border-bottom:none; }
 .txn-icon { width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.15rem; flex-shrink:0; }
-.txn-icon.expense  { background:#ffeaea; }
-.txn-icon.income   { background:#e6faf0; }
-.txn-icon.transfer   { background:#fff8e6; }
-.txn-icon.receivable { background:#f0f4ff; }
+.txn-icon.expense  { background:var(--tint-expense); }
+.txn-icon.income   { background:var(--tint-income); }
+.txn-icon.transfer   { background:var(--tint-transfer); }
+.txn-icon.receivable { background:var(--tint-recv); }
 .txn-amount.receivable { color:var(--expense-color); }
 .txn-info { flex:1; min-width:0; }
 .txn-cat  { font-size:0.88rem; font-weight:600; }
@@ -160,6 +203,9 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .form-label { font-size:0.78rem; font-weight:600; color:var(--text2); margin-bottom:5px; display:block; }
 .form-control { width:100%; padding:11px 13px; border:1.5px solid var(--border); border-radius:var(--radius-sm); font-size:0.95rem; background:var(--surface); color:var(--text); outline:none; transition:border-color .2s; -webkit-appearance:none; }
 .form-control:focus { border-color:var(--primary); }
+.theme-opts { display:flex; gap:8px; }
+.theme-opt { flex:1; padding:9px 0; border-radius:var(--radius-sm); border:1.5px solid var(--border); background:var(--surface2); color:var(--text2); font-size:0.88rem; font-weight:600; cursor:pointer; }
+.theme-opt.active { background:var(--primary); border-color:var(--primary); color:#fff; }
 .amount-wrap { position:relative; }
 .amount-prefix { position:absolute; left:13px; top:50%; transform:translateY(-50%); font-weight:600; color:var(--text2); }
 .amount-wrap input { padding-left:28px; font-size:1.5rem; font-weight:700; }
@@ -194,9 +240,9 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .type-chooser { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:6px; }
 .type-choice { padding:18px 8px; border-radius:var(--radius); border:none; background:var(--surface2); cursor:pointer; text-align:center; font-size:0.82rem; font-weight:600; color:var(--text); }
 .type-choice .tc-icon { font-size:1.8rem; display:block; margin-bottom:6px; }
-.type-choice.expense-choice { background:#ffeaea; color:var(--expense-color); }
-.type-choice.income-choice  { background:#e6faf0; color:var(--income-color); }
-.type-choice.transfer-choice{ background:#fff8e6; color:var(--transfer-color); }
+.type-choice.expense-choice { background:var(--tint-expense); color:var(--expense-color); }
+.type-choice.income-choice  { background:var(--tint-income); color:var(--income-color); }
+.type-choice.transfer-choice{ background:var(--tint-transfer); color:var(--transfer-color); }
 
 /* ── Accounts Page ── */
 .acc-page-section-header { font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text2); padding:4px 2px 6px; margin-top:14px; border-bottom:1px solid var(--border); margin-bottom:8px; }
@@ -218,7 +264,7 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .acc-page-actions { display:flex; gap:6px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
 .acc-page-actions button { flex:1; padding:7px; border:none; border-radius:8px; font-size:0.8rem; font-weight:600; cursor:pointer; }
 .acc-edit-btn { background:var(--primary-light); color:var(--primary); }
-.acc-del-btn  { background:#ffeaea; color:var(--expense-color); }
+.acc-del-btn  { background:var(--tint-expense); color:var(--expense-color); }
 
 /* ── Settings ── */
 .settings-row { display:flex; align-items:center; padding:13px 0; border-bottom:1px solid var(--border); }
@@ -228,7 +274,7 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .settings-value { font-size:0.78rem; color:var(--text2); }
 
 /* ── Toast ── */
-#toast { position:fixed; bottom:calc(var(--nav-h) + 10px); left:50%; transform:translateX(-50%) translateY(20px); background:var(--text); color:#fff; padding:9px 20px; border-radius:20px; font-size:0.85rem; opacity:0; transition:all .3s; z-index:500; pointer-events:none; white-space:nowrap; }
+#toast { position:fixed; bottom:calc(var(--nav-h) + 10px); left:50%; transform:translateX(-50%) translateY(20px); background:var(--text); color:var(--on-surface-inv); padding:9px 20px; border-radius:20px; font-size:0.85rem; opacity:0; transition:all .3s; z-index:500; pointer-events:none; white-space:nowrap; }
 #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 
 /* ── Misc ── */
@@ -242,7 +288,7 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 
 /* ── Recurring Badge ── */
 .recurring-badge { display:inline-block; font-size:0.6rem; font-weight:700; background:var(--primary-light); color:var(--primary); padding:1px 6px; border-radius:8px; margin-left:4px; vertical-align:middle; }
-.project-badge { display:inline-block; font-size:0.6rem; font-weight:700; background:#fff8e6; color:var(--transfer-color); padding:1px 6px; border-radius:8px; margin-left:4px; vertical-align:middle; }
+.project-badge { display:inline-block; font-size:0.6rem; font-weight:700; background:var(--tint-transfer); color:var(--transfer-color); padding:1px 6px; border-radius:8px; margin-left:4px; vertical-align:middle; }
 
 /* ── Project Cards ── */
 .project-card { background:var(--surface); border-radius:var(--radius); padding:15px; margin-bottom:10px; box-shadow:var(--shadow-sm); }
@@ -268,8 +314,8 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .recv-right { text-align:right; flex-shrink:0; }
 .recv-amount { font-size:1rem; font-weight:700; color:var(--income-color); }
 .recv-status { font-size:0.7rem; font-weight:600; padding:2px 8px; border-radius:10px; margin-top:3px; display:inline-block; }
-.recv-status.pending { background:#fff8e6; color:var(--transfer-color); }
-.recv-status.settled { background:#e6faf0; color:var(--income-color); }
+.recv-status.pending { background:var(--tint-transfer); color:var(--transfer-color); }
+.recv-status.settled { background:var(--tint-income); color:var(--income-color); }
 .recv-settle-btn { margin-top:6px; background:var(--income-color); color:#fff; border:none; border-radius:8px; padding:5px 10px; font-size:0.75rem; font-weight:600; cursor:pointer; }
 .recv-del-btn { margin-top:4px; background:none; color:var(--expense-color); border:none; font-size:0.75rem; cursor:pointer; display:block; }
 
@@ -295,7 +341,7 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .form-sub { background:var(--surface2); border-radius:var(--radius-sm); padding:10px 12px; margin-top:8px; border:1px solid var(--border); }
 
 /* ── Setup ── */
-#setup-screen { position:fixed; inset:0; background:linear-gradient(135deg,#6c63ff 0%,#9b59b6 100%); z-index:1000; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:28px; color:#fff; text-align:center; }
+#setup-screen { position:fixed; inset:0; background:var(--header-grad); z-index:1000; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:28px; color:#fff; text-align:center; }
 #setup-screen h1 { font-size:1.9rem; margin-bottom:6px; }
 #setup-screen p { opacity:.85; margin-bottom:28px; font-size:0.9rem; }
 .setup-card { background:rgba(255,255,255,.15); border-radius:var(--radius); padding:22px; width:100%; max-width:380px; text-align:left; backdrop-filter:blur(10px); }
@@ -323,7 +369,7 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .inst-card-merchant { font-size:0.75rem; color:var(--text2); margin-top:2px; }
 .inst-badge { font-size:0.68rem; font-weight:700; padding:2px 8px; border-radius:10px; white-space:nowrap; }
 .inst-badge.active { background:var(--primary-light); color:var(--primary); }
-.inst-badge.completed { background:#e6faf0; color:var(--income-color); }
+.inst-badge.completed { background:var(--tint-income); color:var(--income-color); }
 .inst-badge.cancelled { background:var(--border); color:var(--text2); }
 .inst-detail-row { display:flex; justify-content:space-between; font-size:0.78rem; color:var(--text2); margin-bottom:4px; }
 .inst-detail-row span:last-child { font-weight:600; color:var(--text); }
@@ -562,7 +608,7 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
       <button class="type-choice expense-choice"  onclick="openExpenseForm()"><span class="tc-icon">💸</span>Expense</button>
       <button class="type-choice income-choice"   onclick="openIncomeForm()"><span class="tc-icon">💰</span>Income</button>
       <button class="type-choice transfer-choice" onclick="openTransferForm()"><span class="tc-icon">↔️</span>Transfer</button>
-      <button class="type-choice" style="background:#f0fdf4;color:#16a34a" onclick="openReceivableForm()"><span class="tc-icon">🤝</span>Receivable</button>
+      <button class="type-choice" style="background:var(--tint-recv2);color:var(--recv-green)" onclick="openReceivableForm()"><span class="tc-icon">🤝</span>Receivable</button>
     </div>
   </div>
 </div>
@@ -787,7 +833,7 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
         <option value="">— Select account —</option>
       </select>
     </div>
-    <button class="btn btn-primary" style="background:#16a34a" onclick="saveReceivable()" id="save-recv-btn">Save Receivable</button>
+    <button class="btn btn-primary" style="background:var(--recv-green)" onclick="saveReceivable()" id="save-recv-btn">Save Receivable</button>
     <div style="height:8px"></div>
     <button class="btn btn-ghost" id="delete-recv-btn" onclick="deleteCurrentReceivable()" style="display:none">Delete Receivable</button>
     <div style="height:8px"></div>
@@ -847,6 +893,15 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
           <div><div class="balance-mode-label">Available Cash</div><div class="balance-mode-desc">Cash + bank accounts only</div></div>
         </div>
       </div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Appearance</div>
+      <div class="theme-opts" id="theme-opts">
+        <button class="theme-opt" data-pref="auto" onclick="setThemePref('auto')">Auto</button>
+        <button class="theme-opt" data-pref="light" onclick="setThemePref('light')">Light</button>
+        <button class="theme-opt" data-pref="dark" onclick="setThemePref('dark')">Dark</button>
+      </div>
+      <div class="balance-mode-desc" style="margin-top:8px">Auto follows your phone's light/dark setting.</div>
     </div>
     <div class="card" style="margin-bottom:12px">
       <div class="card-title">Script Connection</div>
@@ -1016,6 +1071,22 @@ var editingProjectRow  = null;
 var editingBudgetId    = null;
 var annualSummaryYear  = new Date().getFullYear();
 var balanceMode  = localStorage.getItem('balanceMode') || 'net_worth';
+
+// ── Theme (auto / light / dark) ──
+function themePref() { try { return localStorage.getItem('themePref') || 'auto'; } catch(e) { return 'auto'; } }
+function applyTheme() {
+  var pref = themePref();
+  var dark = pref==='dark' || (pref==='auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  var m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = dark ? '#0f0f1a' : '#6c63ff';
+  document.querySelectorAll('.theme-opt').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-pref')===pref); });
+}
+function setThemePref(p) { try { localStorage.setItem('themePref', p); } catch(e) {} applyTheme(); }
+if (window.matchMedia) {
+  var _mq = matchMedia('(prefers-color-scheme: dark)');
+  (_mq.addEventListener ? _mq.addEventListener('change', applyTheme) : _mq.addListener && _mq.addListener(applyTheme));
+}
+document.addEventListener('DOMContentLoaded', applyTheme);
 var BALANCE_MODES = {
   net_worth:       { label: 'Net Worth',       sub: 'all assets minus liabilities' },
   monthly_balance: { label: 'Monthly Balance', sub: 'income minus expenses this month' },
