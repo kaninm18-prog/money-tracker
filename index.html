@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Money Tracker">
 <title>Money Tracker</title>
 <link rel="manifest" href="manifest.json">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root {
   --primary: #6c63ff;
@@ -1087,37 +1087,77 @@ function updateScriptUrl() {
 // ════════════════════════════════════════════
 //  API
 // ════════════════════════════════════════════
-function api(payload) {
+function api(payload, retries) {
+  if (retries === undefined) retries = 2;
   return fetch(SCRIPT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
     body: JSON.stringify(payload)
-  }).then(function(r){ return r.json(); });
+  }).then(function(r){ return r.json(); }).catch(function(err) {
+    if (retries <= 0) throw err;
+    return new Promise(function(res){ setTimeout(res, 800 * (3 - retries)); })
+      .then(function(){ return api(payload, retries - 1); });
+  });
 }
 
+var CACHE_KEY = 'moneyCache_v1';
+
+function applyData(d) {
+  if (d.accounts && d.accounts.ok)         { accounts=d.accounts.accounts; totalBalance=d.accounts.totalBalance; }
+  if (d.categories && d.categories.ok)     { expCategories=d.categories.categories; }
+  if (d.incomeCategories && d.incomeCategories.ok) { incCategories=d.incomeCategories.categories; }
+  if (d.transactions && d.transactions.ok) { transactions=d.transactions.transactions; }
+  if (d.projects && d.projects.ok)         { projects=d.projects.projects; }
+  if (d.receivables && d.receivables.ok)   { receivables=d.receivables.receivables; }
+  if (d.installmentPlans && d.installmentPlans.ok) { installmentPlans=d.installmentPlans.installmentPlans||[]; }
+  if (d.budgets && d.budgets.ok)           { budgets=d.budgets.budgets||[]; }
+  renderAll();
+}
+
+function saveCache(d) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({m:viewMonth, y:viewYear, d:d})); } catch(e) {}
+}
+
+function loadCache() {
+  try {
+    var c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+    if (c && c.m === viewMonth && c.y === viewYear && c.d) { applyData(c.d); return true; }
+  } catch(e) {}
+  return false;
+}
+
+// Fallback for a backend that has not been redeployed with 'bootstrap' yet
+function fetchLegacy() {
+  return Promise.all([
+    api({action:'getAccounts'}), api({action:'getCategories'}), api({action:'getIncomeCategories'}),
+    api({action:'getAllTransactions', month:viewMonth, year:viewYear}),
+    api({action:'getProjects'}), api({action:'getReceivables'}),
+    api({action:'getInstallmentPlans'}), api({action:'getBudgets', month:viewMonth, year:viewYear})
+  ]).then(function(r) {
+    return { ok:true, accounts:r[0], categories:r[1], incomeCategories:r[2], transactions:r[3],
+             projects:r[4], receivables:r[5], installmentPlans:r[6], budgets:r[7] };
+  });
+}
+
+var firstLoad = true;
 function loadAll() {
-  api({action:'checkInstallments'}).then(function() {
-    return Promise.all([
-      api({action:'getAccounts'}),
-      api({action:'getCategories'}),
-      api({action:'getIncomeCategories'}),
-      api({action:'getAllTransactions', month:viewMonth, year:viewYear}),
-      api({action:'getProjects'}),
-      api({action:'getReceivables'}),
-      api({action:'getInstallmentPlans'}),
-      api({action:'getBudgets', month:viewMonth, year:viewYear})
-    ]);
-  }).then(function(results) {
-    if (results[0].ok) { accounts=results[0].accounts; totalBalance=results[0].totalBalance; }
-    if (results[1].ok) { expCategories=results[1].categories; }
-    if (results[2].ok) { incCategories=results[2].categories; }
-    if (results[3].ok) { transactions=results[3].transactions; }
-    if (results[4].ok) { projects=results[4].projects; }
-    if (results[5].ok) { receivables=results[5].receivables; }
-    if (results[6].ok) { installmentPlans=results[6].installmentPlans||[]; }
-    if (results[7].ok) { budgets=results[7].budgets||[]; }
-    renderAll();
-  }).catch(function(e){ toast('Connection error'); console.error(e); });
+  // Show last-known data instantly on the first open, then refresh in the background
+  var hadCache = firstLoad ? loadCache() : false;
+  firstLoad = false;
+  return api({action:'bootstrap', month:viewMonth, year:viewYear}).then(function(res) {
+    if (res && res.ok === false && /Unknown action/.test(res.error || '')) return fetchLegacy();
+    return res;
+  }).then(function(d) {
+    applyData(d);
+    saveCache(d);
+    // Generate due installments in the background; refresh only if something was created
+    api({action:'checkInstallments'}, 0).then(function(r) {
+      if (r && r.ok && r.generated > 0) { loadAll(); }
+    }).catch(function(){});
+  }).catch(function(e) {
+    console.error(e);
+    toast(hadCache ? 'Offline - showing saved data' : 'Connection error - reload to retry');
+  });
 }
 
 function loadTransactions() {

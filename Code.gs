@@ -29,8 +29,11 @@ var SHEET = {
 
 // ── Helpers ──────────────────────────────────────────────────
 
+var _ss = null, _sheetMemo = {};
 function getSheet(name) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (_sheetMemo[name]) return _sheetMemo[name];
+  if (!_ss) _ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = _ss;
   var sh = ss.getSheetByName(name);
   if (!sh) {
     sh = ss.insertSheet(name);
@@ -76,6 +79,7 @@ function getSheet(name) {
     }
     sh.getRange(1, 1, 1, sh.getLastColumn()).setFontWeight("bold");
   }
+  _sheetMemo[name] = sh;
   return sh;
 }
 
@@ -176,12 +180,32 @@ function doPost(e) {
       case "setBudget":              return setBudget(p);
       case "deleteBudget":           return deleteBudget(p);
       case "getAnnualSummary":       return getAnnualSummary(p);
+      case "bootstrap":              return bootstrap(p);
       default:
         return jsonResponse({ ok: false, error: "Unknown action: " + p.action });
     }
   } catch (err) {
     return jsonResponse({ ok: false, error: err.message });
   }
+}
+
+// One round-trip startup: returns everything the app needs on open.
+// Reuses the existing getters (parsing their JSON) so logic stays identical.
+function bootstrap(p) {
+  function run(fn) { return JSON.parse(fn().getContent()); }
+  var acc  = run(getAccounts);
+  var exp  = run(getCategories);
+  var inc  = run(getIncomeCategories);
+  var txn  = run(function(){ return getAllTransactions(p); });
+  var prj  = run(getProjects);
+  var rec  = run(getReceivables);
+  var ins  = run(getInstallmentPlans);
+  var bud  = run(function(){ return getBudgets(p); });
+  return jsonResponse({
+    ok: true,
+    accounts: acc, categories: exp, incomeCategories: inc, transactions: txn,
+    projects: prj, receivables: rec, installmentPlans: ins, budgets: bud
+  });
 }
 
 function doGet() {
