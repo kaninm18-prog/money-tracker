@@ -203,6 +203,19 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .form-label { font-size:0.78rem; font-weight:600; color:var(--text2); margin-bottom:5px; display:block; }
 .form-control { width:100%; padding:11px 13px; border:1.5px solid var(--border); border-radius:var(--radius-sm); font-size:0.95rem; background:var(--surface); color:var(--text); outline:none; transition:border-color .2s; -webkit-appearance:none; }
 .form-control:focus { border-color:var(--primary); }
+
+.imp-list { max-height:38dvh; overflow-y:auto; border:1.5px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); }
+.imp-list:empty { display:none; }
+.imp-row { display:grid; grid-template-columns:22px 1fr auto; gap:4px 10px; align-items:center; padding:9px 10px; border-bottom:1px solid var(--border); font-size:0.85rem; }
+.imp-row:last-child { border-bottom:none; }
+.imp-row input[type=checkbox] { width:18px; height:18px; accent-color:var(--primary); }
+.imp-m { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.imp-d { font-size:0.72rem; color:var(--text2); }
+.imp-a { font-weight:700; color:var(--expense-color); text-align:right; white-space:nowrap; }
+.imp-cat { grid-column:2 / 4; display:flex; gap:8px; align-items:center; }
+.imp-cat select { flex:1; padding:6px 8px; border:1.5px solid var(--border); border-radius:8px; background:var(--surface2); color:var(--text); font-size:0.8rem; }
+.imp-tag { font-size:0.65rem; font-weight:700; padding:2px 7px; border-radius:8px; background:var(--tint-transfer); color:var(--transfer-color); white-space:nowrap; }
+.imp-row.dup { opacity:.6; }
 .theme-opts { display:flex; gap:8px; }
 .theme-opt { flex:1; padding:9px 0; border-radius:var(--radius-sm); border:1.5px solid var(--border); background:var(--surface2); color:var(--text2); font-size:0.88rem; font-weight:600; cursor:pointer; }
 .theme-opt.active { background:var(--primary); border-color:var(--primary); color:#fff; }
@@ -872,6 +885,34 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
   </div>
 </div>
 
+<!-- ══ Import Modal ══ -->
+<div class="modal-overlay" id="import-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Import UOB card alerts</div>
+    <div class="form-group">
+      <label class="form-label">LINE chat export (.txt) or alerts CSV</label>
+      <input type="file" class="form-control" id="imp-file" accept=".txt,.csv,text/plain,text/csv" onchange="impFileChosen()">
+    </div>
+    <div style="display:flex;gap:10px">
+      <div class="form-group" style="flex:1">
+        <label class="form-label">From date</label>
+        <input type="date" class="form-control" id="imp-from" onchange="impBuild()">
+      </div>
+      <div class="form-group" style="flex:1">
+        <label class="form-label">Save to account</label>
+        <select class="form-control" id="imp-account"></select>
+      </div>
+    </div>
+    <div id="imp-summary" class="balance-mode-desc" style="margin:4px 0 8px"></div>
+    <div id="imp-list" class="imp-list"></div>
+    <div style="height:10px"></div>
+    <button class="btn btn-primary" id="imp-save-btn" onclick="impSave()" disabled>Import selected</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('import-modal')">Cancel</button>
+  </div>
+</div>
+
 <!-- ══ Settings Modal ══ -->
 <div class="modal-overlay" id="settings-modal">
   <div class="modal">
@@ -902,6 +943,11 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
         <button class="theme-opt" data-pref="dark" onclick="setThemePref('dark')">Dark</button>
       </div>
       <div class="balance-mode-desc" style="margin-top:8px">Auto follows your phone's light/dark setting.</div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Import</div>
+      <div class="balance-mode-desc" style="margin-bottom:10px">Bring in card spending alerts from a LINE chat export (UOB Thai).</div>
+      <button class="btn btn-ghost btn-sm" onclick="openImport()">Import UOB card alerts</button>
     </div>
     <div class="card" style="margin-bottom:12px">
       <div class="card-title">Script Connection</div>
@@ -2046,6 +2092,147 @@ function openModal(id) {
   el.onclick = function(e){ if(e.target===el){ el.classList.remove('open'); } };
 }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+
+// ════════════════════════════════════════════
+//  IMPORT UOB CARD ALERTS
+// ════════════════════════════════════════════
+var impParsed = [], impKnown = {full:{}, loose:{}}, impRows = [];
+var IMP_ALERT = /มีการใช้บัตร\s+(\S+)\s+@(.+?)\s+([\d,]+(?:\.\d+)?)\s*THB\s+วันที่\s+(\d\d)\/(\d\d)/;
+
+// Parse LINE export text (phone or PC format) or the alerts CSV -> [{date,time,card,merchant,amount}]
+function parseAlerts(text) {
+  var lines = text.replace(/^\uFEFF/, '').split(/\r?\n/), out = [], i, m;
+  if (/^date,time,card,merchant,amount/i.test(lines[0] || '')) {
+    for (i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      var c = lines[i].match(/("([^"]|"")*"|[^,]*)(,|$)/g).map(function(x){ return x.replace(/,$/, '').replace(/^"|"$/g, '').replace(/""/g, '"'); });
+      if (c.length >= 5 && /^\d{4}-\d\d-\d\d$/.test(c[0])) out.push({ date:c[0], time:c[1], card:c[2], merchant:c[3].trim(), amount:parseFloat(c[4]) });
+    }
+    return out;
+  }
+  var date = null;
+  for (i = 0; i < lines.length; i++) {
+    var l = lines[i];
+    if ((m = l.match(/^[A-Za-z]{3}, (\d\d)\/(\d\d)\/(\d{4})$/))) { date = m[3]+'-'+m[2]+'-'+m[1]; continue; }   // phone export
+    if ((m = l.match(/^(\d{4})\.(\d\d)\.(\d\d)\b/))) { date = m[1]+'-'+m[2]+'-'+m[3]; continue; }             // PC export
+    if (!date) continue;
+    m = l.match(IMP_ALERT);
+    if (!m) continue;
+    var t = (l.match(/^(\d\d:\d\d)/) || [,''])[1];
+    out.push({ date:date, time:t, card:m[1], merchant:m[2].trim(), amount:parseFloat(m[3].replace(/,/g,'')) });
+  }
+  return out;
+}
+
+var IMP_RULES = [
+  [/ADVANCED WIRELESS|\bAIS\b|TRUE ?MOVE|DTAC|ELECTRICITY|METROPOLITAN|WATERWORKS|\bMEA\b|\bPEA\b|APPLE\.COM|ICLOUD|MICROSOFT|GOOGLE/i, 'Bills & Utilities'],
+  [/NETFLIX|PLAYSTATION|SPOTIFY|YOUTUBE|DISNEY|CINEMA|\bSFW\b|MAJOR|STEAM/i, 'Entertainment'],
+  [/MAKRO|TOPS|FOOD|LOTUS|7-?ELEVEN|GRAB|STARBUCKS|RESTAURANT|CAFE/i, 'Food & Dining'],
+  [/SHOPEE|LAZADA|CENTRAL|B2S|ROBINSON/i, 'Shopping']
+];
+function impGuessCat(merchant) {
+  var names = expCategories.map(function(c){ return c.name; }), want = null;
+  for (var i = 0; i < IMP_RULES.length; i++) if (IMP_RULES[i][0].test(merchant)) { want = IMP_RULES[i][1]; break; }
+  var hit = want && names.filter(function(n){ return String(n).toLowerCase() === want.toLowerCase(); })[0];
+  if (hit) return hit;
+  var other = names.filter(function(n){ return /^other/i.test(n); })[0];
+  return other || names[0] || '';
+}
+function impNote(a) { return 'UOB · ' + a.merchant; }
+function impEsc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+function impBaht(n) { return n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+function openImport() {
+  impParsed = []; impRows = [];
+  document.getElementById('imp-file').value = '';
+  document.getElementById('imp-list').innerHTML = '';
+  document.getElementById('imp-summary').textContent = 'Choose the exported chat file to preview the expenses before anything is saved.';
+  document.getElementById('imp-save-btn').disabled = true;
+  var d = new Date(); d.setMonth(d.getMonth() - 6); d.setDate(1);
+  document.getElementById('imp-from').value = d.getFullYear()+'-'+pad(d.getMonth()+1)+'-01';
+  var sel = document.getElementById('imp-account');
+  sel.innerHTML = accounts.map(function(a){ return '<option value="'+impEsc(a.name)+'">'+impEsc(a.name)+'</option>'; }).join('');
+  var guess = accounts.filter(function(a){ return /uob/i.test(a.name); })[0] || accounts.filter(function(a){ return a.type === 'credit'; })[0];
+  if (guess) sel.value = guess.name;
+  openModal('import-modal');
+}
+
+function impFileChosen() {
+  var f = document.getElementById('imp-file').files[0];
+  if (!f) return;
+  document.getElementById('imp-summary').textContent = 'Reading file…';
+  var fr = new FileReader();
+  fr.onload = function() {
+    impParsed = parseAlerts(String(fr.result));
+    if (!impParsed.length) { document.getElementById('imp-summary').textContent = 'No UOB card alerts found in this file.'; return; }
+    // Existing expenses, to flag duplicates
+    api({action:'getExpenses'}).then(function(r) {
+      impKnown = {full:{}, loose:{}};
+      (r && r.ok ? r.expenses : []).forEach(function(e) {
+        impKnown.full[e.date+'|'+Number(e.amount).toFixed(2)+'|'+e.note] = 1;
+        impKnown.loose[e.date+'|'+Number(e.amount).toFixed(2)] = 1;
+      });
+      impBuild();
+    }).catch(function(){ impBuild(); });
+  };
+  fr.readAsText(f, 'utf-8');
+}
+
+function impBuild() {
+  var from = document.getElementById('imp-from').value || '0000-00-00';
+  impRows = impParsed.filter(function(a){ return a.date >= from; }).map(function(a) {
+    var k = a.date+'|'+a.amount.toFixed(2);
+    var status = impKnown.full[k+'|'+impNote(a)] ? 'imported' : (impKnown.loose[k] ? 'maybe' : '');
+    return { a:a, cat:impGuessCat(a.merchant), on: status === '', status:status };
+  });
+  impRender();
+}
+
+function impRender() {
+  var catOpts = function(sel) { return expCategories.map(function(c){ return '<option'+(c.name===sel?' selected':'')+'>'+impEsc(c.name)+'</option>'; }).join(''); };
+  document.getElementById('imp-list').innerHTML = impRows.map(function(r, i) {
+    var tag = r.status === 'imported' ? '<span class="imp-tag">Already imported</span>' : (r.status === 'maybe' ? '<span class="imp-tag">Same day &amp; amount exists</span>' : '');
+    return '<div class="imp-row'+(r.status==='imported'?' dup':'')+'">'
+      + '<input type="checkbox" '+(r.on?'checked ':'')+'onchange="impToggle('+i+',this.checked)">'
+      + '<div><div class="imp-m">'+impEsc(r.a.merchant)+'</div><div class="imp-d">'+impEsc(r.a.date)+(r.a.time?' · '+impEsc(r.a.time):'')+'</div></div>'
+      + '<div class="imp-a">฿'+impBaht(r.a.amount)+'</div>'
+      + '<div class="imp-cat"><select onchange="impCat('+i+',this.value)">'+catOpts(r.cat)+'</select>'+tag+'</div></div>';
+  }).join('');
+  impSummary();
+}
+function impToggle(i, on) { impRows[i].on = on; impSummary(); }
+function impCat(i, v) { impRows[i].cat = v; }
+function impSummary() {
+  var sel = impRows.filter(function(r){ return r.on; });
+  var tot = sel.reduce(function(s, r){ return s + r.a.amount; }, 0);
+  document.getElementById('imp-summary').textContent = impRows.length
+    ? impRows.length + ' alerts found · ' + sel.length + ' selected · ฿' + impBaht(tot)
+    : 'No alerts on or after this date.';
+  document.getElementById('imp-save-btn').disabled = !sel.length;
+  document.getElementById('imp-save-btn').textContent = sel.length ? 'Import ' + sel.length + ' expense' + (sel.length>1?'s':'') : 'Import selected';
+}
+
+function impSave() {
+  var acct = document.getElementById('imp-account').value;
+  if (!acct) { toast('Select an account'); return; }
+  var items = impRows.filter(function(r){ return r.on; }).map(function(r) {
+    return { date:r.a.date, amount:r.a.amount, category:r.cat, note:impNote(r.a), account:acct, isRecurring:false, recurrencePeriod:'', projectId:'' };
+  });
+  if (!items.length) return;
+  var btn = document.getElementById('imp-save-btn'); btn.disabled = true; btn.textContent = 'Importing…';
+  var done = function(n) { closeModal('import-modal'); closeModal('settings-modal'); toast(n + ' expenses imported'); loadAll(); };
+  api({action:'addExpensesBatch', items:items}, 0).then(function(res) {
+    if (res.ok) return done(res.added);
+    if (/Unknown action/.test(res.error || '')) {           // old backend: add one by one
+      var n = 0;
+      return items.reduce(function(p, it) {
+        return p.then(function(){ return api(Object.assign({action:'addExpense'}, it)); }).then(function(r){ if (r.ok) n++; });
+      }, Promise.resolve()).then(function(){ done(n); });
+    }
+    toast('Error: ' + (res.error || '?')); impSummary();
+  }).catch(function(){ toast('Connection error - check your expenses before retrying'); impSummary(); });
+}
 
 // ════════════════════════════════════════════
 //  TOAST
