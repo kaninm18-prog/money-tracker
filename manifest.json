@@ -4,8 +4,8 @@
   "description": "Personal money tracker — income, expenses & accounts — powered by Google Sheets",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#6c63ff",
-  "theme_color": "#6c63ff",
+  "background_color": "#1b1e2a",
+  "theme_color": "#1b1e2a",
   "orientation": "portrait",
   "icons": [
     {

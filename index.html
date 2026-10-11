@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#6c63ff">
+<meta name="theme-color" content="#1b1e2a">
 <meta name="color-scheme" content="light dark">
 <script>
 (function(){
@@ -11,7 +11,7 @@
   try { pref = localStorage.getItem('themePref') || 'auto'; } catch(e) {}
   var dark = pref==='dark' || (pref==='auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-  var m=document.querySelector('meta[name="theme-color"]'); if (m) m.content = dark ? '#0f0f1a' : '#6c63ff';
+  var m=document.querySelector('meta[name="theme-color"]'); if (m) m.content = dark ? '#0d0e12' : '#1b1e2a';
 })();
 </script>
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -22,21 +22,21 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root {
-  --primary: #6c63ff;
-  --primary-dark: #5a52d5;
-  --primary-light: #ede9ff;
+  --primary: #2f3445;
+  --primary-dark: #1f2330;
+  --primary-light: #ebebf0;
   --income-color: #22c55e;
   --expense-color: #ef4444;
   --transfer-color: #f59e0b;
-  --bg: #f5f4ff;
+  --bg: #f3f4f6;
   --surface: #ffffff;
-  --surface2: #f8f7ff;
-  --text: #1a1a2e;
-  --text2: #6b6b8d;
-  --border: #e8e6f5;
+  --surface2: #f7f7f9;
+  --text: #1b1d27;
+  --text2: #6b7080;
+  --border: #e5e6ea;
   --radius: 16px;
   --radius-sm: 10px;
-  --shadow: 0 4px 20px rgba(108,99,255,0.12);
+  --shadow: 0 4px 20px rgba(20,22,32,0.10);
   --shadow-sm: 0 2px 8px rgba(0,0,0,0.07);
   --nav-h: 66px;
   --tint-expense: #ffeaea;
@@ -45,33 +45,33 @@
   --tint-recv: #f0f4ff;
   --tint-recv2: #f0fdf4;
   --recv-green: #16a34a;
-  --header-grad: linear-gradient(135deg, #6c63ff 0%, #9b59b6 100%);
+  --header-grad: linear-gradient(135deg, #1b1e2a 0%, #3a3f52 100%);
   --on-surface-inv: #fff;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --primary: #7b73ff;
-  --primary-dark: #655dea;
-  --primary-light: #2a2750;
+  --primary: #7f8db0;
+  --primary-dark: #6b7a9e;
+  --primary-light: #242731;
   --income-color: #34d399;
   --expense-color: #f87171;
   --transfer-color: #fbbf24;
-  --bg: #0f0f1a;
-  --surface: #191929;
-  --surface2: #222236;
-  --text: #ececf8;
-  --text2: #9a9ab8;
-  --border: #2d2d47;
+  --bg: #0d0e12;
+  --surface: #17181e;
+  --surface2: #1f2027;
+  --text: #ececf1;
+  --text2: #9a9eae;
+  --border: #2a2c36;
   --shadow: 0 4px 20px rgba(0,0,0,0.45);
   --shadow-sm: 0 2px 8px rgba(0,0,0,0.4);
   --tint-expense: rgba(248,113,113,0.16);
   --tint-income: rgba(52,211,153,0.15);
   --tint-transfer: rgba(251,191,36,0.15);
-  --tint-recv: rgba(123,115,255,0.18);
+  --tint-recv: rgba(127,141,176,0.18);
   --tint-recv2: rgba(52,211,153,0.15);
   --recv-green: #34d399;
-  --header-grad: linear-gradient(135deg, #3f39b8 0%, #6b3a86 100%);
-  --on-surface-inv: #0f0f1a;
+  --header-grad: linear-gradient(135deg, #15171d 0%, #2b2f3c 100%);
+  --on-surface-inv: #0d0e12;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100dvh; }
@@ -354,7 +354,7 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .setup-steps li { font-size:0.8rem; opacity:.85; margin-bottom:5px; list-style:decimal; margin-left:18px; }
 
 /* ── Accounts Edit Mode ── */
-.acct-edit-active { background:linear-gradient(135deg,rgba(108,99,255,.12),rgba(155,89,182,.10)); border-radius:var(--radius-sm); padding:8px 10px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
+.acct-edit-active { background:var(--primary-light); border-radius:var(--radius-sm); padding:8px 10px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
 .acct-page-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
 .acct-page-title { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text2); }
 .acc-page-actions { display:flex; gap:6px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
@@ -384,7 +384,7 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .inst-preview { background:var(--surface2); border-radius:var(--radius-sm); padding:10px 12px; margin-top:8px; font-size:0.88rem; color:var(--primary); font-weight:600; text-align:center; border:1.5px solid var(--primary-light); }
 
 /* ── Budget Planner ── */
-.budget-overview { background:linear-gradient(135deg,var(--primary),#9b59b6); color:#fff; border-radius:var(--radius); padding:16px; margin-bottom:12px; }
+.budget-overview { background:var(--header-grad); color:#fff; border-radius:var(--radius); padding:16px; margin-bottom:12px; }
 .budget-overview-title { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; opacity:.8; margin-bottom:8px; }
 .budget-overview-row { display:flex; justify-content:space-between; align-items:flex-end; }
 .budget-overview-spent { font-size:1.8rem; font-weight:700; }
@@ -412,7 +412,7 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .year-nav { display:flex; align-items:center; gap:10px; }
 .year-nav button { background:var(--surface2); border:1.5px solid var(--border); border-radius:8px; padding:4px 10px; cursor:pointer; font-size:1rem; }
 .year-nav-label { font-size:1.1rem; font-weight:700; color:var(--primary); min-width:52px; text-align:center; }
-.savings-rate-hero { text-align:center; padding:20px; background:linear-gradient(135deg,var(--primary),#9b59b6); border-radius:var(--radius); color:#fff; margin-bottom:16px; }
+.savings-rate-hero { text-align:center; padding:20px; background:var(--header-grad); border-radius:var(--radius); color:#fff; margin-bottom:16px; }
 .savings-rate-pct { font-size:3.5rem; font-weight:700; line-height:1; }
 .savings-rate-label { font-size:0.78rem; opacity:.8; margin-top:4px; text-transform:uppercase; letter-spacing:.08em; }
 .annual-metric-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px; }
@@ -1078,7 +1078,7 @@ function applyTheme() {
   var pref = themePref();
   var dark = pref==='dark' || (pref==='auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-  var m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = dark ? '#0f0f1a' : '#6c63ff';
+  var m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = dark ? '#0d0e12' : '#1b1e2a';
   document.querySelectorAll('.theme-opt').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-pref')===pref); });
 }
 function setThemePref(p) { try { localStorage.setItem('themePref', p); } catch(e) {} applyTheme(); }
@@ -1096,7 +1096,7 @@ var BALANCE_MODES = {
 var MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 var ACCT_ICONS  = { cash:'💵', bank:'🏦', investment:'📈', wallet:'📱', credit:'💳' };
 var CAT_ICONS   = { "Food & Dining":"🍜","Transport":"🚗","Shopping":"🛍️","Bills & Utilities":"💡","Healthcare":"💊","Entertainment":"🎬","Education":"📚","Personal Care":"✨","Travel":"✈️","Savings":"🏦","Other":"📌","Salary":"💼","Investment Returns":"📈","Freelance":"💻","Bonus":"🎁","Other Income":"💰" };
-var CAT_COLORS  = ["#6c63ff","#ff6584","#22c55e","#f59e0b","#3b82f6","#ec4899","#14b8a6","#f97316","#8b5cf6","#06b6d4","#84cc16","#e11d48","#0891b2"];
+var CAT_COLORS  = ["#64748b","#ff6584","#22c55e","#f59e0b","#3b82f6","#ec4899","#14b8a6","#f97316","#eab308","#06b6d4","#84cc16","#e11d48","#0891b2"];
 
 function catIcon(n) { return CAT_ICONS[n] || "📌"; }
 function catColor(n, list) {
