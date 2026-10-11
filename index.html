@@ -203,6 +203,14 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .form-label { font-size:0.78rem; font-weight:600; color:var(--text2); margin-bottom:5px; display:block; }
 .form-control { width:100%; padding:11px 13px; border:1.5px solid var(--border); border-radius:var(--radius-sm); font-size:0.95rem; background:var(--surface); color:var(--text); outline:none; transition:border-color .2s; -webkit-appearance:none; }
 .form-control:focus { border-color:var(--primary); }
+
+.rec-row { display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--border); cursor:pointer; }
+.rec-row:last-child { border-bottom:none; }
+.rec-main { flex:1; min-width:0; }
+.rec-name { font-weight:600; font-size:0.9rem; }
+.rec-sub { font-size:0.74rem; color:var(--text2); }
+.rec-amt { font-weight:700; color:var(--expense-color); white-space:nowrap; }
+.rec-paused { opacity:.55; }
 .theme-opts { display:flex; gap:8px; }
 .theme-opt { flex:1; padding:9px 0; border-radius:var(--radius-sm); border:1.5px solid var(--border); background:var(--surface2); color:var(--text2); font-size:0.88rem; font-weight:600; cursor:pointer; }
 .theme-opt.active { background:var(--primary); border-color:var(--primary); color:#fff; }
@@ -872,6 +880,33 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
   </div>
 </div>
 
+<!-- ══ Recurring Modal ══ -->
+<div class="modal-overlay" id="rec-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="rec-title">Recurring expense</div>
+    <div class="form-group"><label class="form-label">Description</label>
+      <input type="text" class="form-control" id="rec-desc" placeholder="e.g. Netflix"></div>
+    <div style="display:flex;gap:10px">
+      <div class="form-group" style="flex:1"><label class="form-label">Amount (฿)</label>
+        <input type="number" class="form-control" id="rec-amount" step="0.01" inputmode="decimal"></div>
+      <div class="form-group" style="flex:1"><label class="form-label">Day of month</label>
+        <input type="number" class="form-control" id="rec-day" min="1" max="31" inputmode="numeric"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Category</label><select class="form-control" id="rec-cat"></select></div>
+    <div class="form-group"><label class="form-label">Account</label><select class="form-control" id="rec-acct"></select></div>
+    <div class="form-group"><label class="form-label">Start date (first entry on or after)</label>
+      <input type="date" class="form-control" id="rec-start"></div>
+    <div class="form-group"><span class="toggle-label">Active</span>
+      <label class="toggle"><input type="checkbox" id="rec-active" checked><span class="toggle-slider"></span></label></div>
+    <button class="btn btn-primary" id="rec-save-btn" onclick="saveRecurring()">Save</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-danger" id="rec-del-btn" onclick="deleteRecurringItem()" style="display:none">Delete</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('rec-modal')">Cancel</button>
+  </div>
+</div>
+
 <!-- ══ Settings Modal ══ -->
 <div class="modal-overlay" id="settings-modal">
   <div class="modal">
@@ -893,6 +928,13 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
           <div><div class="balance-mode-label">Available Cash</div><div class="balance-mode-desc">Cash + bank accounts only</div></div>
         </div>
       </div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Recurring expenses</div>
+      <div class="balance-mode-desc" style="margin-bottom:8px">Each item is added automatically on its day of the month, when the app opens.</div>
+      <div id="settings-recurring"></div>
+      <div style="height:8px"></div>
+      <button class="btn btn-ghost btn-sm" onclick="openRecurring()">+ Add recurring</button>
     </div>
     <div class="card" style="margin-bottom:12px">
       <div class="card-title">Appearance</div>
@@ -1096,6 +1138,7 @@ var BALANCE_MODES = {
 var MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 var ACCT_ICONS  = { cash:'💵', bank:'🏦', investment:'📈', wallet:'📱', credit:'💳' };
 var CAT_ICONS   = { "Food & Dining":"🍜","Transport":"🚗","Shopping":"🛍️","Bills & Utilities":"💡","Healthcare":"💊","Entertainment":"🎬","Education":"📚","Personal Care":"✨","Travel":"✈️","Savings":"🏦","Other":"📌","Salary":"💼","Investment Returns":"📈","Freelance":"💻","Bonus":"🎁","Other Income":"💰" };
+var recurringExpenses = [];
 var CAT_COLORS  = ["#64748b","#ff6584","#22c55e","#f59e0b","#3b82f6","#ec4899","#14b8a6","#f97316","#eab308","#06b6d4","#84cc16","#e11d48","#0891b2"];
 
 function catIcon(n) { return CAT_ICONS[n] || "📌"; }
@@ -1182,6 +1225,7 @@ function applyData(d) {
   if (d.receivables && d.receivables.ok)   { receivables=d.receivables.receivables; }
   if (d.installmentPlans && d.installmentPlans.ok) { installmentPlans=d.installmentPlans.installmentPlans||[]; }
   if (d.budgets && d.budgets.ok)           { budgets=d.budgets.budgets||[]; }
+  if (d.recurringExpenses && d.recurringExpenses.ok) { recurringExpenses=d.recurringExpenses.recurring||[]; }
   renderAll();
 }
 
@@ -1221,10 +1265,11 @@ function loadAll() {
   }).then(function(d) {
     applyData(d);
     saveCache(d);
-    // Generate due installments in the background; refresh only if something was created
+    // Generate due installments, then recurring expenses, in the background; refresh only if something was created
     api({action:'checkInstallments'}, 0).then(function(r) {
-      if (r && r.ok && r.generated > 0) { loadAll(); }
-    }).catch(function(){});
+      var n = (r && r.ok && r.generated) || 0;
+      return api({action:'checkRecurring'}, 0).then(function(r2) { return n + ((r2 && r2.ok && r2.generated) || 0); });
+    }).then(function(n) { if (n > 0) loadAll(); }).catch(function(){});
   }).catch(function(e) {
     console.error(e);
     toast(hadCache ? 'Offline - showing saved data' : 'Connection error - reload to retry');
@@ -1290,6 +1335,7 @@ function renderAll() {
   renderReceivables();
   renderInstallments();
   renderBudgetPlanner();
+  renderRecurring();
   populateProjectDropdown();
   syncBalanceModeUI();
   // Update year review label
@@ -2046,6 +2092,66 @@ function openModal(id) {
   el.onclick = function(e){ if(e.target===el){ el.classList.remove('open'); } };
 }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+
+// ════════════════════════════════════════════
+//  RECURRING EXPENSES (managed in Settings)
+// ════════════════════════════════════════════
+var editingRecurringRow = null;
+function recEsc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+function renderRecurring() {
+  var el = document.getElementById('settings-recurring');
+  if (!el) return;
+  if (!recurringExpenses.length) { el.innerHTML = '<div class="balance-mode-desc">No recurring items yet.</div>'; return; }
+  el.innerHTML = recurringExpenses.map(function(r) {
+    var sub = 'Day ' + r.dayOfMonth + ' · ' + recEsc(r.account) + ' · ' + recEsc(r.category) + (r.status !== 'active' ? ' · Paused' : '');
+    return '<div class="rec-row' + (r.status !== 'active' ? ' rec-paused' : '') + '" onclick="openRecurring(' + r.rowIndex + ')">'
+      + '<div class="rec-main"><div class="rec-name">' + recEsc(r.description) + '</div><div class="rec-sub">' + sub + '</div></div>'
+      + '<div class="rec-amt">฿' + Number(r.amount).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) + '</div></div>';
+  }).join('');
+}
+function openRecurring(rowIndex) {
+  var r = rowIndex ? recurringExpenses.filter(function(x){ return x.rowIndex === rowIndex; })[0] : null;
+  editingRecurringRow = r ? r.rowIndex : null;
+  document.getElementById('rec-title').textContent = r ? 'Edit recurring expense' : 'Add recurring expense';
+  document.getElementById('rec-desc').value = r ? r.description : '';
+  document.getElementById('rec-amount').value = r ? r.amount : '';
+  document.getElementById('rec-day').value = r ? r.dayOfMonth : '';
+  document.getElementById('rec-cat').innerHTML = expCategories.map(function(c){ return '<option>' + recEsc(c.name) + '</option>'; }).join('');
+  document.getElementById('rec-acct').innerHTML = accounts.map(function(a){ return '<option>' + recEsc(a.name) + '</option>'; }).join('');
+  if (r) { document.getElementById('rec-cat').value = r.category; document.getElementById('rec-acct').value = r.account; }
+  document.getElementById('rec-start').value = r ? r.startDate : todayStr();
+  document.getElementById('rec-active').checked = r ? r.status === 'active' : true;
+  document.getElementById('rec-del-btn').style.display = r ? 'block' : 'none';
+  openModal('rec-modal');
+}
+function saveRecurring() {
+  var desc = document.getElementById('rec-desc').value.trim();
+  var amt = parseFloat(document.getElementById('rec-amount').value);
+  var day = parseInt(document.getElementById('rec-day').value);
+  if (!desc) { toast('Enter a description'); return; }
+  if (!amt || amt <= 0) { toast('Enter a valid amount'); return; }
+  if (!day || day < 1 || day > 31) { toast('Day must be 1-31'); return; }
+  var payload = { description:desc, amount:amt, dayOfMonth:day,
+    category:document.getElementById('rec-cat').value, account:document.getElementById('rec-acct').value,
+    startDate:document.getElementById('rec-start').value || todayStr(),
+    status:document.getElementById('rec-active').checked ? 'active' : 'paused' };
+  if (editingRecurringRow) { payload.action = 'updateRecurring'; payload.rowIndex = editingRecurringRow; }
+  else { payload.action = 'addRecurring'; }
+  var btn = document.getElementById('rec-save-btn'); btn.textContent = 'Saving…';
+  api(payload).then(function(res) {
+    btn.textContent = 'Save';
+    if (res.ok) { closeModal('rec-modal'); toast(editingRecurringRow ? 'Updated!' : 'Recurring added!'); loadAll(); }
+    else if (/Unknown action/.test(res.error || '')) { toast('Update Code.gs in Apps Script and redeploy first'); }
+    else { toast('Error: ' + (res.error || '?')); }
+  }).catch(function(){ btn.textContent = 'Save'; toast('Connection error'); });
+}
+function deleteRecurringItem() {
+  if (!editingRecurringRow || !confirm('Delete this recurring item? Past entries stay.')) return;
+  api({action:'deleteRecurring', rowIndex:editingRecurringRow}).then(function(res) {
+    if (res.ok) { closeModal('rec-modal'); toast('Deleted'); loadAll(); } else toast('Error: ' + (res.error || '?'));
+  }).catch(function(){ toast('Connection error'); });
+}
 
 // ════════════════════════════════════════════
 //  TOAST

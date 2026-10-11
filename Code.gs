@@ -12,6 +12,7 @@
 //    Receivables      → Date | Amount | Counterparty | Type | Note | ReimbursedBy | Status | SettledDate | Account
 //    InstallmentPlans → Description | PurchaseDate | Merchant | TotalAmount | InstallmentCount | InstallmentAmount | FirstInstallmentDate | Account | Category | ProjectId | Status | InstallmentsPaid
 //    CategoryBudgets  → Category | MonthlyLimit | AlertThreshold | IsActive | AppliesToProjects
+//    RecurringExpenses→ Description | Amount | Category | Account | DayOfMonth | StartDate | Status | LastGenerated | ProjectId
 // ============================================================
 
 var SHEET = {
@@ -24,7 +25,8 @@ var SHEET = {
   PROJECTS:     "Projects",
   RECEIVABLES:  "Receivables",
   INSTALLMENTS: "InstallmentPlans",
-  BUDGETS:      "CategoryBudgets"
+  BUDGETS:      "CategoryBudgets",
+  RECURRING:    "RecurringExpenses"
 };
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -75,6 +77,11 @@ function getSheet(name) {
         break;
       case SHEET.BUDGETS:
         sh.appendRow(["Category","MonthlyLimit","AlertThreshold","IsActive","AppliesToProjects"]);
+        break;
+      case SHEET.RECURRING:
+        sh.appendRow(["Description","Amount","Category","Account","DayOfMonth","StartDate","Status","LastGenerated","ProjectId"]);
+        sh.getRange(2, 6, 998, 1).setNumberFormat("@");   // StartDate stays plain text
+        sh.getRange(2, 8, 998, 1).setNumberFormat("@");   // LastGenerated stays plain text
         break;
     }
     sh.getRange(1, 1, 1, sh.getLastColumn()).setFontWeight("bold");
@@ -181,6 +188,11 @@ function doPost(e) {
       case "deleteBudget":           return deleteBudget(p);
       case "getAnnualSummary":       return getAnnualSummary(p);
       case "bootstrap":              return bootstrap(p);
+      case "getRecurring":           return getRecurring();
+      case "addRecurring":           return addRecurring(p);
+      case "updateRecurring":        return updateRecurring(p);
+      case "deleteRecurring":        return deleteRecurring(p);
+      case "checkRecurring":         return checkRecurring();
       default:
         return jsonResponse({ ok: false, error: "Unknown action: " + p.action });
     }
@@ -201,11 +213,100 @@ function bootstrap(p) {
   var rec  = run(getReceivables);
   var ins  = run(getInstallmentPlans);
   var bud  = run(function(){ return getBudgets(p); });
+  var rcr  = run(getRecurring);
   return jsonResponse({
     ok: true,
     accounts: acc, categories: exp, incomeCategories: inc, transactions: txn,
-    projects: prj, receivables: rec, installmentPlans: ins, budgets: bud
+    projects: prj, receivables: rec, installmentPlans: ins, budgets: bud, recurringExpenses: rcr
   });
+}
+
+// ── RECURRING EXPENSES ───────────────────────────────────────
+// Each row is one independent recurring charge (own amount and day of month).
+// checkRecurring() creates a normal Expenses row for every due month it has not created yet.
+
+function recurringRow(d, ri) {
+  return {
+    rowIndex: ri, description: d[0], amount: toFloat(d[1]), category: d[2], account: d[3],
+    dayOfMonth: parseInt(d[4]) || 1, startDate: formatDate(d[5]),
+    status: d[6] || "active", lastGenerated: formatDate(d[7]), projectId: d[8] || ""
+  };
+}
+
+function getRecurring() {
+  var rows = sheetToRows(getSheet(SHEET.RECURRING), recurringRow);
+  return jsonResponse({ ok: true, recurring: rows });
+}
+
+function addRecurring(p) {
+  var desc = String(p.description || "").trim();
+  var amt  = toFloat(p.amount);
+  if (!desc || amt <= 0) return jsonResponse({ ok: false, error: "Description and amount required" });
+  var day = Math.min(31, Math.max(1, parseInt(p.dayOfMonth) || 1));
+  var sh = getSheet(SHEET.RECURRING);
+  var r = sh.getLastRow() + 1;
+  sh.getRange(r, 6).setNumberFormat("@"); sh.getRange(r, 8).setNumberFormat("@");
+  sh.getRange(r, 1, 1, 9).setValues([[desc, amt, p.category || "", p.account || "", day,
+    p.startDate || todayStr(), p.status || "active", "", p.projectId || ""]]);
+  return jsonResponse({ ok: true, rowIndex: r });
+}
+
+function updateRecurring(p) {
+  var sh = getSheet(SHEET.RECURRING), row = parseInt(p.rowIndex);
+  if (row < 2 || row > sh.getLastRow()) return jsonResponse({ ok: false, error: "Invalid row" });
+  var day = Math.min(31, Math.max(1, parseInt(p.dayOfMonth) || 1));
+  sh.getRange(row, 6).setNumberFormat("@");
+  sh.getRange(row, 1, 1, 7).setValues([[String(p.description || "").trim(), toFloat(p.amount), p.category || "",
+    p.account || "", day, p.startDate || todayStr(), p.status || "active"]]);
+  sh.getRange(row, 9).setValue(p.projectId || "");
+  return jsonResponse({ ok: true });
+}
+
+function deleteRecurring(p) {
+  var sh = getSheet(SHEET.RECURRING), row = parseInt(p.rowIndex);
+  if (row < 2 || row > sh.getLastRow()) return jsonResponse({ ok: false, error: "Invalid row" });
+  sh.deleteRow(row);
+  return jsonResponse({ ok: true });
+}
+
+function pad2(n) { return n < 10 ? "0" + n : "" + n; }
+
+function checkRecurring() {
+  var sh = getSheet(SHEET.RECURRING), expSh = getSheet(SHEET.EXPENSES);
+  var today = todayStr();
+  var ty = parseInt(today.substring(0, 4)), tm = parseInt(today.substring(5, 7));
+  var items = sheetToRows(sh, recurringRow);
+  var newRows = [], generated = 0;
+  items.forEach(function(it) {
+    if (it.status !== "active" || !it.amount) return;
+    var y, m;
+    if (it.lastGenerated) {                       // continue after the last month already created
+      y = parseInt(it.lastGenerated.substring(0, 4)); m = parseInt(it.lastGenerated.substring(5, 7)) + 1;
+      if (m > 12) { m = 1; y++; }
+    } else if (it.startDate) {                    // first run: begin in the start month
+      y = parseInt(it.startDate.substring(0, 4)); m = parseInt(it.startDate.substring(5, 7));
+    } else return;
+    var lastDone = "", guard = 0;
+    while ((y < ty || (y === ty && m <= tm)) && guard < 36) {
+      var dim = new Date(y, m, 0).getDate();      // days in month (Feb 30 -> 28/29)
+      var due = y + "-" + pad2(m) + "-" + pad2(Math.min(it.dayOfMonth, dim));
+      if (due > today) break;                     // not due yet - try again next time
+      if (!it.startDate || due >= it.startDate) {
+        newRows.push([due, it.amount, it.category || "Subscription", it.description, it.account || "",
+                      "TRUE", "monthly", it.projectId || ""]);
+        generated++;
+      }
+      lastDone = due;
+      m++; if (m > 12) { m = 1; y++; }
+      guard++;
+    }
+    if (lastDone) {
+      sh.getRange(it.rowIndex, 8).setNumberFormat("@");
+      sh.getRange(it.rowIndex, 8).setValue(lastDone);
+    }
+  });
+  if (newRows.length) expSh.getRange(expSh.getLastRow() + 1, 1, newRows.length, 8).setValues(newRows);
+  return jsonResponse({ ok: true, generated: generated });
 }
 
 function doGet() {
