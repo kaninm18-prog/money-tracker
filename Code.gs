@@ -181,7 +181,6 @@ function doPost(e) {
       case "deleteBudget":           return deleteBudget(p);
       case "getAnnualSummary":       return getAnnualSummary(p);
       case "bootstrap":              return bootstrap(p);
-      case "addExpensesBatch":       return addExpensesBatch(p);
       default:
         return jsonResponse({ ok: false, error: "Unknown action: " + p.action });
     }
@@ -228,27 +227,6 @@ function addExpense(p) {
     p.projectId || ""
   ]);
   return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
-}
-
-function addExpensesBatch(p) {
-  var items = p.items || [];
-  if (!items.length) return jsonResponse({ ok: false, error: "No items" });
-  if (items.length > 500) return jsonResponse({ ok: false, error: "Too many items (max 500)" });
-  var sh = getSheet(SHEET.EXPENSES);
-  var rows = items.map(function(it) {
-    return [
-      it.date || todayStr(),
-      toFloat(it.amount),
-      it.category || "",
-      it.note || "",
-      it.account || "",
-      it.isRecurring ? "TRUE" : "FALSE",
-      it.recurrencePeriod || "",
-      it.projectId || ""
-    ];
-  });
-  sh.getRange(sh.getLastRow() + 1, 1, rows.length, 8).setValues(rows);
-  return jsonResponse({ ok: true, added: rows.length });
 }
 
 function getExpenses(p) {
