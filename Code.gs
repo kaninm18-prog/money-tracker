@@ -2,14 +2,15 @@
 //  Money Tracker — Google Apps Script Backend v5
 //
 //  Sheets:
-//    Expenses         → Date | Amount | Category | Note | Account | IsRecurring | RecurrencePeriod | ProjectId
-//    Income           → Date | Amount | Category | Note | Account
-//    Transfers        → Date | Amount | FromAccount | ToAccount | Note
-//    Accounts         → Name | Type | StartingBalance | CreditLimit | DueDay | StatementDay
+//    Expenses         → Date | Amount(THB) | Category | Note | Account | IsRecurring | RecurrencePeriod | ProjectId | OrigAmount | Currency
+//    Income           → Date | Amount(THB) | Category | Note | Account | OrigAmount | Currency
+//    Transfers        → Date | Amount (in From currency) | FromAccount | ToAccount | Note | ReceivedAmount (in To currency, optional)
+//    Accounts         → Name | Type | StartingBalance | CreditLimit | DueDay | StatementDay | Currency | Rate (THB per 1 unit)
 //    Categories       → Name
 //    IncomeCategories → Name
 //    Projects         → Name | Budget | StartDate | EndDate
-//    Receivables      → Date | Amount | Counterparty | Type | Note | ReimbursedBy | Status | SettledDate | Account
+//    Receivables      → Date | Amount | Counterparty | Type | Note | ReimbursedBy | Status | SettledDate | Account | Id
+//    ReceivableRepayments → Id | ReceivableId | Date | Amount | Account | Note
 //    InstallmentPlans → Description | PurchaseDate | Merchant | TotalAmount | InstallmentCount | InstallmentAmount | FirstInstallmentDate | Account | Category | ProjectId | Status | InstallmentsPaid
 //    CategoryBudgets  → Category | MonthlyLimit | AlertThreshold | IsActive | AppliesToProjects
 //    RecurringExpenses→ Description | Amount | Category | Account | DayOfMonth | StartDate | Status | LastGenerated | ProjectId
@@ -26,7 +27,8 @@ var SHEET = {
   RECEIVABLES:  "Receivables",
   INSTALLMENTS: "InstallmentPlans",
   BUDGETS:      "CategoryBudgets",
-  RECURRING:    "RecurringExpenses"
+  RECURRING:    "RecurringExpenses",
+  REPAYMENTS:   "ReceivableRepayments"
 };
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -41,18 +43,18 @@ function getSheet(name) {
     sh = ss.insertSheet(name);
     switch (name) {
       case SHEET.EXPENSES:
-        sh.appendRow(["Date","Amount","Category","Note","Account","IsRecurring","RecurrencePeriod","ProjectId"]);
+        sh.appendRow(["Date","Amount","Category","Note","Account","IsRecurring","RecurrencePeriod","ProjectId","OrigAmount","Currency"]);
         break;
       case SHEET.INCOME:
-        sh.appendRow(["Date","Amount","Category","Note","Account"]);
+        sh.appendRow(["Date","Amount","Category","Note","Account","OrigAmount","Currency"]);
         break;
       case SHEET.TRANSFERS:
-        sh.appendRow(["Date","Amount","FromAccount","ToAccount","Note"]);
+        sh.appendRow(["Date","Amount","FromAccount","ToAccount","Note","ReceivedAmount"]);
         break;
       case SHEET.ACCOUNTS:
-        sh.appendRow(["Name","Type","StartingBalance","CreditLimit","DueDay","StatementDay"]);
-        sh.appendRow(["Cash","cash",0,"","",""]);
-        sh.appendRow(["Investment","investment",0,"","",""]);
+        sh.appendRow(["Name","Type","StartingBalance","CreditLimit","DueDay","StatementDay","Currency","Rate"]);
+        sh.appendRow(["Cash","cash",0,"","","","THB",1]);
+        sh.appendRow(["Investment","investment",0,"","","","THB",1]);
         break;
       case SHEET.CATEGORIES:
         sh.appendRow(["Name"]);
@@ -68,7 +70,11 @@ function getSheet(name) {
         sh.appendRow(["Name","Budget","StartDate","EndDate"]);
         break;
       case SHEET.RECEIVABLES:
-        sh.appendRow(["Date","Amount","Counterparty","Type","Note","ReimbursedBy","Status","SettledDate","Account"]);
+        sh.appendRow(["Date","Amount","Counterparty","Type","Note","ReimbursedBy","Status","SettledDate","Account","Id"]);
+        break;
+      case SHEET.REPAYMENTS:
+        sh.appendRow(["Id","ReceivableId","Date","Amount","Account","Note"]);
+        sh.getRange(2, 3, 998, 1).setNumberFormat("@");   // Date stays plain text
         break;
       case SHEET.INSTALLMENTS:
         sh.appendRow(["Description","PurchaseDate","Merchant","TotalAmount","InstallmentCount",
@@ -120,6 +126,26 @@ function addMonths(dateStr, n) {
 
 function toFloat(v) { return parseFloat(v) || 0; }
 function toBool(v)  { return v === true || v === "true" || v === "TRUE" || v === 1; }
+function round2(n)  { return Math.round(n * 100) / 100; }
+
+// Write a header cell only if it is still empty (older sheets lack the newer columns)
+function ensureHeaders(sh, startCol, names) {
+  var cur = sh.getRange(1, startCol, 1, names.length).getValues()[0];
+  var need = false;
+  names.forEach(function(n, i){ if (!cur[i]) { cur[i] = n; need = true; } });
+  if (need) sh.getRange(1, startCol, 1, names.length).setValues([cur]).setFontWeight("bold");
+}
+// Foreign-currency details of one transaction row
+function fxFields(p) {
+  var o = toFloat(p.origAmount), c = String(p.currency || "").trim().toUpperCase();
+  return (o > 0 && c && c !== "THB") ? [o, c] : ["", ""];
+}
+// Amount of a THB transaction as it affects an account kept in its own currency
+function amtForAccount(acc, thb, orig, cur) {
+  if (!acc || acc.currency === "THB") return thb;
+  if (orig && cur === acc.currency) return orig;
+  return thb / (acc.rate || 1);
+}
 
 // Parse year and month directly from "yyyy-MM-dd" — avoids all timezone issues with new Date()
 function dateMatchesMonth(dateStr, m, y) {
@@ -173,6 +199,8 @@ function doPost(e) {
       case "getReceivables":         return getReceivables();
       case "addReceivable":          return addReceivable(p);
       case "settleReceivable":       return settleReceivable(p);
+      case "addRepayment":           return addRepayment(p);
+      case "deleteRepayment":        return deleteRepayment(p);
       case "updateReceivable":       return updateReceivable(p);
       case "deleteReceivable":       return deleteReceivable(p);
       case "getAllTransactions":      return getAllTransactions(p);
@@ -326,7 +354,9 @@ function addExpense(p) {
     p.isRecurring ? "TRUE" : "FALSE",
     p.recurrencePeriod || "",
     p.projectId || ""
-  ]);
+  ].concat(fxFields(p)));
+  var fx = fxFields(p);
+  if (fx[0]) ensureHeaders(sh, 9, ["OrigAmount", "Currency"]);
   return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
 }
 
@@ -336,7 +366,8 @@ function getExpenses(p) {
     return {
       rowIndex: ri, date: formatDate(d[0]), amount: toFloat(d[1]),
       category: d[2], note: d[3], account: d[4],
-      isRecurring: toBool(d[5]), recurrencePeriod: d[6] || "", projectId: d[7] || ""
+      isRecurring: toBool(d[5]), recurrencePeriod: d[6] || "", projectId: d[7] || "",
+      origAmount: toFloat(d[8]) || 0, currency: d[9] || ""
     };
   });
   if (p.month && p.year) {
@@ -351,10 +382,11 @@ function updateExpense(p) {
   var sh  = getSheet(SHEET.EXPENSES);
   var row = parseInt(p.rowIndex);
   if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
-  sh.getRange(row, 1, 1, 8).setValues([[
+  sh.getRange(row, 1, 1, 10).setValues([[
     p.date || "", toFloat(p.amount), p.category || "", p.note || "", p.account || "",
     p.isRecurring ? "TRUE" : "FALSE", p.recurrencePeriod || "", p.projectId || ""
-  ]]);
+  ].concat(fxFields(p))]);
+  if (fxFields(p)[0]) ensureHeaders(sh, 9, ["OrigAmount", "Currency"]);
   return jsonResponse({ ok: true });
 }
 
@@ -370,14 +402,16 @@ function deleteExpense(p) {
 
 function addIncome(p) {
   var sh = getSheet(SHEET.INCOME);
-  sh.appendRow([p.date || todayStr(), toFloat(p.amount), p.category || "", p.note || "", p.account || ""]);
+  sh.appendRow([p.date || todayStr(), toFloat(p.amount), p.category || "", p.note || "", p.account || ""].concat(fxFields(p)));
+  if (fxFields(p)[0]) ensureHeaders(sh, 6, ["OrigAmount", "Currency"]);
   return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
 }
 
 function getIncome(p) {
   var sh   = getSheet(SHEET.INCOME);
   var rows = sheetToRows(sh, function(d, ri) {
-    return { rowIndex: ri, date: formatDate(d[0]), amount: toFloat(d[1]), category: d[2], note: d[3], account: d[4] };
+    return { rowIndex: ri, date: formatDate(d[0]), amount: toFloat(d[1]), category: d[2], note: d[3], account: d[4],
+      origAmount: toFloat(d[5]) || 0, currency: d[6] || "" };
   });
   if (p.month && p.year) {
     var fm = parseInt(p.month), fy = parseInt(p.year);
@@ -391,7 +425,8 @@ function updateIncome(p) {
   var sh  = getSheet(SHEET.INCOME);
   var row = parseInt(p.rowIndex);
   if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
-  sh.getRange(row, 1, 1, 5).setValues([[p.date || "", toFloat(p.amount), p.category || "", p.note || "", p.account || ""]]);
+  sh.getRange(row, 1, 1, 7).setValues([[p.date || "", toFloat(p.amount), p.category || "", p.note || "", p.account || ""].concat(fxFields(p))]);
+  if (fxFields(p)[0]) ensureHeaders(sh, 6, ["OrigAmount", "Currency"]);
   return jsonResponse({ ok: true });
 }
 
@@ -407,14 +442,16 @@ function deleteIncome(p) {
 
 function addTransfer(p) {
   var sh = getSheet(SHEET.TRANSFERS);
-  sh.appendRow([p.date || todayStr(), toFloat(p.amount), p.fromAccount || "", p.toAccount || "", p.note || ""]);
+  var rcv = toFloat(p.receivedAmount);
+  sh.appendRow([p.date || todayStr(), toFloat(p.amount), p.fromAccount || "", p.toAccount || "", p.note || "", rcv > 0 ? rcv : ""]);
+  if (rcv > 0) ensureHeaders(sh, 6, ["ReceivedAmount"]);
   return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
 }
 
 function getTransfers(p) {
   var sh   = getSheet(SHEET.TRANSFERS);
   var rows = sheetToRows(sh, function(d, ri) {
-    return { rowIndex: ri, date: formatDate(d[0]), amount: toFloat(d[1]), fromAccount: d[2], toAccount: d[3], note: d[4] };
+    return { rowIndex: ri, date: formatDate(d[0]), amount: toFloat(d[1]), fromAccount: d[2], toAccount: d[3], note: d[4], receivedAmount: toFloat(d[5]) || 0 };
   });
   if (p.month && p.year) {
     var fm = parseInt(p.month), fy = parseInt(p.year);
@@ -436,10 +473,12 @@ function updateTransfer(p) {
   var sh  = getSheet(SHEET.TRANSFERS);
   var row = parseInt(p.rowIndex);
   if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
-  sh.getRange(row, 1, 1, 5).setValues([[
+  var rcv = toFloat(p.receivedAmount);
+  sh.getRange(row, 1, 1, 6).setValues([[
     p.date || todayStr(), toFloat(p.amount),
-    p.fromAccount || "", p.toAccount || "", p.note || ""
+    p.fromAccount || "", p.toAccount || "", p.note || "", rcv > 0 ? rcv : ""
   ]]);
+  if (rcv > 0) ensureHeaders(sh, 6, ["ReceivedAmount"]);
   return jsonResponse({ ok: true });
 }
 
@@ -448,45 +487,62 @@ function updateTransfer(p) {
 function getAccounts() {
   var sh = getSheet(SHEET.ACCOUNTS);
   var accounts = sheetToRows(sh, function(d, ri) {
+    var cur = String(d[6] || "THB").trim().toUpperCase() || "THB";
+    var rate = cur === "THB" ? 1 : (toFloat(d[7]) || 1);
     return {
       rowIndex: ri, name: d[0], type: d[1],
       startingBalance: toFloat(d[2]), balance: toFloat(d[2]),
-      creditLimit: toFloat(d[3]), dueDay: parseInt(d[4]) || 0, statementDay: parseInt(d[5]) || 0
+      creditLimit: toFloat(d[3]), dueDay: parseInt(d[4]) || 0, statementDay: parseInt(d[5]) || 0,
+      currency: cur, rate: rate
     };
   });
-  var expSh  = getSheet(SHEET.EXPENSES);
-  var incSh  = getSheet(SHEET.INCOME);
-  var trfSh  = getSheet(SHEET.TRANSFERS);
-  var expRows  = sheetToRows(expSh, function(d){ return { amount: toFloat(d[1]), account: String(d[4]||'').trim() }; });
-  var incRows  = sheetToRows(incSh, function(d){ return { amount: toFloat(d[1]), account: String(d[4]||'').trim() }; });
-  var trfRows  = sheetToRows(trfSh, function(d){ return { amount: toFloat(d[1]), from: String(d[2]||'').trim(), to: String(d[3]||'').trim() }; });
-  var recvRows = sheetToRows(getSheet(SHEET.RECEIVABLES), function(d){
-    return { amount: toFloat(d[1]), account: String(d[8]||'').trim(), status: String(d[6]||'pending').trim() };
+  var byName = {};
+  accounts.forEach(function(a){ byName[String(a.name||'').trim()] = a; });
+  function bump(name, delta) { var a = byName[name]; if (a) a.balance += delta; }
+  var expRows  = sheetToRows(getSheet(SHEET.EXPENSES), function(d){ return { amount: toFloat(d[1]), account: String(d[4]||'').trim(), orig: toFloat(d[8]), cur: String(d[9]||'').trim().toUpperCase() }; });
+  var incRows  = sheetToRows(getSheet(SHEET.INCOME),   function(d){ return { amount: toFloat(d[1]), account: String(d[4]||'').trim(), orig: toFloat(d[5]), cur: String(d[6]||'').trim().toUpperCase() }; });
+  var trfRows  = sheetToRows(getSheet(SHEET.TRANSFERS), function(d){ return { amount: toFloat(d[1]), from: String(d[2]||'').trim(), to: String(d[3]||'').trim(), received: toFloat(d[5]) }; });
+  incRows.forEach(function(r){ var a = byName[r.account]; if (a) a.balance += amtForAccount(a, r.amount, r.orig, r.cur); });
+  expRows.forEach(function(r){ var a = byName[r.account]; if (a) a.balance -= amtForAccount(a, r.amount, r.orig, r.cur); });
+  trfRows.forEach(function(r){
+    var f = byName[r.from], t = byName[r.to];
+    if (f) f.balance -= r.amount;                       // amount is in the From account's currency
+    if (t) {
+      var got = r.received;
+      if (!got) got = (f && f.currency !== t.currency) ? (r.amount * f.rate) / t.rate : r.amount;
+      t.balance += got;
+    }
   });
-  accounts.forEach(function(acc) {
-    var n = String(acc.name||'').trim();
-    var bal = acc.startingBalance;
-    incRows.forEach(function(r){ if (r.account === n) bal += r.amount; });
-    expRows.forEach(function(r){ if (r.account === n) bal -= r.amount; });
-    trfRows.forEach(function(r){
-      if (r.from === n) bal -= r.amount;
-      if (r.to   === n) bal += r.amount;
+  // Receivables: money lent out leaves the account; each repayment goes back into the account it landed in.
+  // (Old settled receivables without a repayment log count as fully returned, so they net to zero.)
+  var rv = loadReceivables();
+  rv.forEach(function(r) {
+    if (r.status === 'pending' || r.repayments.length) {
+      var a = byName[r.account]; if (a) a.balance -= (a.currency === 'THB' ? r.amount : r.amount / a.rate);
+    }
+    r.repayments.forEach(function(rp) {
+      var a = byName[rp.account || r.account]; if (a) a.balance += (a.currency === 'THB' ? rp.amount : rp.amount / a.rate);
     });
-    // Pending receivables deduct from account (money went out; reverses when settled)
-    recvRows.forEach(function(r){ if (r.account === n && r.status === 'pending') bal -= r.amount; });
-    acc.balance = Math.round(bal * 100) / 100;
   });
-  var total = accounts.reduce(function(s, a){ return s + a.balance; }, 0);
-  return jsonResponse({ ok: true, accounts: accounts, totalBalance: Math.round(total * 100) / 100 });
+  var total = 0;
+  accounts.forEach(function(a) {
+    a.balance = round2(a.balance);
+    a.balanceThb = round2(a.balance * a.rate);
+    total += a.balanceThb;
+  });
+  return jsonResponse({ ok: true, accounts: accounts, totalBalance: round2(total) });
 }
 
 function addAccount(p) {
   var sh = getSheet(SHEET.ACCOUNTS);
+  var cur = String(p.currency || "THB").trim().toUpperCase() || "THB";
+  ensureHeaders(sh, 7, ["Currency", "Rate"]);
   sh.appendRow([
     p.name || "", p.type || "bank", toFloat(p.startingBalance),
     p.type === "credit" ? toFloat(p.creditLimit) : "",
     p.type === "credit" ? (parseInt(p.dueDay) || "") : "",
-    p.type === "credit" ? (parseInt(p.statementDay) || "") : ""
+    p.type === "credit" ? (parseInt(p.statementDay) || "") : "",
+    cur, cur === "THB" ? 1 : (toFloat(p.rate) || 1)
   ]);
   return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
 }
@@ -495,11 +551,14 @@ function updateAccount(p) {
   var sh  = getSheet(SHEET.ACCOUNTS);
   var row = parseInt(p.rowIndex);
   if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
-  sh.getRange(row, 1, 1, 6).setValues([[
+  var cur = String(p.currency || "THB").trim().toUpperCase() || "THB";
+  ensureHeaders(sh, 7, ["Currency", "Rate"]);
+  sh.getRange(row, 1, 1, 8).setValues([[
     p.name || "", p.type || "bank", toFloat(p.startingBalance),
     p.type === "credit" ? toFloat(p.creditLimit) : "",
     p.type === "credit" ? (parseInt(p.dueDay) || "") : "",
-    p.type === "credit" ? (parseInt(p.statementDay) || "") : ""
+    p.type === "credit" ? (parseInt(p.statementDay) || "") : "",
+    cur, cur === "THB" ? 1 : (toFloat(p.rate) || 1)
   ]]);
   return jsonResponse({ ok: true });
 }
@@ -588,29 +647,65 @@ function deleteProject(p) {
 }
 
 // ── RECEIVABLES ───────────────────────────────────────────────
+// A receivable is money you lent / paid for someone. Repayments (ReceivableRepayments tab) come back
+// in pieces: Returned = sum of repayments, Left = Amount - Returned. Each repayment adds to the
+// account it landed in. When Left reaches 0 the receivable becomes "settled" automatically.
 
-function getReceivables() {
+var _recvIds = false;
+function recvEnsureIds(sh) {
+  if (_recvIds) return;
+  _recvIds = true;
+  var last = sh.getLastRow();
+  if (last < 2) return;
+  ensureHeaders(sh, 10, ["Id"]);
+  var rng = sh.getRange(2, 1, last - 1, 10), v = rng.getValues(), ch = false;
+  v.forEach(function(r){
+    if (!r[9] && (r[0] || r[1])) { r[9] = "R" + Utilities.getUuid().replace(/-/g, "").slice(0, 8); ch = true; }
+  });
+  if (ch) sh.getRange(2, 10, last - 1, 1).setValues(v.map(function(r){ return [r[9]]; }));
+}
+
+function loadReceivables() {
   var sh = getSheet(SHEET.RECEIVABLES);
-  var rows = sheetToRows(sh, function(d, ri) {
+  recvEnsureIds(sh);
+  var reps = sheetToRows(getSheet(SHEET.REPAYMENTS), function(d, ri) {
+    return { rowIndex: ri, id: d[0], receivableId: String(d[1]||''), date: formatDate(d[2]),
+             amount: toFloat(d[3]), account: String(d[4]||'').trim(), note: String(d[5]||'') };
+  });
+  return sheetToRows(sh, function(d, ri) {
+    var id = String(d[9] || '');
+    var mine = reps.filter(function(x){ return x.receivableId === id; });
+    var status = String(d[6] || 'pending').trim() || 'pending';
+    var amount = toFloat(d[1]);
+    var returned = mine.reduce(function(s, x){ return s + x.amount; }, 0);
+    if (status === 'settled' && !mine.length) returned = amount;      // legacy: settled before repayments existed
+    returned = round2(returned);
     return {
-      rowIndex: ri, date: formatDate(d[0]), amount: toFloat(d[1]),
+      rowIndex: ri, id: id, date: formatDate(d[0]), amount: amount,
       counterparty: d[2], type: d[3], note: d[4],
-      reimbursedBy: d[5], status: d[6] || "pending", settledDate: formatDate(d[7]),
-      account: String(d[8]||'').trim()
+      reimbursedBy: d[5], status: status, settledDate: formatDate(d[7]),
+      account: String(d[8]||'').trim(),
+      repayments: mine, returned: returned, left: Math.max(0, round2(amount - returned))
     };
   });
-  return jsonResponse({ ok: true, receivables: rows });
+}
+
+function getReceivables() {
+  return jsonResponse({ ok: true, receivables: loadReceivables() });
 }
 
 function addReceivable(p) {
   var sh = getSheet(SHEET.RECEIVABLES);
+  recvEnsureIds(sh);
+  ensureHeaders(sh, 10, ["Id"]);
+  var id = "R" + Utilities.getUuid().replace(/-/g, "").slice(0, 8);
   sh.appendRow([
     p.date || todayStr(), toFloat(p.amount),
     p.counterparty || "", p.type || "advance",
     p.note || "", p.reimbursedBy || "",
-    "pending", "", p.account || ""
+    "pending", "", p.account || "", id
   ]);
-  return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
+  return jsonResponse({ ok: true, rowIndex: sh.getLastRow(), id: id });
 }
 
 function updateReceivable(p) {
@@ -627,11 +722,52 @@ function updateReceivable(p) {
   return jsonResponse({ ok: true });
 }
 
+function markRecvStatus(row, status, date) {
+  var sh = getSheet(SHEET.RECEIVABLES);
+  sh.getRange(row, 7, 1, 2).setValues([[status, date || ""]]);
+}
+
+function addRepaymentRow(rv, amount, date, account, note) {
+  var sh = getSheet(SHEET.REPAYMENTS);
+  var r = sh.getLastRow() + 1;
+  sh.getRange(r, 3).setNumberFormat("@");
+  var id = "P" + Utilities.getUuid().replace(/-/g, "").slice(0, 8);
+  sh.getRange(r, 1, 1, 6).setValues([[id, rv.id, date, amount, account || rv.account || "", note || ""]]);
+  return r;
+}
+
+function addRepayment(p) {
+  var all = loadReceivables(), rv = null;
+  all.forEach(function(x){ if (x.id === String(p.receivableId) || (p.rowIndex && x.rowIndex === parseInt(p.rowIndex))) rv = x; });
+  if (!rv) return jsonResponse({ ok: false, error: "Receivable not found" });
+  var amt = round2(toFloat(p.amount));
+  if (amt <= 0) return jsonResponse({ ok: false, error: "Amount must be more than 0" });
+  if (amt > rv.left + 0.005) return jsonResponse({ ok: false, error: "More than what is left (" + rv.left + ")" });
+  var date = p.date || todayStr();
+  addRepaymentRow(rv, amt, date, String(p.account || "").trim(), p.note);
+  var left = round2(rv.left - amt);
+  if (left <= 0.005) markRecvStatus(rv.rowIndex, "settled", date);
+  return jsonResponse({ ok: true, left: Math.max(0, left), settled: left <= 0.005 });
+}
+
+function deleteRepayment(p) {
+  var sh = getSheet(SHEET.REPAYMENTS), row = parseInt(p.rowIndex);
+  if (row < 2 || row > sh.getLastRow()) return jsonResponse({ ok: false, error: "Invalid row" });
+  var recvId = String(sh.getRange(row, 2).getValue() || "");
+  sh.deleteRow(row);
+  loadReceivables().forEach(function(rv){
+    if (rv.id === recvId && rv.status === "settled" && rv.repayments.length && rv.left > 0.005) markRecvStatus(rv.rowIndex, "pending", "");
+  });
+  return jsonResponse({ ok: true });
+}
+
 function settleReceivable(p) {
-  var sh  = getSheet(SHEET.RECEIVABLES);
   var row = parseInt(p.rowIndex);
   if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
-  sh.getRange(row, 7, 1, 2).setValues([["settled", p.settledDate || todayStr()]]);
+  var date = p.settledDate || todayStr(), rv = null;
+  loadReceivables().forEach(function(x){ if (x.rowIndex === row) rv = x; });
+  if (rv && rv.status !== "settled" && rv.left > 0.005) addRepaymentRow(rv, rv.left, date, String(p.account || "").trim(), "Marked settled");
+  markRecvStatus(row, "settled", date);
   return jsonResponse({ ok: true });
 }
 
@@ -639,6 +775,11 @@ function deleteReceivable(p) {
   var sh  = getSheet(SHEET.RECEIVABLES);
   var row = parseInt(p.rowIndex);
   if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
+  var id = String(sh.getRange(row, 10).getValue() || "");
+  if (id) {
+    var rp = getSheet(SHEET.REPAYMENTS), data = rp.getDataRange().getValues();
+    for (var i = data.length - 1; i >= 1; i--) if (String(data[i][1]) === id) rp.deleteRow(i + 1);
+  }
   sh.deleteRow(row);
   return jsonResponse({ ok: true });
 }
@@ -656,27 +797,36 @@ function getAllTransactions(p) {
   sheetToRows(getSheet(SHEET.EXPENSES), function(d, ri) {
     return { rowIndex: ri, type: "expense", date: formatDate(d[0]), amount: toFloat(d[1]),
       category: d[2], note: d[3], account: d[4],
-      isRecurring: toBool(d[5]), recurrencePeriod: d[6] || "", projectId: d[7] || "" };
+      isRecurring: toBool(d[5]), recurrencePeriod: d[6] || "", projectId: d[7] || "",
+      origAmount: toFloat(d[8]) || 0, currency: d[9] || "" };
   }).forEach(function(r){ if (inPeriod(r.date)) txns.push(r); });
 
   sheetToRows(getSheet(SHEET.INCOME), function(d, ri) {
     return { rowIndex: ri, type: "income", date: formatDate(d[0]), amount: toFloat(d[1]),
-      category: d[2], note: d[3], account: d[4] };
+      category: d[2], note: d[3], account: d[4], origAmount: toFloat(d[5]) || 0, currency: d[6] || "" };
   }).forEach(function(r){ if (inPeriod(r.date)) txns.push(r); });
 
   sheetToRows(getSheet(SHEET.TRANSFERS), function(d, ri) {
     return { rowIndex: ri, type: "transfer", date: formatDate(d[0]), amount: toFloat(d[1]),
-      fromAccount: d[2], toAccount: d[3], note: d[4] };
+      fromAccount: d[2], toAccount: d[3], note: d[4], receivedAmount: toFloat(d[5]) || 0 };
   }).forEach(function(r){ if (inPeriod(r.date)) txns.push(r); });
 
   // Pending receivables: always included regardless of month filter
   // (they are ongoing obligations that affect account balance until settled)
-  sheetToRows(getSheet(SHEET.RECEIVABLES), function(d, ri) {
-    return { rowIndex: ri, type: "receivable", date: formatDate(d[0]), amount: toFloat(d[1]),
-      counterparty: String(d[2]||''), recvType: String(d[3]||'advance'),
-      note: String(d[4]||''), reimbursedBy: String(d[5]||''),
-      status: String(d[6]||'pending').trim(), account: String(d[8]||'').trim() };
-  }).forEach(function(r){ if (r.status === 'pending') txns.push(r); });
+  loadReceivables().forEach(function(rv) {
+    if (rv.status === 'pending') {
+      txns.push({ rowIndex: rv.rowIndex, type: "receivable", date: rv.date, amount: rv.amount,
+        counterparty: String(rv.counterparty||''), recvType: String(rv.type||'advance'),
+        note: String(rv.note||''), reimbursedBy: String(rv.reimbursedBy||''),
+        status: rv.status, account: rv.account, returned: rv.returned, left: rv.left });
+    }
+    rv.repayments.forEach(function(rp) {
+      if (!inPeriod(rp.date)) return;
+      txns.push({ rowIndex: rp.rowIndex, type: "repayment", date: rp.date, amount: rp.amount,
+        counterparty: String(rv.counterparty||''), note: rp.note, account: rp.account || rv.account,
+        receivableRow: rv.rowIndex });
+    });
+  });
 
   txns.sort(function(a,b){ return b.date.localeCompare(a.date); });
   return jsonResponse({ ok: true, transactions: txns });

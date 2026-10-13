@@ -325,6 +325,18 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .recv-status.pending { background:var(--tint-transfer); color:var(--transfer-color); }
 .recv-status.settled { background:var(--tint-income); color:var(--income-color); }
 .recv-settle-btn { margin-top:6px; background:var(--income-color); color:#fff; border:none; border-radius:8px; padding:5px 10px; font-size:0.75rem; font-weight:600; cursor:pointer; }
+.recv-progress { height:7px; background:var(--surface2); border-radius:6px; overflow:hidden; margin-top:8px; }
+.recv-progress > div { height:100%; background:var(--recv-green, var(--income-color)); border-radius:6px; }
+.recv-nums { display:flex; justify-content:space-between; font-size:0.72rem; color:var(--text2); margin-top:4px; }
+.recv-nums b { color:var(--text); }
+.recv-reps { margin-top:8px; border-top:1px dashed var(--border); padding-top:6px; }
+.recv-rep { display:flex; align-items:center; gap:8px; font-size:0.74rem; padding:3px 0; color:var(--text2); }
+.recv-rep .rp-amt { margin-left:auto; font-weight:700; color:var(--income-color); }
+.recv-rep button { background:none; border:none; color:var(--text2); cursor:pointer; font-size:0.8rem; padding:0 2px; }
+.recv-btn-row { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+.recv-btn-row .recv-settle-btn { margin-top:0; }
+.fx-hint { font-size:0.74rem; color:var(--text2); margin-top:5px; }
+.account-card-sub { font-size:0.68rem; color:var(--text2); margin-top:1px; }
 .recv-del-btn { margin-top:4px; background:none; color:var(--expense-color); border:none; font-size:0.75rem; cursor:pointer; display:block; }
 
 /* ── Balance Mode Picker ── */
@@ -627,10 +639,11 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
     <div class="modal-handle"></div>
     <div class="modal-title" id="expense-modal-title">Add Expense</div>
     <div class="form-group">
-      <label class="form-label">Amount (฿)</label>
-      <div class="amount-wrap"><span class="amount-prefix">฿</span>
-        <input type="number" class="form-control" id="fe-amount" placeholder="0" inputmode="decimal" min="0" step="0.01">
+      <label class="form-label" id="fe-amount-label">Amount (฿)</label>
+      <div class="amount-wrap"><span class="amount-prefix" id="fe-prefix">฿</span>
+        <input type="number" class="form-control" id="fe-amount" placeholder="0" inputmode="decimal" min="0" step="0.01" oninput="fxUpdate('fe')">
       </div>
+      <div class="fx-hint" id="fe-fx" style="display:none"></div>
     </div>
     <div class="form-group">
       <label class="form-label">Category</label>
@@ -682,10 +695,11 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
     <div class="modal-handle"></div>
     <div class="modal-title" id="income-modal-title">Add Income</div>
     <div class="form-group">
-      <label class="form-label">Amount (฿)</label>
-      <div class="amount-wrap"><span class="amount-prefix">฿</span>
-        <input type="number" class="form-control" id="fi-amount" placeholder="0" inputmode="decimal" min="0" step="0.01">
+      <label class="form-label" id="fi-amount-label">Amount (฿)</label>
+      <div class="amount-wrap"><span class="amount-prefix" id="fi-prefix">฿</span>
+        <input type="number" class="form-control" id="fi-amount" placeholder="0" inputmode="decimal" min="0" step="0.01" oninput="fxUpdate('fi')">
       </div>
+      <div class="fx-hint" id="fi-fx" style="display:none"></div>
     </div>
     <div class="form-group">
       <label class="form-label">Category</label>
@@ -717,18 +731,25 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
     <div class="modal-handle"></div>
     <div class="modal-title" id="transfer-modal-title">Transfer Between Accounts</div>
     <div class="form-group">
-      <label class="form-label">Amount (฿)</label>
-      <div class="amount-wrap"><span class="amount-prefix">฿</span>
-        <input type="number" class="form-control" id="ft-amount" placeholder="0" inputmode="decimal" min="0" step="0.01">
+      <label class="form-label" id="ft-amount-label">Amount (฿)</label>
+      <div class="amount-wrap"><span class="amount-prefix" id="ft-prefix">฿</span>
+        <input type="number" class="form-control" id="ft-amount" placeholder="0" inputmode="decimal" min="0" step="0.01" oninput="ftUpdate()">
       </div>
     </div>
     <div class="form-group">
       <label class="form-label">From Account</label>
-      <select class="form-control" id="ft-from"></select>
+      <select class="form-control" id="ft-from" onchange="ftUpdate()"></select>
     </div>
     <div class="form-group">
       <label class="form-label">To Account</label>
-      <select class="form-control" id="ft-to"></select>
+      <select class="form-control" id="ft-to" onchange="ftUpdate()"></select>
+    </div>
+    <div class="form-group" id="ft-recv-group" style="display:none">
+      <label class="form-label" id="ft-recv-label">Amount received</label>
+      <div class="amount-wrap"><span class="amount-prefix" id="ft-recv-prefix">฿</span>
+        <input type="number" class="form-control" id="ft-received" placeholder="0" inputmode="decimal" min="0" step="0.01" oninput="this.dataset.touched='1'">
+      </div>
+      <div class="fx-hint" id="ft-recv-hint"></div>
     </div>
     <div class="form-group">
       <label class="form-label">Note (optional)</label>
@@ -766,8 +787,18 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
       </select>
     </div>
     <div class="form-group">
+      <label class="form-label">Currency</label>
+      <input type="text" class="form-control" id="fa-currency" list="cur-list" value="THB" maxlength="3" style="text-transform:uppercase" oninput="onAcctCurChange()">
+      <datalist id="cur-list"><option value="THB"></option><option value="USD"></option><option value="EUR"></option><option value="GBP"></option><option value="JPY"></option><option value="SGD"></option><option value="CNY"></option><option value="AUD"></option></datalist>
+    </div>
+    <div class="form-group" id="fa-rate-group" style="display:none">
+      <label class="form-label" id="fa-rate-label">Exchange rate (฿ per 1 unit)</label>
+      <input type="number" class="form-control" id="fa-rate" placeholder="e.g. 33" inputmode="decimal" step="0.0001" min="0">
+      <div style="font-size:0.72rem;color:var(--text2);margin-top:4px">You set this rate yourself and can update it any time. The balance is shown in its own currency with the ฿ value underneath.</div>
+    </div>
+    <div class="form-group">
       <label class="form-label" id="fa-balance-label">Starting Balance (฿)</label>
-      <div class="amount-wrap"><span class="amount-prefix">฿</span>
+      <div class="amount-wrap"><span class="amount-prefix" id="fa-prefix">฿</span>
         <input type="number" class="form-control" id="fa-balance" placeholder="0" inputmode="decimal" step="0.01">
       </div>
       <div id="fa-balance-hint" style="font-size:0.72rem;color:var(--text2);margin-top:4px;display:none">
@@ -798,6 +829,36 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
     <button class="btn btn-primary" onclick="saveAccount()" id="save-account-btn">Add Account</button>
     <div style="height:8px"></div>
     <button class="btn btn-ghost" onclick="closeModal('account-modal')">Cancel</button>
+  </div>
+</div>
+
+<!-- ══ Repayment Modal ══ -->
+<div class="modal-overlay" id="repay-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Add Repayment</div>
+    <div id="rp-summary" style="font-size:0.82rem;color:var(--text2);margin-bottom:12px"></div>
+    <div class="form-group">
+      <label class="form-label">Amount received (฿)</label>
+      <div class="amount-wrap"><span class="amount-prefix">฿</span>
+        <input type="number" class="form-control" id="rp-amount" placeholder="0" inputmode="decimal" min="0" step="0.01">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Received into account</label>
+      <select class="form-control" id="rp-account"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Date</label>
+      <input type="date" class="form-control" id="rp-date">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Note (optional)</label>
+      <input type="text" class="form-control" id="rp-note" placeholder="e.g. paid back by transfer">
+    </div>
+    <button class="btn btn-primary" style="background:var(--recv-green)" onclick="saveRepayment()" id="save-rp-btn">Save Repayment</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('repay-modal')">Cancel</button>
   </div>
 </div>
 
@@ -1146,6 +1207,59 @@ function catColor(n, list) {
   var idx = list.findIndex(function(c){ return c.name === n; });
   return CAT_COLORS[Math.max(idx,0) % CAT_COLORS.length];
 }
+var CUR_SYM = {USD:'$',EUR:'€',GBP:'£',JPY:'¥',SGD:'S$',CNY:'¥',AUD:'A$'};
+function acctByName(n) { return accounts.find(function(a){ return a.name === n; }) || null; }
+function curOf(n)  { var a = acctByName(n); return (a && a.currency) ? a.currency : 'THB'; }
+function rateOf(n) { var a = acctByName(n); return (a && a.rate) ? a.rate : 1; }
+function curSym(c) { return c === 'THB' ? '฿' : (CUR_SYM[c] || c); }
+function fmtCur(n, cur) {
+  if (!cur || cur === 'THB') return fmtMoney(n);
+  return (CUR_SYM[cur] || cur + ' ') + parseFloat(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function acctThb(a) { return a.balanceThb !== undefined ? a.balanceThb : a.balance; }
+function round2(n) { return Math.round(n * 100) / 100; }
+// Expense / income forms: the amount is typed in the selected account's own currency
+var editingFx = null;
+function fxUpdate(p) {
+  var acct = getSelectedAcct(p + '-acct-list'), cur = acct ? curOf(acct) : 'THB', rate = acct ? rateOf(acct) : 1;
+  var foreign = cur !== 'THB';
+  document.getElementById(p + '-amount-label').textContent = 'Amount (' + (foreign ? cur : '฿') + ')';
+  document.getElementById(p + '-prefix').textContent = curSym(cur);
+  var hint = document.getElementById(p + '-fx');
+  if (!foreign) { hint.style.display = 'none'; return; }
+  var v = parseFloat(document.getElementById(p + '-amount').value) || 0;
+  hint.style.display = 'block';
+  hint.textContent = '≈ ' + fmtMoney(v * rate) + '  ·  1 ' + cur + ' = ฿' + rate;
+}
+function fxPayload(val, acct) {
+  var cur = acct ? curOf(acct) : 'THB';
+  if (cur === 'THB') {
+    return editingFx ? { amount: val, origAmount: editingFx.origAmount, currency: editingFx.currency } : { amount: val };
+  }
+  return { amount: round2(val * rateOf(acct)), origAmount: val, currency: cur };
+}
+function fxEditValue(t) {
+  var cur = curOf(t.account);
+  if (cur === 'THB') return t.amount;
+  return (t.origAmount && t.currency === cur) ? t.origAmount : round2(t.amount / rateOf(t.account));
+}
+function fxKeep(t) { return (t && t.origAmount && t.currency && curOf(t.account) === 'THB') ? { origAmount: t.origAmount, currency: t.currency } : null; }
+// Transfer form: amount sent is in the From currency; when the currencies differ we also ask for the amount received
+function ftUpdate() {
+  var from = document.getElementById('ft-from').value, to = document.getElementById('ft-to').value;
+  var fc = curOf(from), tc = curOf(to), diff = fc !== tc;
+  document.getElementById('ft-amount-label').textContent = 'Amount sent (' + (fc === 'THB' ? '฿' : fc) + ')';
+  document.getElementById('ft-prefix').textContent = curSym(fc);
+  document.getElementById('ft-recv-group').style.display = diff ? 'block' : 'none';
+  if (!diff) return;
+  document.getElementById('ft-recv-label').textContent = 'Amount received (' + (tc === 'THB' ? '฿' : tc) + ')';
+  document.getElementById('ft-recv-prefix').textContent = curSym(tc);
+  var rc = document.getElementById('ft-received');
+  var amt = parseFloat(document.getElementById('ft-amount').value) || 0;
+  var est = round2(amt * rateOf(from) / rateOf(to));
+  if (rc.dataset.touched !== '1') rc.value = amt ? est : '';
+  document.getElementById('ft-recv-hint').textContent = 'Estimated from your rates: ' + fmtCur(est, tc) + ' — type the exact amount your bank gave.';
+}
 function acctIcon(type) { return ACCT_ICONS[type] || '💳'; }
 function sortedAccounts() {
   var ORDER = ['bank','cash','wallet','investment','credit'];
@@ -1436,7 +1550,8 @@ function renderAccountCards() {
       html += '<div class="account-card" onclick="showPage(\'accounts\')">' +
         '<div class="account-card-type">' + acctIcon(a.type) + '</div>' +
         '<div class="account-card-name">' + a.name + '</div>' +
-        '<div class="account-card-balance' + neg + '">' + fmtMoney(a.balance) + '</div>' +
+        '<div class="account-card-balance' + neg + '">' + fmtCur(a.balance, a.currency) + '</div>' +
+        (a.currency && a.currency !== 'THB' ? '<div class="account-card-sub">≈ ' + fmtMoney(a.balanceThb) + '</div>' : '') +
       '</div>';
     }
   });
@@ -1457,7 +1572,7 @@ function computeBalance() {
     return inc - exp;
   }
   if (mode === 'available_cash') {
-    return accounts.filter(function(a){return a.type==='cash'||a.type==='bank';}).reduce(function(s,a){return s+a.balance;},0);
+    return accounts.filter(function(a){return a.type==='cash'||a.type==='bank';}).reduce(function(s,a){return s+acctThb(a);},0);
   }
   return totalBalance; // net_worth default
 }
@@ -1610,29 +1725,37 @@ function txnHtml(t) {
     label = (t.category||'Expense') +
       (t.isRecurring ? '<span class="recurring-badge">🔁 '+t.recurrencePeriod+'</span>' : '') +
       (t.projectId   ? '<span class="project-badge">📁 '+t.projectId+'</span>' : '');
-    sublabel = (t.note||'—') + (t.account ? ' · '+t.account : '');
+    sublabel = (t.note||'—') + (t.account ? ' · '+t.account : '') + (t.origAmount && t.currency ? ' · '+fmtCur(t.origAmount, t.currency) : '');
     amountStr = '−'+fmtMoney(t.amount); amountClass = 'expense';
   } else if (t.type === 'income') {
     icon = catIcon(t.category); label = t.category||'Income';
-    sublabel = (t.note||'—') + (t.account ? ' · '+t.account : '');
+    sublabel = (t.note||'—') + (t.account ? ' · '+t.account : '') + (t.origAmount && t.currency ? ' · '+fmtCur(t.origAmount, t.currency) : '');
     amountStr = '+'+fmtMoney(t.amount); amountClass = 'income';
   } else if (t.type === 'receivable') {
     var isWork = t.recvType === 'work';
     icon = isWork ? '💼' : '🤝';
     label = isWork ? 'Work Expense (Pending)' : 'Advance Payment (Pending)';
     var who = isWork ? (t.reimbursedBy || '—') : (t.counterparty || '—');
-    sublabel = who + (t.note ? ' · '+t.note : '') + (t.account ? ' · '+t.account : '');
+    sublabel = who + (t.note ? ' · '+t.note : '') + (t.account ? ' · '+t.account : '') +
+      (t.returned > 0 ? ' · returned '+fmtMoney(t.returned)+', left '+fmtMoney(t.left) : '');
     amountStr = '−'+fmtMoney(t.amount); amountClass = 'receivable';
+  } else if (t.type === 'repayment') {
+    icon = '🤝'; label = 'Repayment received';
+    sublabel = (t.counterparty || '—') + (t.note ? ' · '+t.note : '') + (t.account ? ' · '+t.account : '');
+    amountStr = '+'+fmtMoney(t.amount); amountClass = 'income';
   } else {
     icon = '↔️'; label = 'Transfer';
-    sublabel = (t.fromAccount||'?')+' → '+(t.toAccount||'?') + (t.note ? ' · '+t.note : '');
-    amountStr = fmtMoney(t.amount); amountClass = 'transfer';
+    var fcur = curOf(t.fromAccount), tcur = curOf(t.toAccount);
+    sublabel = (t.fromAccount||'?')+' → '+(t.toAccount||'?') + (t.note ? ' · '+t.note : '') +
+      (t.receivedAmount ? ' · received '+fmtCur(t.receivedAmount, tcur) : '');
+    amountStr = fmtCur(t.amount, fcur); amountClass = 'transfer';
   }
   var onclickAttr = '';
   if (t.type==='expense')    onclickAttr = 'onclick="openEditExpense('+t.rowIndex+')"';
   if (t.type==='income')     onclickAttr = 'onclick="openEditIncome('+t.rowIndex+')"';
   if (t.type==='transfer')   onclickAttr = 'onclick="openEditTransfer('+t.rowIndex+')"';
   if (t.type==='receivable') onclickAttr = 'onclick="openEditReceivable('+t.rowIndex+')"';
+  if (t.type==='repayment')  onclickAttr = 'onclick="showPage(\'projects\');setProjectsTab(\'receivables\')"';
   return '<div class="txn-item" '+onclickAttr+'>' +
     '<div class="txn-icon '+t.type+'">'+icon+'</div>' +
     '<div class="txn-info"><div class="txn-cat">'+label+'</div><div class="txn-sub">'+sublabel+'</div></div>' +
@@ -1708,8 +1831,8 @@ function renderAccountsPage() {
           html += '<div class="acc-page-card">' +
             '<div class="acc-page-row">' +
               '<div class="acc-page-icon">'+acctIcon(a.type)+'</div>' +
-              '<div class="acc-page-info"><div class="acc-page-name">'+a.name+'</div><div class="acc-page-type">'+typeLabel(a.type)+'</div></div>' +
-              '<div class="acc-page-balance'+neg+'">'+fmtMoney(a.balance)+'</div>' +
+              '<div class="acc-page-info"><div class="acc-page-name">'+a.name+'</div><div class="acc-page-type">'+typeLabel(a.type)+(a.currency && a.currency !== 'THB' ? ' · '+a.currency+' @ ฿'+a.rate : '')+'</div></div>' +
+              '<div class="acc-page-balance'+neg+'">'+fmtCur(a.balance, a.currency)+(a.currency && a.currency !== 'THB' ? '<div style="font-size:0.7rem;font-weight:500;color:var(--text2)">≈ '+fmtMoney(a.balanceThb)+'</div>' : '')+'</div>' +
             '</div>' +
             (accountsEditMode ? '<div class="acc-page-actions">' +
               '<button class="acc-edit-btn" onclick="openEditAccount('+a.rowIndex+')">✏️ Edit</button>' +
@@ -1739,7 +1862,8 @@ function openExpenseForm(rowIndex) {
 
   if (rowIndex) {
     var t = transactions.find(function(x){ return x.type==='expense' && x.rowIndex===rowIndex; });
-    document.getElementById('fe-amount').value = t ? t.amount : '';
+    document.getElementById('fe-amount').value = t ? fxEditValue(t) : '';
+    editingFx = fxKeep(t);
     document.getElementById('fe-note').value   = t ? (t.note||'') : '';
     document.getElementById('fe-date').value   = t ? t.date : todayStr();
     renderCatGrid('fe-cat-grid', expCategories, t ? t.category : null);
@@ -1750,6 +1874,7 @@ function openExpenseForm(rowIndex) {
     document.getElementById('fe-project').value = t ? (t.projectId||'') : '';
   } else {
     document.getElementById('fe-amount').value = '';
+    editingFx = null;
     document.getElementById('fe-note').value   = '';
     document.getElementById('fe-date').value   = todayStr();
     document.getElementById('fe-recurring').checked = false;
@@ -1758,6 +1883,7 @@ function openExpenseForm(rowIndex) {
     renderCatGrid('fe-cat-grid', expCategories, null);
     renderAcctList('fe-acct-list', null);
   }
+  fxUpdate('fe');
   openModal('expense-modal');
   setTimeout(function(){ document.getElementById('fe-amount').focus(); }, 300);
 }
@@ -1776,8 +1902,8 @@ function saveExpense() {
   var recurring = document.getElementById('fe-recurring').checked;
   var recPeriod = document.getElementById('fe-recurrence-period').value;
   var projectId = document.getElementById('fe-project').value;
-  var payload   = { amount, category:cat, account:acct, note, date,
-    isRecurring: recurring, recurrencePeriod: recurring ? recPeriod : '', projectId: projectId };
+  var payload   = Object.assign({ category:cat, account:acct, note, date,
+    isRecurring: recurring, recurrencePeriod: recurring ? recPeriod : '', projectId: projectId }, fxPayload(amount, acct));
   if (editingExpenseRow) { payload.action='updateExpense'; payload.rowIndex=editingExpenseRow; }
   else { payload.action='addExpense'; }
   document.getElementById('save-expense-btn').textContent = 'Saving…';
@@ -1808,18 +1934,21 @@ function openIncomeForm(rowIndex) {
 
   if (rowIndex) {
     var t = transactions.find(function(x){ return x.type==='income' && x.rowIndex===rowIndex; });
-    document.getElementById('fi-amount').value = t ? t.amount : '';
+    document.getElementById('fi-amount').value = t ? fxEditValue(t) : '';
+    editingFx = fxKeep(t);
     document.getElementById('fi-note').value   = t ? (t.note||'') : '';
     document.getElementById('fi-date').value   = t ? t.date : todayStr();
     renderCatGrid('fi-cat-grid', incCategories, t ? t.category : null);
     renderAcctList('fi-acct-list', t ? t.account : null);
   } else {
     document.getElementById('fi-amount').value = '';
+    editingFx = null;
     document.getElementById('fi-note').value   = '';
     document.getElementById('fi-date').value   = todayStr();
     renderCatGrid('fi-cat-grid', incCategories, null);
     renderAcctList('fi-acct-list', null);
   }
+  fxUpdate('fi');
   openModal('income-modal');
   setTimeout(function(){ document.getElementById('fi-amount').focus(); }, 300);
 }
@@ -1835,7 +1964,7 @@ function saveIncome() {
   if (!acct) { toast('Select an account'); return; }
   var note = document.getElementById('fi-note').value.trim();
   var date = document.getElementById('fi-date').value || todayStr();
-  var payload = { amount, category:cat, account:acct, note, date };
+  var payload = Object.assign({ category:cat, account:acct, note, date }, fxPayload(amount, acct));
   if (editingIncomeRow) { payload.action='updateIncome'; payload.rowIndex=editingIncomeRow; }
   else { payload.action='addIncome'; }
   document.getElementById('save-income-btn').textContent = 'Saving…';
@@ -1874,13 +2003,17 @@ function openTransferForm(rowIndex) {
       document.getElementById('ft-date').value   = t.date || todayStr();
       document.getElementById('ft-from').value   = t.fromAccount || '';
       document.getElementById('ft-to').value     = t.toAccount   || '';
+      var rc0 = document.getElementById('ft-received');
+      rc0.value = t.receivedAmount || ''; rc0.dataset.touched = t.receivedAmount ? '1' : '';
     }
   } else {
     document.getElementById('ft-amount').value = '';
     document.getElementById('ft-note').value   = '';
     document.getElementById('ft-date').value   = todayStr();
+    document.getElementById('ft-received').value = ''; document.getElementById('ft-received').dataset.touched = '';
     if (accounts.length > 1) document.getElementById('ft-to').selectedIndex = 1;
   }
+  ftUpdate();
   openModal('transfer-modal');
 }
 
@@ -1896,6 +2029,11 @@ function saveTransfer() {
   var date = document.getElementById('ft-date').value || todayStr();
   var action = editingTransferRow ? 'updateTransfer' : 'addTransfer';
   var payload = { action, amount, fromAccount:from, toAccount:to, note, date };
+  if (curOf(from) !== curOf(to)) {
+    var rcv = parseFloat(document.getElementById('ft-received').value);
+    if (!rcv || rcv <= 0) { toast('Enter the amount received'); return; }
+    payload.receivedAmount = rcv;
+  }
   if (editingTransferRow) payload.rowIndex = editingTransferRow;
   document.getElementById('save-transfer-btn').textContent = 'Saving…';
   api(payload).then(function(res) {
@@ -1920,7 +2058,16 @@ function toggleCreditFields() {
   var isCredit = document.getElementById('fa-type').value === 'credit';
   document.getElementById('credit-fields').style.display    = isCredit ? 'block' : 'none';
   document.getElementById('fa-balance-hint').style.display  = isCredit ? 'block' : 'none';
-  document.getElementById('fa-balance-label').textContent   = isCredit ? 'Current Balance (฿)' : 'Starting Balance (฿)';
+  onAcctCurChange();
+}
+function onAcctCurChange() {
+  var isCredit = document.getElementById('fa-type').value === 'credit';
+  var cur = (document.getElementById('fa-currency').value || 'THB').trim().toUpperCase();
+  var foreign = cur.length === 3 && cur !== 'THB';
+  document.getElementById('fa-rate-group').style.display = foreign ? 'block' : 'none';
+  document.getElementById('fa-rate-label').textContent = 'Exchange rate (฿ per 1 ' + cur + ')';
+  document.getElementById('fa-balance-label').textContent = (isCredit ? 'Current Balance (' : 'Starting Balance (') + (foreign ? cur : '฿') + ')';
+  document.getElementById('fa-prefix').textContent = foreign ? curSym(cur) : '฿';
 }
 
 function openAddAccount() {
@@ -1933,6 +2080,8 @@ function openAddAccount() {
   document.getElementById('fa-limit').value   = '';
   document.getElementById('fa-dueday').value  = '';
   document.getElementById('fa-stmtday').value = '';
+  document.getElementById('fa-currency').value = 'THB';
+  document.getElementById('fa-rate').value = '';
   toggleCreditFields();
   openModal('account-modal');
 }
@@ -1949,6 +2098,8 @@ function openEditAccount(rowIndex) {
   document.getElementById('fa-limit').value   = a.creditLimit || '';
   document.getElementById('fa-dueday').value  = a.dueDay || '';
   document.getElementById('fa-stmtday').value = a.statementDay || '';
+  document.getElementById('fa-currency').value = a.currency || 'THB';
+  document.getElementById('fa-rate').value = (a.currency && a.currency !== 'THB') ? a.rate : '';
   toggleCreditFields();
   openModal('account-modal');
 }
@@ -1959,6 +2110,14 @@ function saveAccount() {
   var balance = parseFloat(document.getElementById('fa-balance').value) || 0;
   if (!name) { toast('Enter an account name'); return; }
   var payload = { name, type, startingBalance: balance };
+  var cur = (document.getElementById('fa-currency').value || 'THB').trim().toUpperCase();
+  if (cur.length !== 3) { toast('Currency must be a 3-letter code, e.g. USD'); return; }
+  payload.currency = cur;
+  if (cur !== 'THB') {
+    var rate = parseFloat(document.getElementById('fa-rate').value);
+    if (!rate || rate <= 0) { toast('Enter the exchange rate (฿ per 1 ' + cur + ')'); return; }
+    payload.rate = rate;
+  }
   if (type === 'credit') {
     payload.creditLimit  = parseFloat(document.getElementById('fa-limit').value)  || 0;
     payload.dueDay       = parseInt(document.getElementById('fa-dueday').value)   || 0;
@@ -2074,6 +2233,8 @@ function renderAcctList(listId, selected) {
 function selectAcct(el) {
   el.closest('.acct-list').querySelectorAll('.acct-option').forEach(function(x){x.classList.remove('selected');});
   el.classList.add('selected');
+  var lid = el.closest('.acct-list').id;
+  if (lid === 'fe-acct-list') fxUpdate('fe'); else if (lid === 'fi-acct-list') fxUpdate('fi');
 }
 
 function getSelectedAcct(listId) {
@@ -2276,6 +2437,12 @@ function setRecvTab(tab) {
   renderReceivables();
 }
 
+function recvNums(r) {
+  var returned = r.returned !== undefined ? r.returned : (r.status === 'settled' ? r.amount : 0);
+  var left = r.left !== undefined ? r.left : (r.status === 'settled' ? 0 : r.amount);
+  return { returned: returned, left: left, pct: r.amount ? Math.min(100, Math.round(returned / r.amount * 100)) : 0 };
+}
+
 function renderReceivables() {
   var filtered = receivables.filter(function(r){ return r.status === activeRecvFilter; });
   var html = '';
@@ -2283,30 +2450,93 @@ function renderReceivables() {
     var emptyMsg = activeRecvFilter==='pending' ? 'No pending receivables 🎉' : 'No settled receivables yet';
     html = '<div class="empty"><div class="empty-icon">🤝</div><p>'+emptyMsg+'</p></div>';
   } else {
-    var total = filtered.reduce(function(s,r){return s+r.amount;},0);
-    html += '<div style="font-size:0.8rem;font-weight:700;color:var(--income-color);text-align:right;margin-bottom:8px">Total: '+fmtMoney(total)+'</div>';
+    var tAmt = 0, tRet = 0, tLeft = 0;
+    filtered.forEach(function(r){ var n = recvNums(r); tAmt += r.amount; tRet += n.returned; tLeft += n.left; });
+    html += '<div style="font-size:0.8rem;font-weight:700;color:var(--income-color);text-align:right;margin-bottom:8px">' +
+      (activeRecvFilter==='pending'
+        ? 'Left to receive: '+fmtMoney(tLeft)+' <span style="font-weight:500;color:var(--text2)">· returned '+fmtMoney(tRet)+' of '+fmtMoney(tAmt)+'</span>'
+        : 'Total: '+fmtMoney(tAmt)) + '</div>';
     filtered.forEach(function(r) {
       // For advance: counterparty = who owes you. For work: reimbursedBy = who reimburses.
+      var n = recvNums(r);
       var displayName = r.type === 'work' ? (r.reimbursedBy || '—') : (r.counterparty || '—');
       var subInfo = r.type === 'work'
         ? (r.counterparty ? 'Paid for: ' + r.counterparty : '')
         : (r.reimbursedBy ? 'Reimbursed by: ' + r.reimbursedBy : '');
       var acctInfo = r.account ? ' · ' + r.account : '';
+      var reps = (r.repayments || []).slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+      var repHtml = reps.length ? '<div class="recv-reps">' + reps.map(function(rp){
+        return '<div class="recv-rep"><span>'+fmtDate(rp.date)+'</span><span>'+(rp.account||'')+(rp.note?' · '+rp.note:'')+'</span>' +
+          '<span class="rp-amt">+'+fmtMoney(rp.amount)+'</span>' +
+          '<button title="Remove" onclick="deleteRepayment('+rp.rowIndex+')">✕</button></div>';
+      }).join('') + '</div>' : '';
+      var isPending = r.status === 'pending';
       html += '<div class="recv-item">' +
         '<div class="recv-icon">'+(r.type==='work'?'💼':'🤝')+'</div>' +
         '<div class="recv-info">' +
           '<div class="recv-counterparty">'+displayName+'</div>' +
           '<div class="recv-note">'+(r.note||'—')+'</div>' +
           '<div class="recv-meta">'+fmtDate(r.date)+(subInfo?' · '+subInfo:'')+acctInfo+'</div>' +
-          (r.status==='pending' ? '<button class="recv-settle-btn" onclick="settleReceivable('+r.rowIndex+')">✓ Mark Settled</button>' : '<div style="font-size:0.72rem;color:var(--text2);margin-top:4px">Settled '+fmtDate(r.settledDate)+'</div>') +
-          '<button class="recv-settle-btn" style="background:var(--text2);margin-right:4px" onclick="openEditReceivable('+r.rowIndex+')">✏️ Edit</button>' +
+          '<div class="recv-progress"><div style="width:'+n.pct+'%"></div></div>' +
+          '<div class="recv-nums"><span>Returned <b>'+fmtMoney(n.returned)+'</b></span><span>Left <b>'+fmtMoney(n.left)+'</b></span></div>' +
+          repHtml +
+          (!isPending ? '<div style="font-size:0.72rem;color:var(--text2);margin-top:4px">Settled '+fmtDate(r.settledDate)+'</div>' : '') +
+          '<div class="recv-btn-row">' +
+            (isPending ? '<button class="recv-settle-btn" onclick="openRepayment('+r.rowIndex+')">+ Repayment</button>' : '') +
+            (isPending ? '<button class="recv-settle-btn" style="background:var(--text2)" onclick="settleReceivable('+r.rowIndex+')">✓ Settle rest</button>' : '') +
+            '<button class="recv-settle-btn" style="background:var(--text2)" onclick="openEditReceivable('+r.rowIndex+')">✏️ Edit</button>' +
+          '</div>' +
           '<button class="recv-del-btn" onclick="deleteReceivable('+r.rowIndex+')">🗑️ Delete</button>' +
         '</div>' +
-        '<div class="recv-right"><div class="recv-amount">'+fmtMoney(r.amount)+'</div><div class="recv-status '+r.status+'">'+r.status+'</div></div>' +
+        '<div class="recv-right"><div class="recv-amount">'+fmtMoney(isPending ? n.left : r.amount)+'</div>' +
+          (isPending && n.returned > 0 ? '<div style="font-size:0.68rem;color:var(--text2)">of '+fmtMoney(r.amount)+'</div>' : '') +
+          '<div class="recv-status '+r.status+'">'+r.status+'</div></div>' +
       '</div>';
     });
   }
   document.getElementById('receivables-list').innerHTML = html;
+}
+
+var repayingRow = null;
+function openRepayment(rowIndex) {
+  var r = receivables.find(function(x){ return x.rowIndex === rowIndex; });
+  if (!r) return;
+  repayingRow = r;
+  var n = recvNums(r);
+  document.getElementById('rp-summary').textContent = (r.counterparty || r.reimbursedBy || 'Receivable') + ' — returned ' + fmtMoney(n.returned) + ' of ' + fmtMoney(r.amount) + ', left ' + fmtMoney(n.left);
+  document.getElementById('rp-amount').value = n.left;
+  var sel = document.getElementById('rp-account');
+  sel.innerHTML = sortedAccounts().map(function(a){ return '<option value="'+escQ(a.name)+'">'+acctIcon(a.type)+' '+a.name+'</option>'; }).join('');
+  sel.value = r.account || (accounts[0] ? accounts[0].name : '');
+  document.getElementById('rp-date').value = todayStr();
+  document.getElementById('rp-note').value = '';
+  openModal('repay-modal');
+  setTimeout(function(){ document.getElementById('rp-amount').focus(); }, 300);
+}
+
+function saveRepayment() {
+  if (!repayingRow) return;
+  var n = recvNums(repayingRow);
+  var amount = parseFloat(document.getElementById('rp-amount').value);
+  if (!amount || amount <= 0) { toast('Enter a valid amount'); return; }
+  if (amount > n.left + 0.005) { toast('More than what is left (' + fmtMoney(n.left) + ')'); return; }
+  var payload = { action: 'addRepayment', receivableId: repayingRow.id, rowIndex: repayingRow.rowIndex, amount: amount,
+    account: document.getElementById('rp-account').value, date: document.getElementById('rp-date').value || todayStr(),
+    note: document.getElementById('rp-note').value.trim() };
+  var btn = document.getElementById('save-rp-btn'); btn.textContent = 'Saving…';
+  api(payload).then(function(res){
+    btn.textContent = 'Save Repayment';
+    if (res.ok) { closeModal('repay-modal'); toast(res.settled ? 'Fully repaid — settled ✓' : 'Repayment saved'); loadAll(); }
+    else { toast(/Unknown action/i.test(res.error||'') ? 'Update Code.gs in Apps Script and redeploy first' : 'Error: '+(res.error||'?')); }
+  }).catch(function(){ btn.textContent = 'Save Repayment'; toast('Connection error'); });
+}
+
+function deleteRepayment(rowIndex) {
+  if (!confirm('Remove this repayment?')) return;
+  api({action:'deleteRepayment', rowIndex:rowIndex}).then(function(res){
+    if (res.ok) { toast('Repayment removed'); loadAll(); }
+    else { toast('Error: '+(res.error||'?')); }
+  });
 }
 
 function openReceivableForm(rowIndex) {
@@ -2402,19 +2632,15 @@ function deleteCurrentReceivable() {
 }
 
 function settleReceivable(rowIndex) {
-  if (!confirm('Mark this as settled (money received)?')) return;
-  api({action:'settleReceivable', rowIndex:rowIndex, settledDate:todayStr()}).then(function(res){
-    if (res.ok) {
-      toast('Marked as settled ✓');
-      // Refresh both receivables and accounts (settling removes the pending balance deduction)
-      Promise.all([
-        api({action:'getReceivables'}),
-        api({action:'getAccounts'})
-      ]).then(function(results){
-        if (results[0].ok) { receivables = results[0].receivables; renderReceivables(); }
-        if (results[1].ok) { accounts = results[1].accounts; renderAccounts(); }
-      });
-    } else { toast('Error: '+res.error); }
+  var r = receivables.find(function(x){ return x.rowIndex === rowIndex; });
+  var n = r ? recvNums(r) : null;
+  var msg = n && n.returned > 0
+    ? 'Mark the remaining ' + fmtMoney(n.left) + ' as received' + (r.account ? ' into ' + r.account : '') + '?'
+    : 'Mark this as settled (money received)?';
+  if (!confirm(msg)) return;
+  api({action:'settleReceivable', rowIndex:rowIndex, settledDate:todayStr(), account: r ? r.account : ''}).then(function(res){
+    if (res.ok) { toast('Marked as settled ✓'); loadAll(); }
+    else { toast('Error: '+res.error); }
   });
 }
 
