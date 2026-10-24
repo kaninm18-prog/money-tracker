@@ -209,14 +209,62 @@ CategoryBudgets:  Category | MonthlyLimit | AlertThreshold | IsActive | AppliesT
 
 ---
 
+## Session 7 — Safety, Offline & Trends
+
+### Data safety
+- **Access token** — every request must carry a secret token. Run `setupToken()` once in Apps Script, paste the token into the app (setup screen or Settings → Script Connection). Requests without it are refused.
+- **Stable row IDs** — Expenses (col 11), Income (col 8) and Transfers (col 7) get an `Id` column, filled in automatically for old rows. Edits/deletes find rows by Id, so a delete on the phone can't make the laptop edit the wrong row. Receivables/repayments use their existing Ids; accounts, categories, projects, budgets, installments and recurring items are checked by name.
+- **One request at a time** — `LockService` around every call, so recurring/installment rows can't be created twice when two devices open together.
+- **Category clean-up** — removed the invisible U+FE0F character that split "Shopping"/"Travel" in two (cause: the category picker stripped the emoji but left its variation selector). Existing data is repaired once automatically; duplicate category names are refused.
+
+### Offline
+- `sw.js` service worker: the app opens without signal (page fetched fresh when online, cached copy when offline).
+- New expenses / income / transfers made offline are queued on the device and sent when back online; each has its own Id, so a resend never creates a duplicate.
+
+### Spending trend (dashboard)
+- Last 12 months of regular spending with the 6-month average; current month is compared with the usual amount by the same day. Top categories vs their average. New backend action `getTrends` (also returned by `bootstrap`).
+
+### Bug fixes
+- Year in Review: expense bars and category breakdown were empty (field-name mismatch); Export Full Year expenses were 0.
+- Installments "Monthly Commitment" always showed ฿0; Budget overview total limit always ฿0.
+- Cancelling an installment plan wiped its merchant, purchase date and project.
+- Saving a receivable / marking an installment paid threw an error while refreshing balances.
+
+**Deploy:** paste new `Code.gs` → run `setupToken()` → Deploy → Manage deployments → edit → New version. Push `index.html` and `sw.js` to GitHub.
+
+---
+
+## Session 8 — Speed, Search, Statements, Bills & Backup
+
+- **Faster startup** — opening the app is now one request: `bootstrap` creates due recurring/installment rows itself (`runChecks`), then reads every sheet once and shares it between all getters (Expenses was read ~5 times).
+- **Search all months** — "This month / All months" toggle in the Transactions search box. New action `searchTransactions` (category, note, account, project, amount; newest 200). Results can be opened and edited.
+- **App icon** — own charcoal ฿-coin icons (`icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png`) instead of a stretched 72px emoji from GitHub; cached for offline.
+- **Weekly backup** — run `setupWeeklyBackup()` once in Apps Script (asks for Drive permission). Every Sunday ~3am a copy goes to "Money Tracker Backups" in Drive, newest 12 kept. Settings shows the last backup and has a "Back up now" button (`backupNow` action).
+- **Credit card statements** — each card with a statement day shows the last statement period, amount billed, paid since, left to pay with due date, and this cycle so far. The due-soon banner uses the statement amount and disappears once it's paid.
+- **Upcoming bills** — dashboard card listing recurring expenses, installments and card bills due in the next 30 days, with the total.
+- **Fix** — card "Next Due Date" showed one day early (UTC conversion).
+
+**Deploy:** paste `Code.gs` → run `setupWeeklyBackup()` (approve Drive access) → Manage deployments → New version. Push `index.html`, `sw.js`, `manifest.json` and the 4 icon PNGs.
+
+---
+
+## Session 9 — Duplicates, Assets & Investments, Yearly Recurring, Offline Edits
+
+- **Duplicate warning** — adding an expense, income or transfer with the same date, amount and account (from/to for transfers) as an existing one asks "Save it anyway?". Checked on the server across all months (`checkDup`); offline it checks what's on screen.
+- **Assets & investments** (logic doc #7, #8) — new sheets `Holdings` and `HoldingTxns`. Buy / sell / dividend from the + button or Accounts page. Buying moves cash out of an account but is **not** an expense; fees are saved as expenses ("Investment Fees"); dividends as income ("Investment Returns"). Average-cost P/L (unrealised, realised), manual price/value updates, "already owned" option (no cash moves) for things like a car. Net worth = accounts + holdings; new home balance option "Investments". Buys/sells appear in the transaction list.
+- **Yearly recurring** — recurring items can repeat every month or every year (new columns `Frequency`, `MonthOfYear`). The "🔁 Repeat automatically" switch on a new expense now actually creates the recurring item (this entry counts as the first one).
+- **Offline edits & deletes** — expenses, income and transfers can be edited or deleted offline; entries still waiting to sync can be edited or removed too. Changes are sent in order when back online; a change to something modified on another device meanwhile is skipped with a message.
+
+**Deploy:** paste `Code.gs` → Manage deployments → New version. Push `index.html` and `sw.js`.
+
+---
+
 ## Features Deferred (from logic doc)
 
 These were reviewed and confirmed non-conflicting — ready to implement in a future session:
 
 - **#5 Split Expenses** — pay full bill, record only your share, track who owes the rest
 - **#6 Foreign Currency** — log in JPY/USD with FX rate, store THB equivalent
-- **#7 Asset Purchases** — separate from expenses (gold, electronics, property)
-- **#8 Investment Transactions** — instrument-level tracking (stocks, ETFs, XAUUSD)
 - **Home balance modes not yet implemented:** Savings Balance, Investment Portfolio Value, Bonus Reserve Remaining (require additional data not yet tracked)
 
 ---
@@ -231,7 +279,7 @@ These were reviewed and confirmed non-conflicting — ready to implement in a fu
 **To push updates:**
 ```bash
 cd C:\Users\Admin\OneDrive\Financial\expense_app
-git add index.html Code.gs
+git add index.html Code.gs sw.js manifest.json *.png
 git commit -m "describe what changed"
 git push
 ```
@@ -247,6 +295,8 @@ expense_app/
 ├── index.html                        ← Main PWA app (all UI + JS)
 ├── Code.gs                           ← Google Apps Script backend
 ├── manifest.json                     ← PWA manifest
+├── sw.js                             ← Service worker (offline support)
+├── icon-192.png / icon-512.png / icon-maskable-512.png / apple-touch-icon.png  ← App icons
 ├── personal_finance_tracking_logic.md ← Finance logic reference spec
 └── project-progress.md               ← This file
 ```

@@ -1,10 +1,10 @@
 // ============================================================
-//  Money Tracker — Google Apps Script Backend v5
+//  Money Tracker — Google Apps Script Backend v6
 //
 //  Sheets:
-//    Expenses         → Date | Amount(THB) | Category | Note | Account | IsRecurring | RecurrencePeriod | ProjectId | OrigAmount | Currency
-//    Income           → Date | Amount(THB) | Category | Note | Account | OrigAmount | Currency
-//    Transfers        → Date | Amount (in From currency) | FromAccount | ToAccount | Note | ReceivedAmount (in To currency, optional)
+//    Expenses         → Date | Amount(THB) | Category | Note | Account | IsRecurring | RecurrencePeriod | ProjectId | OrigAmount | Currency | Id
+//    Income           → Date | Amount(THB) | Category | Note | Account | OrigAmount | Currency | Id
+//    Transfers        → Date | Amount (in From currency) | FromAccount | ToAccount | Note | ReceivedAmount (in To currency, optional) | Id
 //    Accounts         → Name | Type | StartingBalance | CreditLimit | DueDay | StatementDay | Currency | Rate (THB per 1 unit)
 //    Categories       → Name
 //    IncomeCategories → Name
@@ -13,7 +13,9 @@
 //    ReceivableRepayments → Id | ReceivableId | Date | Amount | Account | Note
 //    InstallmentPlans → Description | PurchaseDate | Merchant | TotalAmount | InstallmentCount | InstallmentAmount | FirstInstallmentDate | Account | Category | ProjectId | Status | InstallmentsPaid
 //    CategoryBudgets  → Category | MonthlyLimit | AlertThreshold | IsActive | AppliesToProjects
-//    RecurringExpenses→ Description | Amount | Category | Account | DayOfMonth | StartDate | Status | LastGenerated | ProjectId
+//    RecurringExpenses→ Description | Amount | Category | Account | DayOfMonth | StartDate | Status | LastGenerated | ProjectId | Frequency | MonthOfYear
+//    Holdings         → Id | Name | Kind | Symbol | Unit | CurrentPrice (THB/unit) | PriceDate | Note | Status
+//    HoldingTxns      → Id | HoldingId | Date | Type (buy/sell/dividend) | Quantity | Price | Amount (THB) | Fee | Account | Note | LinkedId
 // ============================================================
 
 var SHEET = {
@@ -28,7 +30,9 @@ var SHEET = {
   INSTALLMENTS: "InstallmentPlans",
   BUDGETS:      "CategoryBudgets",
   RECURRING:    "RecurringExpenses",
-  REPAYMENTS:   "ReceivableRepayments"
+  REPAYMENTS:   "ReceivableRepayments",
+  HOLDINGS:     "Holdings",
+  HOLDING_TXNS: "HoldingTxns"
 };
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -43,13 +47,13 @@ function getSheet(name) {
     sh = ss.insertSheet(name);
     switch (name) {
       case SHEET.EXPENSES:
-        sh.appendRow(["Date","Amount","Category","Note","Account","IsRecurring","RecurrencePeriod","ProjectId","OrigAmount","Currency"]);
+        sh.appendRow(["Date","Amount","Category","Note","Account","IsRecurring","RecurrencePeriod","ProjectId","OrigAmount","Currency","Id"]);
         break;
       case SHEET.INCOME:
-        sh.appendRow(["Date","Amount","Category","Note","Account","OrigAmount","Currency"]);
+        sh.appendRow(["Date","Amount","Category","Note","Account","OrigAmount","Currency","Id"]);
         break;
       case SHEET.TRANSFERS:
-        sh.appendRow(["Date","Amount","FromAccount","ToAccount","Note","ReceivedAmount"]);
+        sh.appendRow(["Date","Amount","FromAccount","ToAccount","Note","ReceivedAmount","Id"]);
         break;
       case SHEET.ACCOUNTS:
         sh.appendRow(["Name","Type","StartingBalance","CreditLimit","DueDay","StatementDay","Currency","Rate"]);
@@ -84,8 +88,16 @@ function getSheet(name) {
       case SHEET.BUDGETS:
         sh.appendRow(["Category","MonthlyLimit","AlertThreshold","IsActive","AppliesToProjects"]);
         break;
+      case SHEET.HOLDINGS:
+        sh.appendRow(["Id","Name","Kind","Symbol","Unit","CurrentPrice","PriceDate","Note","Status"]);
+        sh.getRange(2, 7, 998, 1).setNumberFormat("@");
+        break;
+      case SHEET.HOLDING_TXNS:
+        sh.appendRow(["Id","HoldingId","Date","Type","Quantity","Price","Amount","Fee","Account","Note","LinkedId"]);
+        sh.getRange(2, 3, 998, 1).setNumberFormat("@");
+        break;
       case SHEET.RECURRING:
-        sh.appendRow(["Description","Amount","Category","Account","DayOfMonth","StartDate","Status","LastGenerated","ProjectId"]);
+        sh.appendRow(["Description","Amount","Category","Account","DayOfMonth","StartDate","Status","LastGenerated","ProjectId","Frequency","MonthOfYear"]);
         sh.getRange(2, 6, 998, 1).setNumberFormat("@");   // StartDate stays plain text
         sh.getRange(2, 8, 998, 1).setNumberFormat("@");   // LastGenerated stays plain text
         break;
@@ -154,8 +166,155 @@ function dateMatchesMonth(dateStr, m, y) {
          parseInt(dateStr.substring(5, 7)) === m;
 }
 
+// ── Security: shared secret token ────────────────────────────
+// Run setupToken() once from the Apps Script editor (Run ▶), copy the token from the
+// Execution log, and paste it into the app (Settings → Script Connection → Access token).
+function setupToken() {
+  var props = PropertiesService.getScriptProperties();
+  var t = props.getProperty("API_TOKEN");
+  if (!t) { t = Utilities.getUuid().replace(/-/g, ""); props.setProperty("API_TOKEN", t); }
+  Logger.log("Your Money Tracker access token: " + t);
+  return t;
+}
+function tokenError(p) {
+  var want = PropertiesService.getScriptProperties().getProperty("API_TOKEN");
+  if (!want) return "No access token set on the server yet. In Apps Script, run setupToken() once.";
+  if (String(p.token || "") !== want) return "unauthorized";
+  return "";
+}
+
+// ── Stable row IDs ───────────────────────────────────────────
+// Edits and deletes find their row by Id, so a row that moved (because something was
+// deleted on another device) is still the one that gets changed.
+var ID_COL = {};
+ID_COL[SHEET.EXPENSES]    = 11;
+ID_COL[SHEET.INCOME]      = 8;
+ID_COL[SHEET.TRANSFERS]   = 7;
+ID_COL[SHEET.RECEIVABLES] = 10;
+ID_COL[SHEET.REPAYMENTS]  = 1;
+ID_COL[SHEET.HOLDINGS]    = 1;
+ID_COL[SHEET.HOLDING_TXNS] = 1;
+var ID_PREFIX = {};
+ID_PREFIX[SHEET.EXPENSES] = "E"; ID_PREFIX[SHEET.INCOME] = "I"; ID_PREFIX[SHEET.TRANSFERS] = "T";
+
+function newId(prefix) { return prefix + Utilities.getUuid().replace(/-/g, "").slice(0, 10); }
+
+// Give every existing row an Id (once per request per sheet)
+var _idsDone = {};
+function ensureRowIds(name) {
+  if (_idsDone[name]) return;
+  _idsDone[name] = true;
+  var sh = getSheet(name), col = ID_COL[name], last = sh.getLastRow();
+  ensureHeaders(sh, col, ["Id"]);
+  if (last < 2) return;
+  var key = sh.getRange(2, 1, last - 1, 2).getValues();
+  var ids = sh.getRange(2, col, last - 1, 1).getValues(), ch = false;
+  for (var i = 0; i < ids.length; i++) {
+    if (!ids[i][0] && (key[i][0] || key[i][1])) { ids[i][0] = newId(ID_PREFIX[name] || "X"); ch = true; }
+  }
+  if (ch) sh.getRange(2, col, last - 1, 1).setValues(ids);
+}
+
+// Possible duplicate: same date, amount and account (from/to for transfers) already saved
+function findDuplicate(name, p) {
+  var amt = toFloat(p.amount), date = String(p.date || todayStr()), hit = null;
+  sheetToRows(getSheet(name), function(d) { return d; }).forEach(function(d) {
+    if (hit || formatDate(d[0]) !== date || Math.abs(toFloat(d[1]) - amt) > 0.005) return;
+    if (name === SHEET.TRANSFERS) {
+      if (String(d[2]).trim() === String(p.fromAccount || "").trim() && String(d[3]).trim() === String(p.toAccount || "").trim())
+        hit = { date: date, amount: toFloat(d[1]), note: String(d[4] || ""), account: d[2] + " → " + d[3] };
+    } else if (String(d[4]).trim() === String(p.account || "").trim()) {
+      hit = { date: date, amount: toFloat(d[1]), category: cleanName(d[2]), note: String(d[3] || ""), account: String(d[4]) };
+    }
+  });
+  return hit;
+}
+function dupResponse(m) { return jsonResponse({ ok: false, possibleDuplicate: true, match: m, error: "Possible duplicate" }); }
+
+function idExists(name, id) {
+  if (!id) return false;
+  var sh = getSheet(name), col = ID_COL[name], last = sh.getLastRow();
+  if (last < 2) return false;
+  var ids = sh.getRange(2, col, last - 1, 1).getValues();
+  for (var i = ids.length - 1; i >= 0; i--) if (String(ids[i][0]) === String(id)) return true;
+  return false;
+}
+
+// Find the sheet row for p.id (p.rowIndex is only a hint). 0 = not found.
+function resolveRow(name, p) {
+  var sh = getSheet(name), last = sh.getLastRow(), hint = parseInt(p.rowIndex) || 0;
+  var col = ID_COL[name];
+  if (p.id && col) {
+    if (hint >= 2 && hint <= last && String(sh.getRange(hint, col).getValue()) === String(p.id)) return hint;
+    if (last < 2) return 0;
+    var ids = sh.getRange(2, col, last - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) if (String(ids[i][0]) === String(p.id)) return i + 2;
+    return 0;
+  }
+  return (hint >= 2 && hint <= last) ? hint : 0;      // older app version without ids
+}
+
+// For small lists (accounts, categories, projects…): check the row still holds the
+// expected name (p.key, column 1); if it moved, find it by name.
+function resolveByKey(name, p) {
+  var sh = getSheet(name), last = sh.getLastRow(), hint = parseInt(p.rowIndex) || 0;
+  if (p.key === undefined || p.key === null || p.key === "") return (hint >= 2 && hint <= last) ? hint : 0;
+  var want = String(p.key);
+  if (hint >= 2 && hint <= last && String(sh.getRange(hint, 1).getValue()) === want) return hint;
+  if (last < 2) return 0;
+  var v = sh.getRange(2, 1, last - 1, 1).getValues();
+  for (var i = 0; i < v.length; i++) if (String(v[i][0]) === want) return i + 2;
+  return 0;
+}
+
+function staleResponse() {
+  return jsonResponse({ ok: false, stale: true,
+    error: "This item was changed or deleted on another device. The app has refreshed, please try again." });
+}
+
+// ── Category names ───────────────────────────────────────────
+// Strip invisible characters (emoji variation selectors, zero-width spaces) that made
+// "Shopping" and "️Shopping" two different categories.
+function cleanName(s) {
+  return String(s == null ? "" : s).replace(/[︎️​-‍⁠﻿]/g, "").replace(/\s+/g, " ").trim();
+}
+
+// One-time repair of existing data (runs automatically once, from bootstrap)
+function cleanupCategoriesOnce() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty("CLEAN_CATS_V1")) return 0;
+  var fixed = 0;
+  [[SHEET.EXPENSES, 3], [SHEET.INCOME, 3], [SHEET.BUDGETS, 1], [SHEET.RECURRING, 3], [SHEET.INSTALLMENTS, 9],
+   [SHEET.CATEGORIES, 1], [SHEET.INCOME_CATS, 1]].forEach(function(sc) {
+    var sh = getSheet(sc[0]), last = sh.getLastRow();
+    if (last < 2) return;
+    var rng = sh.getRange(2, sc[1], last - 1, 1), v = rng.getValues(), ch = false;
+    v.forEach(function(r) { if (typeof r[0] === "string") { var c = cleanName(r[0]); if (c !== r[0]) { r[0] = c; ch = true; fixed++; } } });
+    if (ch) rng.setValues(v);
+  });
+  // Remove duplicate category rows (keep the first)
+  [SHEET.CATEGORIES, SHEET.INCOME_CATS].forEach(function(n) {
+    var sh = getSheet(n), last = sh.getLastRow();
+    if (last < 2) return;
+    var v = sh.getRange(2, 1, last - 1, 1).getValues(), seen = {}, dup = [];
+    v.forEach(function(r, i) { var k = String(r[0]).toLowerCase(); if (!k) return; if (seen[k]) dup.push(i + 2); else seen[k] = true; });
+    for (var j = dup.length - 1; j >= 0; j--) sh.deleteRow(dup[j]);
+  });
+  props.setProperty("CLEAN_CATS_V1", new Date().toISOString());
+  return fixed;
+}
+
+// During startup every sheet is read once and shared by all getters (was ~5 reads of Expenses)
+var _readCache = null;
+function sheetValues(sh) {
+  if (!_readCache) return sh.getDataRange().getValues();
+  var k = sh.getName();
+  if (!_readCache[k]) _readCache[k] = sh.getDataRange().getValues();
+  return _readCache[k];
+}
+
 function sheetToRows(sh, mapper) {
-  var data = sh.getDataRange().getValues();
+  var data = sheetValues(sh);
   var rows = [];
   for (var i = 1; i < data.length; i++) {
     if (!data[i][0] && !data[i][1]) continue;
@@ -167,8 +326,24 @@ function sheetToRows(sh, mapper) {
 // ── Entry Point ───────────────────────────────────────────────
 
 function doPost(e) {
+  var lock = null;
   try {
     var p = JSON.parse(e.postData.contents);
+    var authErr = tokenError(p);
+    if (authErr) return jsonResponse({ ok: false, auth: true, error: authErr });
+    // One request at a time: stops laptop + phone from creating the same recurring /
+    // installment rows twice, or writing over each other.
+    lock = LockService.getScriptLock();
+    if (!lock.tryLock(25000)) { lock = null; return jsonResponse({ ok: false, error: "Server busy, please try again" }); }
+    return route(p);
+  } catch (err) {
+    return jsonResponse({ ok: false, error: err.message });
+  } finally {
+    if (lock) { SpreadsheetApp.flush(); lock.releaseLock(); }
+  }
+}
+
+function route(p) {
     switch (p.action) {
       case "addExpense":             return addExpense(p);
       case "getExpenses":            return getExpenses(p);
@@ -221,18 +396,35 @@ function doPost(e) {
       case "updateRecurring":        return updateRecurring(p);
       case "deleteRecurring":        return deleteRecurring(p);
       case "checkRecurring":         return checkRecurring();
+      case "getTrends":              return getTrends(p);
+      case "searchTransactions":     return searchTransactions(p);
+      case "getHoldings":            return jsonResponse(holdingsData());
+      case "addHolding":             return addHolding(p);
+      case "updateHolding":          return updateHolding(p);
+      case "deleteHolding":          return deleteHolding(p);
+      case "addHoldingTxn":          return addHoldingTxn(p);
+      case "deleteHoldingTxn":       return deleteHoldingTxn(p);
+      case "backupNow":              return jsonResponse({ ok: true, name: backupNow(), last: todayStr() });
       default:
         return jsonResponse({ ok: false, error: "Unknown action: " + p.action });
     }
-  } catch (err) {
-    return jsonResponse({ ok: false, error: err.message });
-  }
 }
 
 // One round-trip startup: returns everything the app needs on open.
 // Reuses the existing getters (parsing their JSON) so logic stays identical.
 function bootstrap(p) {
   function run(fn) { return JSON.parse(fn().getContent()); }
+  // writes first (repairs, ids, due recurring/installment rows), then one read pass
+  cleanupCategoriesOnce();
+  ensureRowIds(SHEET.EXPENSES); ensureRowIds(SHEET.INCOME); ensureRowIds(SHEET.TRANSFERS);
+  recvEnsureIds(getSheet(SHEET.RECEIVABLES));
+  var generated = 0;
+  if (p.runChecks) {
+    generated += run(checkInstallments).generated || 0;
+    generated += run(checkRecurring).generated || 0;
+  }
+  _readCache = {};
+  try {
   var acc  = run(getAccounts);
   var exp  = run(getCategories);
   var inc  = run(getIncomeCategories);
@@ -242,10 +434,16 @@ function bootstrap(p) {
   var ins  = run(getInstallmentPlans);
   var bud  = run(function(){ return getBudgets(p); });
   var rcr  = run(getRecurring);
+  var trd  = run(function(){ return getTrends(p); });
+  var hld  = holdingsData();
+  } finally { _readCache = null; }
+  var props = PropertiesService.getScriptProperties();
   return jsonResponse({
     ok: true,
     accounts: acc, categories: exp, incomeCategories: inc, transactions: txn,
-    projects: prj, receivables: rec, installmentPlans: ins, budgets: bud, recurringExpenses: rcr
+    projects: prj, receivables: rec, installmentPlans: ins, budgets: bud, recurringExpenses: rcr,
+    trends: trd, holdings: hld, checked: !!p.runChecks, generated: generated,
+    backup: { last: props.getProperty("LAST_BACKUP") || "", weekly: !!props.getProperty("BACKUP_WEEKLY") }
   });
 }
 
@@ -257,7 +455,9 @@ function recurringRow(d, ri) {
   return {
     rowIndex: ri, description: d[0], amount: toFloat(d[1]), category: d[2], account: d[3],
     dayOfMonth: parseInt(d[4]) || 1, startDate: formatDate(d[5]),
-    status: d[6] || "active", lastGenerated: formatDate(d[7]), projectId: d[8] || ""
+    status: d[6] || "active", lastGenerated: formatDate(d[7]), projectId: d[8] || "",
+    frequency: String(d[9] || "monthly") === "yearly" ? "yearly" : "monthly",
+    monthOfYear: parseInt(d[10]) || (formatDate(d[5]) ? parseInt(formatDate(d[5]).substring(5, 7)) : 1)
   };
 }
 
@@ -274,25 +474,33 @@ function addRecurring(p) {
   var sh = getSheet(SHEET.RECURRING);
   var r = sh.getLastRow() + 1;
   sh.getRange(r, 6).setNumberFormat("@"); sh.getRange(r, 8).setNumberFormat("@");
-  sh.getRange(r, 1, 1, 9).setValues([[desc, amt, p.category || "", p.account || "", day,
-    p.startDate || todayStr(), p.status || "active", "", p.projectId || ""]]);
+  var freq = p.frequency === "yearly" ? "yearly" : "monthly";
+  var start = p.startDate || todayStr();
+  var moy = Math.min(12, Math.max(1, parseInt(p.monthOfYear) || parseInt(start.substring(5, 7))));
+  ensureHeaders(sh, 10, ["Frequency", "MonthOfYear"]);
+  sh.getRange(r, 1, 1, 11).setValues([[desc, amt, cleanName(p.category), p.account || "", day,
+    start, p.status || "active", p.lastGenerated || "", p.projectId || "", freq, moy]]);
   return jsonResponse({ ok: true, rowIndex: r });
 }
 
 function updateRecurring(p) {
-  var sh = getSheet(SHEET.RECURRING), row = parseInt(p.rowIndex);
-  if (row < 2 || row > sh.getLastRow()) return jsonResponse({ ok: false, error: "Invalid row" });
+  var sh = getSheet(SHEET.RECURRING), row = resolveByKey(SHEET.RECURRING, p);
+  if (!row) return staleResponse();
   var day = Math.min(31, Math.max(1, parseInt(p.dayOfMonth) || 1));
   sh.getRange(row, 6).setNumberFormat("@");
-  sh.getRange(row, 1, 1, 7).setValues([[String(p.description || "").trim(), toFloat(p.amount), p.category || "",
+  sh.getRange(row, 1, 1, 7).setValues([[String(p.description || "").trim(), toFloat(p.amount), cleanName(p.category),
     p.account || "", day, p.startDate || todayStr(), p.status || "active"]]);
   sh.getRange(row, 9).setValue(p.projectId || "");
+  ensureHeaders(sh, 10, ["Frequency", "MonthOfYear"]);
+  var start = p.startDate || todayStr();
+  sh.getRange(row, 10, 1, 2).setValues([[p.frequency === "yearly" ? "yearly" : "monthly",
+    Math.min(12, Math.max(1, parseInt(p.monthOfYear) || parseInt(start.substring(5, 7))))]]);
   return jsonResponse({ ok: true });
 }
 
 function deleteRecurring(p) {
-  var sh = getSheet(SHEET.RECURRING), row = parseInt(p.rowIndex);
-  if (row < 2 || row > sh.getLastRow()) return jsonResponse({ ok: false, error: "Invalid row" });
+  var sh = getSheet(SHEET.RECURRING), row = resolveByKey(SHEET.RECURRING, p);
+  if (!row) return staleResponse();
   sh.deleteRow(row);
   return jsonResponse({ ok: true });
 }
@@ -301,6 +509,7 @@ function pad2(n) { return n < 10 ? "0" + n : "" + n; }
 
 function checkRecurring() {
   var sh = getSheet(SHEET.RECURRING), expSh = getSheet(SHEET.EXPENSES);
+  ensureRowIds(SHEET.EXPENSES);
   var today = todayStr();
   var ty = parseInt(today.substring(0, 4)), tm = parseInt(today.substring(5, 7));
   var items = sheetToRows(sh, recurringRow);
@@ -315,13 +524,14 @@ function checkRecurring() {
       y = parseInt(it.startDate.substring(0, 4)); m = parseInt(it.startDate.substring(5, 7));
     } else return;
     var lastDone = "", guard = 0;
-    while ((y < ty || (y === ty && m <= tm)) && guard < 36) {
+    while ((y < ty || (y === ty && m <= tm)) && guard < 60) {
       var dim = new Date(y, m, 0).getDate();      // days in month (Feb 30 -> 28/29)
       var due = y + "-" + pad2(m) + "-" + pad2(Math.min(it.dayOfMonth, dim));
       if (due > today) break;                     // not due yet - try again next time
-      if (!it.startDate || due >= it.startDate) {
+      var inMonth = it.frequency !== "yearly" || m === it.monthOfYear;
+      if (inMonth && (!it.startDate || due >= it.startDate)) {
         newRows.push([due, it.amount, it.category || "Subscription", it.description, it.account || "",
-                      "TRUE", "monthly", it.projectId || ""]);
+                      "TRUE", it.frequency, it.projectId || "", "", "", newId("E")]);
         generated++;
       }
       lastDone = due;
@@ -333,30 +543,35 @@ function checkRecurring() {
       sh.getRange(it.rowIndex, 8).setValue(lastDone);
     }
   });
-  if (newRows.length) expSh.getRange(expSh.getLastRow() + 1, 1, newRows.length, 8).setValues(newRows);
+  if (newRows.length) expSh.getRange(expSh.getLastRow() + 1, 1, newRows.length, 11).setValues(newRows);
   return jsonResponse({ ok: true, generated: generated });
 }
 
 function doGet() {
-  return jsonResponse({ ok: true, message: "Money Tracker API v5 — live" });
+  return jsonResponse({ ok: true, message: "Money Tracker API v6 — live" });
 }
 
 // ── EXPENSES ──────────────────────────────────────────────────
 
 function addExpense(p) {
   var sh = getSheet(SHEET.EXPENSES);
+  ensureRowIds(SHEET.EXPENSES);
+  if (p.id && idExists(SHEET.EXPENSES, p.id)) return jsonResponse({ ok: true, duplicate: true, id: p.id });
+  if (p.checkDup) { var dm = findDuplicate(SHEET.EXPENSES, p); if (dm) return dupResponse(dm); }
+  var fx0 = fxFields(p);
   sh.appendRow([
     p.date || todayStr(),
     toFloat(p.amount),
-    p.category || "",
+    cleanName(p.category),
     p.note || "",
     p.account || "",
     p.isRecurring ? "TRUE" : "FALSE",
     p.recurrencePeriod || "",
-    p.projectId || ""
-  ].concat(fxFields(p)));
-  var fx = fxFields(p);
-  if (fx[0]) ensureHeaders(sh, 9, ["OrigAmount", "Currency"]);
+    p.projectId || "",
+    fx0[0], fx0[1],
+    String(p.id || newId("E"))
+  ]);
+  if (fx0[0]) ensureHeaders(sh, 9, ["OrigAmount", "Currency"]);
   return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
 }
 
@@ -367,7 +582,7 @@ function getExpenses(p) {
       rowIndex: ri, date: formatDate(d[0]), amount: toFloat(d[1]),
       category: d[2], note: d[3], account: d[4],
       isRecurring: toBool(d[5]), recurrencePeriod: d[6] || "", projectId: d[7] || "",
-      origAmount: toFloat(d[8]) || 0, currency: d[9] || ""
+      origAmount: toFloat(d[8]) || 0, currency: d[9] || "", id: String(d[10] || "")
     };
   });
   if (p.month && p.year) {
@@ -380,10 +595,10 @@ function getExpenses(p) {
 
 function updateExpense(p) {
   var sh  = getSheet(SHEET.EXPENSES);
-  var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
+  var row = resolveRow(SHEET.EXPENSES, p);
+  if (!row) return staleResponse();
   sh.getRange(row, 1, 1, 10).setValues([[
-    p.date || "", toFloat(p.amount), p.category || "", p.note || "", p.account || "",
+    p.date || "", toFloat(p.amount), cleanName(p.category), p.note || "", p.account || "",
     p.isRecurring ? "TRUE" : "FALSE", p.recurrencePeriod || "", p.projectId || ""
   ].concat(fxFields(p))]);
   if (fxFields(p)[0]) ensureHeaders(sh, 9, ["OrigAmount", "Currency"]);
@@ -392,8 +607,8 @@ function updateExpense(p) {
 
 function deleteExpense(p) {
   var sh  = getSheet(SHEET.EXPENSES);
-  var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
+  var row = resolveRow(SHEET.EXPENSES, p);
+  if (!row) return staleResponse();
   sh.deleteRow(row);
   return jsonResponse({ ok: true });
 }
@@ -402,7 +617,11 @@ function deleteExpense(p) {
 
 function addIncome(p) {
   var sh = getSheet(SHEET.INCOME);
-  sh.appendRow([p.date || todayStr(), toFloat(p.amount), p.category || "", p.note || "", p.account || ""].concat(fxFields(p)));
+  ensureRowIds(SHEET.INCOME);
+  if (p.id && idExists(SHEET.INCOME, p.id)) return jsonResponse({ ok: true, duplicate: true, id: p.id });
+  if (p.checkDup) { var dm = findDuplicate(SHEET.INCOME, p); if (dm) return dupResponse(dm); }
+  sh.appendRow([p.date || todayStr(), toFloat(p.amount), cleanName(p.category), p.note || "", p.account || ""]
+    .concat(fxFields(p)).concat([String(p.id || newId("I"))]));
   if (fxFields(p)[0]) ensureHeaders(sh, 6, ["OrigAmount", "Currency"]);
   return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
 }
@@ -411,7 +630,7 @@ function getIncome(p) {
   var sh   = getSheet(SHEET.INCOME);
   var rows = sheetToRows(sh, function(d, ri) {
     return { rowIndex: ri, date: formatDate(d[0]), amount: toFloat(d[1]), category: d[2], note: d[3], account: d[4],
-      origAmount: toFloat(d[5]) || 0, currency: d[6] || "" };
+      origAmount: toFloat(d[5]) || 0, currency: d[6] || "", id: String(d[7] || "") };
   });
   if (p.month && p.year) {
     var fm = parseInt(p.month), fy = parseInt(p.year);
@@ -423,17 +642,17 @@ function getIncome(p) {
 
 function updateIncome(p) {
   var sh  = getSheet(SHEET.INCOME);
-  var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
-  sh.getRange(row, 1, 1, 7).setValues([[p.date || "", toFloat(p.amount), p.category || "", p.note || "", p.account || ""].concat(fxFields(p))]);
+  var row = resolveRow(SHEET.INCOME, p);
+  if (!row) return staleResponse();
+  sh.getRange(row, 1, 1, 7).setValues([[p.date || "", toFloat(p.amount), cleanName(p.category), p.note || "", p.account || ""].concat(fxFields(p))]);
   if (fxFields(p)[0]) ensureHeaders(sh, 6, ["OrigAmount", "Currency"]);
   return jsonResponse({ ok: true });
 }
 
 function deleteIncome(p) {
   var sh  = getSheet(SHEET.INCOME);
-  var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
+  var row = resolveRow(SHEET.INCOME, p);
+  if (!row) return staleResponse();
   sh.deleteRow(row);
   return jsonResponse({ ok: true });
 }
@@ -443,7 +662,11 @@ function deleteIncome(p) {
 function addTransfer(p) {
   var sh = getSheet(SHEET.TRANSFERS);
   var rcv = toFloat(p.receivedAmount);
-  sh.appendRow([p.date || todayStr(), toFloat(p.amount), p.fromAccount || "", p.toAccount || "", p.note || "", rcv > 0 ? rcv : ""]);
+  ensureRowIds(SHEET.TRANSFERS);
+  if (p.id && idExists(SHEET.TRANSFERS, p.id)) return jsonResponse({ ok: true, duplicate: true, id: p.id });
+  if (p.checkDup) { var dm = findDuplicate(SHEET.TRANSFERS, p); if (dm) return dupResponse(dm); }
+  sh.appendRow([p.date || todayStr(), toFloat(p.amount), p.fromAccount || "", p.toAccount || "", p.note || "", rcv > 0 ? rcv : "",
+    String(p.id || newId("T"))]);
   if (rcv > 0) ensureHeaders(sh, 6, ["ReceivedAmount"]);
   return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
 }
@@ -451,7 +674,7 @@ function addTransfer(p) {
 function getTransfers(p) {
   var sh   = getSheet(SHEET.TRANSFERS);
   var rows = sheetToRows(sh, function(d, ri) {
-    return { rowIndex: ri, date: formatDate(d[0]), amount: toFloat(d[1]), fromAccount: d[2], toAccount: d[3], note: d[4], receivedAmount: toFloat(d[5]) || 0 };
+    return { rowIndex: ri, date: formatDate(d[0]), amount: toFloat(d[1]), fromAccount: d[2], toAccount: d[3], note: d[4], receivedAmount: toFloat(d[5]) || 0, id: String(d[6] || "") };
   });
   if (p.month && p.year) {
     var fm = parseInt(p.month), fy = parseInt(p.year);
@@ -463,16 +686,16 @@ function getTransfers(p) {
 
 function deleteTransfer(p) {
   var sh  = getSheet(SHEET.TRANSFERS);
-  var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
+  var row = resolveRow(SHEET.TRANSFERS, p);
+  if (!row) return staleResponse();
   sh.deleteRow(row);
   return jsonResponse({ ok: true });
 }
 
 function updateTransfer(p) {
   var sh  = getSheet(SHEET.TRANSFERS);
-  var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
+  var row = resolveRow(SHEET.TRANSFERS, p);
+  if (!row) return staleResponse();
   var rcv = toFloat(p.receivedAmount);
   sh.getRange(row, 1, 1, 6).setValues([[
     p.date || todayStr(), toFloat(p.amount),
@@ -499,9 +722,9 @@ function getAccounts() {
   var byName = {};
   accounts.forEach(function(a){ byName[String(a.name||'').trim()] = a; });
   function bump(name, delta) { var a = byName[name]; if (a) a.balance += delta; }
-  var expRows  = sheetToRows(getSheet(SHEET.EXPENSES), function(d){ return { amount: toFloat(d[1]), account: String(d[4]||'').trim(), orig: toFloat(d[8]), cur: String(d[9]||'').trim().toUpperCase() }; });
+  var expRows  = sheetToRows(getSheet(SHEET.EXPENSES), function(d){ return { date: formatDate(d[0]), amount: toFloat(d[1]), account: String(d[4]||'').trim(), orig: toFloat(d[8]), cur: String(d[9]||'').trim().toUpperCase() }; });
   var incRows  = sheetToRows(getSheet(SHEET.INCOME),   function(d){ return { amount: toFloat(d[1]), account: String(d[4]||'').trim(), orig: toFloat(d[5]), cur: String(d[6]||'').trim().toUpperCase() }; });
-  var trfRows  = sheetToRows(getSheet(SHEET.TRANSFERS), function(d){ return { amount: toFloat(d[1]), from: String(d[2]||'').trim(), to: String(d[3]||'').trim(), received: toFloat(d[5]) }; });
+  var trfRows  = sheetToRows(getSheet(SHEET.TRANSFERS), function(d){ return { date: formatDate(d[0]), amount: toFloat(d[1]), from: String(d[2]||'').trim(), to: String(d[3]||'').trim(), received: toFloat(d[5]) }; });
   incRows.forEach(function(r){ var a = byName[r.account]; if (a) a.balance += amtForAccount(a, r.amount, r.orig, r.cur); });
   expRows.forEach(function(r){ var a = byName[r.account]; if (a) a.balance -= amtForAccount(a, r.amount, r.orig, r.cur); });
   trfRows.forEach(function(r){
@@ -513,6 +736,13 @@ function getAccounts() {
       t.balance += got;
     }
   });
+  // Assets & investments: buying takes cash out of the account, selling puts it back
+  holdingTxnRows().forEach(function(t) {
+    var a = byName[t.account]; if (!a) return;
+    var amt = a.currency === 'THB' ? t.amount : t.amount / a.rate;
+    if (t.type === 'buy') a.balance -= amt;
+    else if (t.type === 'sell') a.balance += amt;
+  });
   // Receivables: money lent out leaves the account; each repayment goes back into the account it landed in.
   // (Old settled receivables without a repayment log count as fully returned, so they net to zero.)
   var rv = loadReceivables();
@@ -523,6 +753,10 @@ function getAccounts() {
     r.repayments.forEach(function(rp) {
       var a = byName[rp.account || r.account]; if (a) a.balance += (a.currency === 'THB' ? rp.amount : rp.amount / a.rate);
     });
+  });
+  var today = todayStr();
+  accounts.forEach(function(a) {
+    if (a.type === "credit" && a.statementDay) a.statement = cardStatement(a, today, expRows, trfRows);
   });
   var total = 0;
   accounts.forEach(function(a) {
@@ -549,8 +783,8 @@ function addAccount(p) {
 
 function updateAccount(p) {
   var sh  = getSheet(SHEET.ACCOUNTS);
-  var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
+  var row = resolveByKey(SHEET.ACCOUNTS, p);
+  if (!row) return staleResponse();
   var cur = String(p.currency || "THB").trim().toUpperCase() || "THB";
   ensureHeaders(sh, 7, ["Currency", "Rate"]);
   sh.getRange(row, 1, 1, 8).setValues([[
@@ -565,8 +799,8 @@ function updateAccount(p) {
 
 function deleteAccount(p) {
   var sh  = getSheet(SHEET.ACCOUNTS);
-  var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
+  var row = resolveByKey(SHEET.ACCOUNTS, p);
+  if (!row) return staleResponse();
   sh.deleteRow(row);
   return jsonResponse({ ok: true });
 }
@@ -577,15 +811,20 @@ function getCategories() {
   var sh = getSheet(SHEET.CATEGORIES);
   return jsonResponse({ ok: true, categories: sheetToRows(sh, function(d, ri){ return { rowIndex: ri, name: d[0] }; }) });
 }
+function categoryExists(sheetName, name) {
+  return sheetToRows(getSheet(sheetName), function(d){ return cleanName(d[0]).toLowerCase(); })
+    .indexOf(name.toLowerCase()) >= 0;
+}
 function addCategory(p) {
-  var name = (p.name || "").trim();
+  var name = cleanName(p.name);
   if (!name) return jsonResponse({ ok: false, error: "Name required" });
+  if (categoryExists(SHEET.CATEGORIES, name)) return jsonResponse({ ok: false, error: "That category already exists" });
   var sh = getSheet(SHEET.CATEGORIES); sh.appendRow([name]);
   return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
 }
 function deleteCategory(p) {
-  var sh = getSheet(SHEET.CATEGORIES); var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
+  var sh = getSheet(SHEET.CATEGORIES); var row = resolveByKey(SHEET.CATEGORIES, p);
+  if (!row) return staleResponse();
   sh.deleteRow(row); return jsonResponse({ ok: true });
 }
 
@@ -594,14 +833,15 @@ function getIncomeCategories() {
   return jsonResponse({ ok: true, categories: sheetToRows(sh, function(d, ri){ return { rowIndex: ri, name: d[0] }; }) });
 }
 function addIncomeCategory(p) {
-  var name = (p.name || "").trim();
+  var name = cleanName(p.name);
   if (!name) return jsonResponse({ ok: false, error: "Name required" });
+  if (categoryExists(SHEET.INCOME_CATS, name)) return jsonResponse({ ok: false, error: "That category already exists" });
   var sh = getSheet(SHEET.INCOME_CATS); sh.appendRow([name]);
   return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
 }
 function deleteIncomeCategory(p) {
-  var sh = getSheet(SHEET.INCOME_CATS); var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
+  var sh = getSheet(SHEET.INCOME_CATS); var row = resolveByKey(SHEET.INCOME_CATS, p);
+  if (!row) return staleResponse();
   sh.deleteRow(row); return jsonResponse({ ok: true });
 }
 
@@ -632,16 +872,16 @@ function addProject(p) {
 
 function updateProject(p) {
   var sh  = getSheet(SHEET.PROJECTS);
-  var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
+  var row = resolveByKey(SHEET.PROJECTS, p);
+  if (!row) return staleResponse();
   sh.getRange(row, 1, 1, 4).setValues([[p.name || "", toFloat(p.budget), p.startDate || "", p.endDate || ""]]);
   return jsonResponse({ ok: true });
 }
 
 function deleteProject(p) {
   var sh  = getSheet(SHEET.PROJECTS);
-  var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
+  var row = resolveByKey(SHEET.PROJECTS, p);
+  if (!row) return staleResponse();
   sh.deleteRow(row);
   return jsonResponse({ ok: true });
 }
@@ -710,8 +950,9 @@ function addReceivable(p) {
 
 function updateReceivable(p) {
   var sh  = getSheet(SHEET.RECEIVABLES);
-  var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
+  recvEnsureIds(sh);
+  var row = resolveRow(SHEET.RECEIVABLES, p);
+  if (!row) return staleResponse();
   // Keep existing status/settledDate (cols 7-8), update cols 1-6 and col 9 (account)
   sh.getRange(row, 1, 1, 6).setValues([[
     p.date || todayStr(), toFloat(p.amount),
@@ -738,7 +979,7 @@ function addRepaymentRow(rv, amount, date, account, note) {
 
 function addRepayment(p) {
   var all = loadReceivables(), rv = null;
-  all.forEach(function(x){ if (x.id === String(p.receivableId) || (p.rowIndex && x.rowIndex === parseInt(p.rowIndex))) rv = x; });
+  all.forEach(function(x){ if (p.receivableId ? x.id === String(p.receivableId) : (p.rowIndex && x.rowIndex === parseInt(p.rowIndex))) rv = x; });
   if (!rv) return jsonResponse({ ok: false, error: "Receivable not found" });
   var amt = round2(toFloat(p.amount));
   if (amt <= 0) return jsonResponse({ ok: false, error: "Amount must be more than 0" });
@@ -751,8 +992,8 @@ function addRepayment(p) {
 }
 
 function deleteRepayment(p) {
-  var sh = getSheet(SHEET.REPAYMENTS), row = parseInt(p.rowIndex);
-  if (row < 2 || row > sh.getLastRow()) return jsonResponse({ ok: false, error: "Invalid row" });
+  var sh = getSheet(SHEET.REPAYMENTS), row = resolveRow(SHEET.REPAYMENTS, p);
+  if (!row) return staleResponse();
   var recvId = String(sh.getRange(row, 2).getValue() || "");
   sh.deleteRow(row);
   loadReceivables().forEach(function(rv){
@@ -762,8 +1003,9 @@ function deleteRepayment(p) {
 }
 
 function settleReceivable(p) {
-  var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
+  recvEnsureIds(getSheet(SHEET.RECEIVABLES));
+  var row = resolveRow(SHEET.RECEIVABLES, p);
+  if (!row) return staleResponse();
   var date = p.settledDate || todayStr(), rv = null;
   loadReceivables().forEach(function(x){ if (x.rowIndex === row) rv = x; });
   if (rv && rv.status !== "settled" && rv.left > 0.005) addRepaymentRow(rv, rv.left, date, String(p.account || "").trim(), "Marked settled");
@@ -773,8 +1015,9 @@ function settleReceivable(p) {
 
 function deleteReceivable(p) {
   var sh  = getSheet(SHEET.RECEIVABLES);
-  var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: "Invalid row" });
+  recvEnsureIds(sh);
+  var row = resolveRow(SHEET.RECEIVABLES, p);
+  if (!row) return staleResponse();
   var id = String(sh.getRange(row, 10).getValue() || "");
   if (id) {
     var rp = getSheet(SHEET.REPAYMENTS), data = rp.getDataRange().getValues();
@@ -798,31 +1041,43 @@ function getAllTransactions(p) {
     return { rowIndex: ri, type: "expense", date: formatDate(d[0]), amount: toFloat(d[1]),
       category: d[2], note: d[3], account: d[4],
       isRecurring: toBool(d[5]), recurrencePeriod: d[6] || "", projectId: d[7] || "",
-      origAmount: toFloat(d[8]) || 0, currency: d[9] || "" };
+      origAmount: toFloat(d[8]) || 0, currency: d[9] || "", id: String(d[10] || "") };
   }).forEach(function(r){ if (inPeriod(r.date)) txns.push(r); });
 
   sheetToRows(getSheet(SHEET.INCOME), function(d, ri) {
     return { rowIndex: ri, type: "income", date: formatDate(d[0]), amount: toFloat(d[1]),
-      category: d[2], note: d[3], account: d[4], origAmount: toFloat(d[5]) || 0, currency: d[6] || "" };
+      category: d[2], note: d[3], account: d[4], origAmount: toFloat(d[5]) || 0, currency: d[6] || "", id: String(d[7] || "") };
   }).forEach(function(r){ if (inPeriod(r.date)) txns.push(r); });
 
   sheetToRows(getSheet(SHEET.TRANSFERS), function(d, ri) {
     return { rowIndex: ri, type: "transfer", date: formatDate(d[0]), amount: toFloat(d[1]),
-      fromAccount: d[2], toAccount: d[3], note: d[4], receivedAmount: toFloat(d[5]) || 0 };
+      fromAccount: d[2], toAccount: d[3], note: d[4], receivedAmount: toFloat(d[5]) || 0, id: String(d[6] || "") };
   }).forEach(function(r){ if (inPeriod(r.date)) txns.push(r); });
+
+  // Asset / investment buys and sells (cash movements, not expenses)
+  var hNames = {};
+  sheetToRows(getSheet(SHEET.HOLDINGS), function(d){ return { id: String(d[0]), name: String(d[1]), unit: String(d[4] || "") }; })
+    .forEach(function(h){ hNames[h.id] = h; });
+  holdingTxnRows().forEach(function(t) {
+    if ((t.type !== 'buy' && t.type !== 'sell') || !inPeriod(t.date)) return;
+    var h = hNames[t.holdingId] || {};
+    txns.push({ rowIndex: t.rowIndex, id: t.id, type: "holding", holdingTxnType: t.type, holdingId: t.holdingId,
+      holdingName: h.name || "?", unit: h.unit || "", date: t.date, amount: t.amount, quantity: t.quantity,
+      price: t.price, fee: t.fee, account: t.account, note: t.note });
+  });
 
   // Pending receivables: always included regardless of month filter
   // (they are ongoing obligations that affect account balance until settled)
   loadReceivables().forEach(function(rv) {
     if (rv.status === 'pending') {
-      txns.push({ rowIndex: rv.rowIndex, type: "receivable", date: rv.date, amount: rv.amount,
+      txns.push({ rowIndex: rv.rowIndex, id: rv.id, type: "receivable", date: rv.date, amount: rv.amount,
         counterparty: String(rv.counterparty||''), recvType: String(rv.type||'advance'),
         note: String(rv.note||''), reimbursedBy: String(rv.reimbursedBy||''),
         status: rv.status, account: rv.account, returned: rv.returned, left: rv.left });
     }
     rv.repayments.forEach(function(rp) {
       if (!inPeriod(rp.date)) return;
-      txns.push({ rowIndex: rp.rowIndex, type: "repayment", date: rp.date, amount: rp.amount,
+      txns.push({ rowIndex: rp.rowIndex, id: String(rp.id || ""), type: "repayment", date: rp.date, amount: rp.amount,
         counterparty: String(rv.counterparty||''), note: rp.note, account: rp.account || rv.account,
         receivableRow: rv.rowIndex });
     });
@@ -882,7 +1137,7 @@ function addInstallmentPlan(p) {
     p.description || '', p.purchaseDate || todayStr(),
     p.merchant || '', total, count, instAmt,
     p.firstInstallmentDate || todayStr(),
-    p.account || '', p.category || '',
+    p.account || '', cleanName(p.category),
     p.projectId || '', 'active', 0
   ]);
   return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
@@ -890,15 +1145,15 @@ function addInstallmentPlan(p) {
 
 function updateInstallmentPlan(p) {
   var sh  = getSheet(SHEET.INSTALLMENTS);
-  var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: 'Invalid row' });
+  var row = resolveByKey(SHEET.INSTALLMENTS, p);
+  if (!row) return staleResponse();
   var count   = parseInt(p.installmentCount) || 1;
   var total   = toFloat(p.totalAmount);
   var instAmt = Math.round(total / count * 100) / 100;
   sh.getRange(row, 1, 1, 12).setValues([[
     p.description || '', p.purchaseDate || '', p.merchant || '',
     total, count, instAmt, p.firstInstallmentDate || '',
-    p.account || '', p.category || '', p.projectId || '',
+    p.account || '', cleanName(p.category), p.projectId || '',
     p.status || 'active', parseInt(p.installmentsPaid) || 0
   ]]);
   return jsonResponse({ ok: true });
@@ -906,8 +1161,8 @@ function updateInstallmentPlan(p) {
 
 function deleteInstallmentPlan(p) {
   var sh  = getSheet(SHEET.INSTALLMENTS);
-  var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: 'Invalid row' });
+  var row = resolveByKey(SHEET.INSTALLMENTS, p);
+  if (!row) return staleResponse();
   sh.deleteRow(row);
   return jsonResponse({ ok: true });
 }
@@ -916,6 +1171,7 @@ function deleteInstallmentPlan(p) {
 function checkInstallments() {
   var sh     = getSheet(SHEET.INSTALLMENTS);
   var expSh  = getSheet(SHEET.EXPENSES);
+  ensureRowIds(SHEET.EXPENSES);
   var today  = todayStr();
   var plans  = sheetToRows(sh, function(d, ri) {
     return {
@@ -949,7 +1205,7 @@ function checkInstallments() {
       expSh.appendRow([
         instDate, plan.installmentAmount,
         plan.category || 'Shopping', note,
-        plan.account || '', 'FALSE', '', plan.projectId || ''
+        plan.account || '', 'FALSE', '', plan.projectId || '', '', '', newId('E')
       ]);
       generated++;
     }
@@ -965,8 +1221,9 @@ function checkInstallments() {
 function markInstallmentPaid(p) {
   var sh    = getSheet(SHEET.INSTALLMENTS);
   var expSh = getSheet(SHEET.EXPENSES);
-  var row   = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: 'Invalid row' });
+  ensureRowIds(SHEET.EXPENSES);
+  var row   = resolveByKey(SHEET.INSTALLMENTS, p);
+  if (!row) return staleResponse();
 
   var data  = sh.getRange(row, 1, 1, 12).getValues()[0];
   var plan  = {
@@ -990,7 +1247,7 @@ function markInstallmentPaid(p) {
   expSh.appendRow([
     instDate, plan.installmentAmount,
     plan.category || 'Shopping', note,
-    plan.account || '', 'FALSE', '', plan.projectId || ''
+    plan.account || '', 'FALSE', '', plan.projectId || '', '', '', newId('E')
   ]);
 
   var newPaid = plan.installmentsPaid + 1;
@@ -1034,15 +1291,15 @@ function getBudgets(p) {
 function setBudget(p) {
   var sh = getSheet(SHEET.BUDGETS);
   var vals = [
-    p.category || '',
+    cleanName(p.category),
     toFloat(p.monthlyLimit),
     toFloat(p.alertThreshold) || 0.8,
     p.isActive === false ? 'FALSE' : 'TRUE',
     p.appliesToProjects ? 'TRUE' : 'FALSE'
   ];
   if (p.rowIndex) {
-    var row = parseInt(p.rowIndex);
-    if (row < 2) return jsonResponse({ ok: false, error: 'Invalid row' });
+    var row = resolveByKey(SHEET.BUDGETS, p);
+    if (!row) return staleResponse();
     sh.getRange(row, 1, 1, 5).setValues([vals]);
   } else {
     sh.appendRow(vals);
@@ -1052,8 +1309,8 @@ function setBudget(p) {
 
 function deleteBudget(p) {
   var sh  = getSheet(SHEET.BUDGETS);
-  var row = parseInt(p.rowIndex);
-  if (row < 2) return jsonResponse({ ok: false, error: 'Invalid row' });
+  var row = resolveByKey(SHEET.BUDGETS, p);
+  if (!row) return staleResponse();
   sh.deleteRow(row);
   return jsonResponse({ ok: true });
 }
@@ -1115,4 +1372,293 @@ function getAnnualSummary(p) {
     monthly:              monthly,
     categories:           categories
   });
+}
+
+// ── SPENDING TRENDS ──────────────────────────────────────────
+// Last 12 months up to the current month: regular (non-project) spending, project
+// spending, income, and regular spending per category.
+function getTrends(p) {
+  var today = todayStr();
+  var ey = parseInt(today.substring(0, 4)), em = parseInt(today.substring(5, 7));
+  var months = [], idx = {};
+  for (var k = 11; k >= 0; k--) {
+    var y = ey, m = em - k;
+    while (m < 1) { m += 12; y--; }
+    var key = y + "-" + pad2(m);
+    idx[key] = months.length;
+    months.push({ year: y, month: m, expense: 0, projectExpense: 0, income: 0, byCat: {} });
+  }
+  sheetToRows(getSheet(SHEET.EXPENSES), function(d) {
+    return { date: formatDate(d[0]), amount: toFloat(d[1]), category: cleanName(d[2]) || "Other", projectId: d[7] || "" };
+  }).forEach(function(r) {
+    var i = idx[r.date.substring(0, 7)];
+    if (i === undefined) return;
+    var mo = months[i];
+    if (r.projectId) { mo.projectExpense += r.amount; return; }
+    mo.expense += r.amount;
+    mo.byCat[r.category] = (mo.byCat[r.category] || 0) + r.amount;
+  });
+  sheetToRows(getSheet(SHEET.INCOME), function(d) {
+    return { date: formatDate(d[0]), amount: toFloat(d[1]) };
+  }).forEach(function(r) {
+    var i = idx[r.date.substring(0, 7)];
+    if (i !== undefined) months[i].income += r.amount;
+  });
+  months.forEach(function(mo) {
+    mo.expense = round2(mo.expense); mo.projectExpense = round2(mo.projectExpense); mo.income = round2(mo.income);
+    Object.keys(mo.byCat).forEach(function(c) { mo.byCat[c] = round2(mo.byCat[c]); });
+  });
+  return jsonResponse({ ok: true, months: months });
+}
+
+// ── CREDIT CARD STATEMENTS ───────────────────────────────────
+// The statement closes on StatementDay each month. Returns the last closed statement
+// (what the bank bills), payments made since it closed, and the current cycle so far.
+function ymd(y, m, d) { var dim = new Date(y, m, 0).getDate(); return y + "-" + pad2(m) + "-" + pad2(Math.min(d, dim)); }
+function shiftMonth(y, m, n) { m += n; while (m > 12) { m -= 12; y++; } while (m < 1) { m += 12; y--; } return [y, m]; }
+function dayAfter(s) {
+  var d = new Date(Date.UTC(parseInt(s.substring(0, 4)), parseInt(s.substring(5, 7)) - 1, parseInt(s.substring(8, 10)) + 1));
+  return d.toISOString().slice(0, 10);
+}
+function cardStatement(a, today, expRows, trfRows) {
+  var ty = parseInt(today.substring(0, 4)), tm = parseInt(today.substring(5, 7)), S = a.statementDay;
+  var lc = today > ymd(ty, tm, S) ? [ty, tm] : shiftMonth(ty, tm, -1);
+  var lastClose = ymd(lc[0], lc[1], S);
+  var pc = shiftMonth(lc[0], lc[1], -1), prevClose = ymd(pc[0], pc[1], S);
+  var nc = shiftMonth(lc[0], lc[1], 1),  nextClose = ymd(nc[0], nc[1], S);
+  var name = String(a.name || "").trim();
+  function spend(from, to) {
+    return round2(expRows.reduce(function(s, r) {
+      return (r.account === name && r.date > from && r.date <= to) ? s + amtForAccount(a, r.amount, r.orig, r.cur) : s;
+    }, 0));
+  }
+  var paid = round2(trfRows.reduce(function(s, r) {
+    return (r.to === name && r.date > lastClose && r.date <= today) ? s + (r.received || r.amount) : s;
+  }, 0));
+  var lastSpend = spend(prevClose, lastClose);
+  var due = "";
+  if (a.dueDay) {
+    due = ymd(lc[0], lc[1], a.dueDay);
+    if (due <= lastClose) { var dm = shiftMonth(lc[0], lc[1], 1); due = ymd(dm[0], dm[1], a.dueDay); }
+  }
+  return {
+    lastStart: dayAfter(prevClose), lastEnd: lastClose, lastSpend: lastSpend,
+    paidSince: paid, leftToPay: Math.max(0, round2(lastSpend - paid)), dueDate: due,
+    curStart: dayAfter(lastClose), curEnd: nextClose, curSpend: spend(lastClose, today)
+  };
+}
+
+// ── SEARCH (all months) ──────────────────────────────────────
+function searchTransactions(p) {
+  var q = cleanName(p.q).toLowerCase();
+  if (q.length < 2) return jsonResponse({ ok: true, transactions: [], total: 0 });
+  var out = [];
+  function hit(parts) { return parts.join(" ").toLowerCase().indexOf(q) >= 0; }
+  sheetToRows(getSheet(SHEET.EXPENSES), function(d, ri) {
+    return { rowIndex: ri, type: "expense", date: formatDate(d[0]), amount: toFloat(d[1]),
+      category: cleanName(d[2]), note: String(d[3] || ""), account: String(d[4] || ""),
+      isRecurring: toBool(d[5]), recurrencePeriod: d[6] || "", projectId: d[7] || "",
+      origAmount: toFloat(d[8]) || 0, currency: d[9] || "", id: String(d[10] || "") };
+  }).forEach(function(r) { if (hit([r.category, r.note, r.account, r.projectId, r.amount])) out.push(r); });
+  sheetToRows(getSheet(SHEET.INCOME), function(d, ri) {
+    return { rowIndex: ri, type: "income", date: formatDate(d[0]), amount: toFloat(d[1]),
+      category: cleanName(d[2]), note: String(d[3] || ""), account: String(d[4] || ""),
+      origAmount: toFloat(d[5]) || 0, currency: d[6] || "", id: String(d[7] || "") };
+  }).forEach(function(r) { if (hit([r.category, r.note, r.account, r.amount])) out.push(r); });
+  sheetToRows(getSheet(SHEET.TRANSFERS), function(d, ri) {
+    return { rowIndex: ri, type: "transfer", date: formatDate(d[0]), amount: toFloat(d[1]),
+      fromAccount: String(d[2] || ""), toAccount: String(d[3] || ""), note: String(d[4] || ""),
+      receivedAmount: toFloat(d[5]) || 0, id: String(d[6] || "") };
+  }).forEach(function(r) { if (hit([r.fromAccount, r.toAccount, r.note, r.amount])) out.push(r); });
+  out.sort(function(a, b) { return b.date.localeCompare(a.date); });
+  return jsonResponse({ ok: true, transactions: out.slice(0, 200), total: out.length });
+}
+
+// ── BACKUP ───────────────────────────────────────────────────
+// Run setupWeeklyBackup() once from the Apps Script editor (it asks for Drive permission).
+// Every Sunday ~3am a copy of this spreadsheet goes to "Money Tracker Backups" in your Drive;
+// the newest 12 copies are kept.
+var BACKUP_FOLDER = "Money Tracker Backups", BACKUP_KEEP = 12;
+function backupNow() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var it = DriveApp.getFoldersByName(BACKUP_FOLDER);
+  var folder = it.hasNext() ? it.next() : DriveApp.createFolder(BACKUP_FOLDER);
+  var name = ss.getName() + " - backup " + todayStr();
+  DriveApp.getFileById(ss.getId()).makeCopy(name, folder);
+  var files = [], fi = folder.getFiles();
+  while (fi.hasNext()) files.push(fi.next());
+  files.sort(function(a, b) { return b.getDateCreated() - a.getDateCreated(); });
+  files.slice(BACKUP_KEEP).forEach(function(f) { f.setTrashed(true); });
+  PropertiesService.getScriptProperties().setProperty("LAST_BACKUP", todayStr());
+  return name;
+}
+function setupWeeklyBackup() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === "backupNow") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("backupNow").timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(3).create();
+  PropertiesService.getScriptProperties().setProperty("BACKUP_WEEKLY", "sunday");
+  var name = backupNow();
+  Logger.log("Weekly backup is on. First backup made: " + name);
+}
+
+// ── ASSETS & INVESTMENTS ─────────────────────────────────────
+// A holding is anything you own that isn't cash: gold, stocks, funds, property, a car...
+// Buying/selling moves cash in/out of an account but is NOT an expense or income.
+// Fees are real expenses (saved to Expenses, category "Investment Fees");
+// dividends are income (saved to Income, category "Investment Returns").
+// Cost basis uses the average-cost method.
+var HOLDING_KINDS = { gold: "investment", stock: "investment", etf: "investment", fund: "investment",
+  crypto: "investment", bond: "investment", property: "asset", vehicle: "asset", electronics: "asset", other: "asset" };
+
+function holdingTxnRows() {
+  return sheetToRows(getSheet(SHEET.HOLDING_TXNS), function(d, ri) {
+    return { rowIndex: ri, id: String(d[0] || ""), holdingId: String(d[1] || ""), date: formatDate(d[2]),
+      type: String(d[3] || ""), quantity: toFloat(d[4]), price: toFloat(d[5]), amount: toFloat(d[6]),
+      fee: toFloat(d[7]), account: String(d[8] || "").trim(), note: String(d[9] || ""), linkedId: String(d[10] || "") };
+  });
+}
+
+function holdingsData() {
+  var txns = holdingTxnRows();
+  var holdings = sheetToRows(getSheet(SHEET.HOLDINGS), function(d, ri) {
+    var kind = String(d[2] || "other");
+    return { rowIndex: ri, id: String(d[0] || ""), name: String(d[1] || ""), kind: kind,
+      group: HOLDING_KINDS[kind] || "asset", symbol: String(d[3] || ""), unit: String(d[4] || ""),
+      currentPrice: toFloat(d[5]), priceDate: formatDate(d[6]), note: String(d[7] || ""),
+      status: String(d[8] || "active") };
+  });
+  var totals = { value: 0, cost: 0, unrealized: 0, realized: 0, dividends: 0, investments: 0, assets: 0 };
+  holdings.forEach(function(h) {
+    var mine = txns.filter(function(t){ return t.holdingId === h.id; })
+      .sort(function(a, b){ return a.date === b.date ? a.rowIndex - b.rowIndex : a.date.localeCompare(b.date); });
+    var qty = 0, cost = 0, realized = 0, dividends = 0, invested = 0, fees = 0, lastPrice = 0;
+    mine.forEach(function(t) {
+      fees += t.fee;
+      if (t.type === "buy") { qty += t.quantity; cost += t.amount; invested += t.amount; if (t.price) lastPrice = t.price; }
+      else if (t.type === "sell") {
+        var avg = qty > 0 ? cost / qty : 0, out = avg * t.quantity;
+        realized += t.amount - out; qty -= t.quantity; cost -= out;
+        if (qty < 1e-9) { qty = 0; cost = 0; }
+        if (t.price) lastPrice = t.price;
+      } else if (t.type === "dividend") dividends += t.amount;
+    });
+    var price = h.currentPrice || lastPrice;
+    h.quantity = Math.round(qty * 1e6) / 1e6;
+    h.cost = round2(cost);
+    h.avgCost = qty > 0 ? round2(cost / qty) : 0;
+    h.value = round2(price ? qty * price : cost);
+    h.priced = !!price;
+    h.unrealized = round2(h.value - h.cost);
+    h.realized = round2(realized); h.dividends = round2(dividends); h.invested = round2(invested); h.fees = round2(fees);
+    h.txns = mine.slice().reverse();
+    totals.value += h.value; totals.cost += h.cost; totals.unrealized += h.unrealized;
+    totals.realized += h.realized; totals.dividends += h.dividends;
+    totals[h.group === "investment" ? "investments" : "assets"] += h.value;
+  });
+  Object.keys(totals).forEach(function(k){ totals[k] = round2(totals[k]); });
+  return { ok: true, holdings: holdings, totals: totals };
+}
+
+function holdingFields(p) {
+  var kind = HOLDING_KINDS[p.kind] ? p.kind : "other";
+  return { name: String(p.name || "").trim(), kind: kind, symbol: String(p.symbol || "").trim().toUpperCase(),
+    unit: String(p.unit || "").trim(), price: toFloat(p.currentPrice), note: String(p.note || "") };
+}
+function addHolding(p) {
+  var f = holdingFields(p);
+  if (!f.name) return jsonResponse({ ok: false, error: "Name required" });
+  var sh = getSheet(SHEET.HOLDINGS), id = p.id || newId("H"), r = sh.getLastRow() + 1;
+  sh.getRange(r, 7).setNumberFormat("@");
+  sh.getRange(r, 1, 1, 9).setValues([[id, f.name, f.kind, f.symbol, f.unit, f.price || "", f.price ? todayStr() : "", f.note, "active"]]);
+  return jsonResponse({ ok: true, id: id });
+}
+function updateHolding(p) {
+  var row = resolveRow(SHEET.HOLDINGS, p);
+  if (!row) return staleResponse();
+  var sh = getSheet(SHEET.HOLDINGS), cur = sh.getRange(row, 1, 1, 9).getValues()[0];
+  var f = holdingFields(Object.assign({ name: cur[1], kind: cur[2], symbol: cur[3], unit: cur[4], currentPrice: cur[5], note: cur[7] }, p));
+  var priceChanged = p.currentPrice !== undefined && toFloat(p.currentPrice) !== toFloat(cur[5]);
+  sh.getRange(row, 7).setNumberFormat("@");
+  sh.getRange(row, 2, 1, 7).setValues([[f.name, f.kind, f.symbol, f.unit, f.price || "",
+    priceChanged ? (p.priceDate || todayStr()) : cur[6], f.note]]);
+  return jsonResponse({ ok: true });
+}
+function deleteLinkedRow(linkedId) {
+  if (!linkedId) return;
+  var name = linkedId.charAt(0) === "E" ? SHEET.EXPENSES : linkedId.charAt(0) === "I" ? SHEET.INCOME : null;
+  if (!name) return;
+  ensureRowIds(name);
+  var row = resolveRow(name, { id: linkedId });
+  if (row) getSheet(name).deleteRow(row);
+}
+function deleteHolding(p) {
+  var row = resolveRow(SHEET.HOLDINGS, p);
+  if (!row) return staleResponse();
+  var id = String(getSheet(SHEET.HOLDINGS).getRange(row, 1).getValue());
+  var tsh = getSheet(SHEET.HOLDING_TXNS);
+  holdingTxnRows().filter(function(t){ return t.holdingId === id; }).reverse().forEach(function(t) {
+    deleteLinkedRow(t.linkedId);
+    tsh.deleteRow(t.rowIndex);
+  });
+  getSheet(SHEET.HOLDINGS).deleteRow(row);
+  return jsonResponse({ ok: true });
+}
+function addHoldingTxn(p) {
+  var type = String(p.type || "");
+  if (["buy", "sell", "dividend"].indexOf(type) < 0) return jsonResponse({ ok: false, error: "Unknown type" });
+  if (p.id && idExists(SHEET.HOLDING_TXNS, p.id)) return jsonResponse({ ok: true, duplicate: true, id: p.id });
+  var holdingId = String(p.holdingId || "");
+  if (!holdingId) {                                   // first purchase creates the holding
+    if (type !== "buy") return jsonResponse({ ok: false, error: "Choose what you are selling" });
+    var hr = JSON.parse(addHolding(p.holding || {}).getContent());
+    if (!hr.ok) return jsonResponse(hr);
+    holdingId = hr.id;
+  }
+  var data = holdingsData(), h = null;
+  data.holdings.forEach(function(x){ if (x.id === holdingId) h = x; });
+  if (!h) return staleResponse();
+  var qty = toFloat(p.quantity), price = toFloat(p.price), amount = round2(toFloat(p.amount) || qty * price), fee = round2(toFloat(p.fee));
+  var date = p.date || todayStr(), account = String(p.account || "").trim();
+  if (amount <= 0) return jsonResponse({ ok: false, error: "Enter an amount" });
+  if (type !== "dividend" && qty <= 0) return jsonResponse({ ok: false, error: "Enter a quantity" });
+  if (type === "sell" && qty > h.quantity + 1e-9) return jsonResponse({ ok: false, error: "You only hold " + h.quantity + (h.unit ? " " + h.unit : "") });
+  // account may be empty for buy/sell = something you already owned (no cash moves)
+  if (!account && (type === "dividend" || fee > 0)) return jsonResponse({ ok: false, error: "Choose an account" });
+  var linked = "";
+  if (type === "dividend") {
+    linked = newId("I");
+    ensureRowIds(SHEET.INCOME);
+    getSheet(SHEET.INCOME).appendRow([date, amount, "Investment Returns", "Dividend · " + h.name + (p.note ? " · " + p.note : ""), account, "", "", linked]);
+    if (!categoryExists(SHEET.INCOME_CATS, "Investment Returns")) getSheet(SHEET.INCOME_CATS).appendRow(["Investment Returns"]);
+  } else if (fee > 0) {
+    linked = newId("E");
+    ensureRowIds(SHEET.EXPENSES);
+    getSheet(SHEET.EXPENSES).appendRow([date, fee, "Investment Fees", (type === "buy" ? "Buy fee · " : "Sell fee · ") + h.name, account,
+      "FALSE", "", "", "", "", linked]);
+    if (!categoryExists(SHEET.CATEGORIES, "Investment Fees")) getSheet(SHEET.CATEGORIES).appendRow(["Investment Fees"]);
+  }
+  var sh = getSheet(SHEET.HOLDING_TXNS), r = sh.getLastRow() + 1, id = p.id || newId("X");
+  sh.getRange(r, 3).setNumberFormat("@");
+  sh.getRange(r, 1, 1, 11).setValues([[id, holdingId, date, type, type === "dividend" ? "" : qty, price || "",
+    amount, type === "dividend" ? "" : (fee || ""), account, String(p.note || ""), linked]]);
+  // latest trade price becomes the current price, unless a newer price was set by hand
+  if (price && type !== "dividend" && (!h.priceDate || date >= h.priceDate)) {
+    var hs = getSheet(SHEET.HOLDINGS), hrow = resolveRow(SHEET.HOLDINGS, { id: holdingId });
+    hs.getRange(hrow, 7).setNumberFormat("@");
+    hs.getRange(hrow, 6, 1, 2).setValues([[price, date]]);
+  }
+  return jsonResponse({ ok: true, id: id, holdingId: holdingId });
+}
+function deleteHoldingTxn(p) {
+  var row = resolveRow(SHEET.HOLDING_TXNS, p);
+  if (!row) return staleResponse();
+  var sh = getSheet(SHEET.HOLDING_TXNS), d = sh.getRange(row, 1, 1, 11).getValues()[0];
+  if (String(d[3]) === "buy") {             // can't remove a buy that later sells depend on
+    var h = null; holdingsData().holdings.forEach(function(x){ if (x.id === String(d[1])) h = x; });
+    if (h && h.quantity + 1e-9 < toFloat(d[4])) return jsonResponse({ ok: false, error: "Delete the later sale first — you'd be holding less than zero" });
+  }
+  deleteLinkedRow(String(d[10] || ""));
+  sh.deleteRow(resolveRow(SHEET.HOLDING_TXNS, p));
+  return jsonResponse({ ok: true });
 }
