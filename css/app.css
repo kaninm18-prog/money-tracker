@@ -521,3 +521,26 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .annual-cat-pct { font-size:0.75rem; color:var(--text2); min-width:36px; text-align:right; }
 .annual-cat-amt { font-size:0.9rem; font-weight:700; min-width:80px; text-align:right; }
 .year-review-btn { background:var(--primary-light); border:none; border-radius:var(--radius-sm); color:var(--primary); font-size:0.88rem; font-weight:600; padding:12px 16px; width:100%; cursor:pointer; margin-bottom:12px; display:flex; align-items:center; justify-content:center; gap:8px; }
+
+/* ── Smart suggestions ── */
+.sug-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.sug-head { font-size:0.68rem; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:.06em; margin:0 2px 6px; }
+#chooser-sugg .sug-row { margin-bottom:14px; }
+.sug-chip { display:flex; align-items:center; gap:8px; text-align:left; border:1.5px solid var(--border); background:var(--surface2); border-radius:12px; padding:8px 10px; cursor:pointer; min-width:0; color:var(--text); }
+.sug-chip:active { transform:scale(.98); }
+.sug-ic { font-size:1.25rem; flex-shrink:0; }
+.sug-txt { display:flex; flex-direction:column; min-width:0; }
+.sug-txt b { font-size:0.8rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sug-txt small { font-size:0.68rem; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.note-sugg { display:block; width:100%; text-align:left; border:none; border-bottom:1px solid var(--border); background:var(--surface2); color:var(--text2); font-size:0.76rem; padding:8px 10px; cursor:pointer; }
+.note-sugg:first-child { border-radius:var(--radius-sm) var(--radius-sm) 0 0; margin-top:4px; }
+.note-sugg:last-child { border-bottom:none; border-radius:0 0 var(--radius-sm) var(--radius-sm); }
+.note-sugg:only-child { border-radius:var(--radius-sm); }
+.note-sugg b { color:var(--text); }
+.nudge { display:grid; grid-template-columns:30px 1fr; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
+.nudge:last-child { border-bottom:none; }
+.nudge-ic { font-size:1.2rem; text-align:center; padding-top:1px; }
+.nudge-text { font-size:0.82rem; color:var(--text); line-height:1.35; }
+.nudge-acts { display:flex; gap:6px; flex-wrap:wrap; margin-top:7px; }
+.nudge-btn { border:none; background:var(--primary); color:var(--on-surface-inv); font-size:0.74rem; font-weight:600; padding:5px 11px; border-radius:14px; cursor:pointer; }
+.nudge-btn.ghost { background:transparent; color:var(--text2); border:1.5px solid var(--border); }

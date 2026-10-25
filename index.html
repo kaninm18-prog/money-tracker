@@ -98,6 +98,16 @@
         </div>
       </div>
 
+      <div class="card" id="nudge-card" style="display:none">
+        <div class="card-title">Heads up</div>
+        <div id="nudge-list"></div>
+      </div>
+
+      <div class="card" id="sug-card" style="display:none">
+        <div class="card-title">Quick add <span class="trend-sub">what you usually log about now</span></div>
+        <div class="sug-row" id="sug-chips"></div>
+      </div>
+
       <div class="card" id="upcoming-card" style="display:none">
         <div class="card-title">Upcoming Bills <span class="trend-sub" id="upcoming-total"></span></div>
         <div id="upcoming-list"></div>
@@ -220,6 +230,7 @@
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title">What do you want to add?</div>
+    <div id="chooser-sugg"></div>
     <div class="type-chooser" style="grid-template-columns:1fr 1fr">
       <button class="type-choice expense-choice"  onclick="openExpenseForm()"><span class="tc-icon">💸</span>Expense</button>
       <button class="type-choice income-choice"   onclick="openIncomeForm()"><span class="tc-icon">💰</span>Income</button>
@@ -252,7 +263,8 @@
     </div>
     <div class="form-group">
       <label class="form-label">Note (optional)</label>
-      <input type="text" class="form-control" id="fe-note" placeholder="What was this for?">
+      <input type="text" class="form-control" id="fe-note" placeholder="What was this for?" oninput="onNoteInput()" autocomplete="off">
+      <div id="fe-note-sugg"></div>
     </div>
     <div class="form-group">
       <label class="form-label">Date</label>
@@ -858,5 +870,6 @@
 <script src="js/settings.js"></script>
 <script src="js/projects.js"></script>
 <script src="js/reports.js"></script>
+<script src="js/suggest.js"></script>
 </body>
 </html>

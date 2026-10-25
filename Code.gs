@@ -2,7 +2,7 @@
 //  Money Tracker — Google Apps Script Backend v6
 //
 //  Sheets:
-//    Expenses         → Date | Amount(THB) | Category | Note | Account | IsRecurring | RecurrencePeriod | ProjectId | OrigAmount | Currency | Id
+//    Expenses         → Date | Amount(THB) | Category | Note | Account | IsRecurring | RecurrencePeriod | ProjectId | OrigAmount | Currency | Id | CreatedAt (ms)
 //    Income           → Date | Amount(THB) | Category | Note | Account | OrigAmount | Currency | Id
 //    Transfers        → Date | Amount (in From currency) | FromAccount | ToAccount | Note | ReceivedAmount (in To currency, optional) | Id
 //    Accounts         → Name | Type | StartingBalance | CreditLimit | DueDay | StatementDay | Currency | Rate (THB per 1 unit)
@@ -51,7 +51,7 @@ function getSheet(name) {
     sh = ss.insertSheet(name);
     switch (name) {
       case SHEET.EXPENSES:
-        sh.appendRow(["Date","Amount","Category","Note","Account","IsRecurring","RecurrencePeriod","ProjectId","OrigAmount","Currency","Id"]);
+        sh.appendRow(["Date","Amount","Category","Note","Account","IsRecurring","RecurrencePeriod","ProjectId","OrigAmount","Currency","Id","CreatedAt"]);
         break;
       case SHEET.INCOME:
         sh.appendRow(["Date","Amount","Category","Note","Account","OrigAmount","Currency","Id"]);
@@ -454,6 +454,7 @@ function bootstrap(p) {
   var bud  = run(function(){ return getBudgets(p); });
   var rcr  = run(getRecurring);
   var trd  = run(function(){ return getTrends(p); });
+  var hist = expenseHistory(180);
   var hld  = holdingsData();
   var live = { accounts: acc.totalBalance || 0, investments: hld.totals.investments, assets: hld.totals.assets };
   var nwh  = netWorthHistory(live);
@@ -464,7 +465,7 @@ function bootstrap(p) {
     ok: true,
     accounts: acc, categories: exp, incomeCategories: inc, transactions: txn,
     projects: prj, receivables: rec, installmentPlans: ins, budgets: bud, recurringExpenses: rcr,
-    trends: trd, holdings: hld, netWorth: nwh, checked: !!p.runChecks, generated: generated,
+    trends: trd, holdings: hld, netWorth: nwh, history: hist, checked: !!p.runChecks, generated: generated,
     prices: { last: props.getProperty("LAST_PRICE_REFRESH") || "", daily: !!props.getProperty("PRICES_DAILY") },
     backup: { last: props.getProperty("LAST_BACKUP") || "", weekly: !!props.getProperty("BACKUP_WEEKLY") }
   });
@@ -592,9 +593,11 @@ function addExpense(p) {
     p.recurrencePeriod || "",
     p.projectId || "",
     fx0[0], fx0[1],
-    String(p.id || newId("E"))
+    String(p.id || newId("E")),
+    toFloat(p.createdAt) || Date.now()          // when it was logged (ms) — used to learn your habits by time of day
   ]);
   if (fx0[0]) ensureHeaders(sh, 9, ["OrigAmount", "Currency"]);
+  ensureHeaders(sh, 12, ["CreatedAt"]);
   return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
 }
 
@@ -1877,4 +1880,21 @@ function saveNetWorthSnapshot(v) {
   sh.getRange(row, 1, 1, 2).setNumberFormat("@");
   sh.getRange(row, 1, 1, 6).setValues([[ym, todayStr(), round2(v.accounts), round2(v.investments), round2(v.assets),
     round2(v.accounts + v.investments + v.assets)]]);
+}
+
+// ── HISTORY FOR SMART SUGGESTIONS ────────────────────────────
+// Compact list of recent expenses the app learns your habits from (all on your device):
+// [date, amount, category, note, account, isRecurring, projectId, createdAtMs]
+function expenseHistory(days) {
+  var from = addMonths(todayStr(), -Math.ceil(days / 30));
+  var rows = [];
+  sheetToRows(getSheet(SHEET.EXPENSES), function(d) { return d; }).forEach(function(d) {
+    var date = formatDate(d[0]);
+    if (!date || date < from) return;
+    var c = d[11];
+    var created = typeof c === "number" ? c : (c && c.getTime ? c.getTime() : 0);
+    rows.push([date, toFloat(d[1]), cleanName(d[2]), String(d[3] || ""), String(d[4] || "").trim(),
+      toBool(d[5]) ? 1 : 0, String(d[7] || ""), created]);
+  });
+  return { ok: true, from: from, rows: rows };
 }

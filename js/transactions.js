@@ -157,7 +157,7 @@ function txnHtml(t) {
 // ════════════════════════════════════════════
 //  ADD / EDIT EXPENSE
 // ════════════════════════════════════════════
-function openAddChooser() { closeModal('chooser-modal'); openModal('chooser-modal'); }
+function openAddChooser() { closeModal('chooser-modal'); renderSuggestions(); openModal('chooser-modal'); }
 
 function openExpenseForm(rowIndex) {
   closeModal('chooser-modal');
@@ -193,6 +193,8 @@ function openExpenseForm(rowIndex) {
     renderAcctList('fe-acct-list', null);
   }
   fxUpdate('fe');
+  document.getElementById('fe-note-sugg').innerHTML = '';
+  amountHint();
   openModal('expense-modal');
   setTimeout(function(){ document.getElementById('fe-amount').focus(); }, 300);
 }
@@ -213,6 +215,10 @@ function saveExpense() {
   var projectId = document.getElementById('fe-project').value;
   var payload   = Object.assign({ category:cat, account:acct, note, date,
     isRecurring: recurring, recurrencePeriod: recurring ? recPeriod : '', projectId: projectId }, fxPayload(amount, acct));
+  if (!editingExpenseRow) {
+    if (!unusualAmountCheck(payload.amount, cat)) return;   // e.g. 4500 typed instead of 45
+    payload.createdAt = Date.now();                         // lets suggestions learn when you usually log this
+  }
   submitTxn('expense', payload, editingExpenseRow, 'expense-modal', 'save-expense-btn', ['Save Expense', 'Update Expense'], 'Expense added!',
     recurring && !editingExpenseRow ? function(){ createRepeatFrom(payload, recPeriod); } : null);
 }

@@ -200,6 +200,7 @@ function renderDashboard() {
     '<div class="empty"><div class="empty-icon">📭</div><p>No activity this month</p></div>';
   document.getElementById('recent-list').innerHTML = rhtml;
   renderTrend();
+  renderSmart();
   var yrEl = document.getElementById('year-review-yr');
   if (yrEl) yrEl.textContent = viewYear;
 }

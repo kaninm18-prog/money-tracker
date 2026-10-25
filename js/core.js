@@ -403,6 +403,7 @@ function applyData(d) {
   if (d.recurringExpenses && d.recurringExpenses.ok) { recurringExpenses=d.recurringExpenses.recurring||[]; }
   if (d.trends && d.trends.ok) { trends=d.trends.months||[]; }
   if (d.backup) { backupInfo = d.backup; }
+  if (d.history && d.history.ok) { setHistory(d.history); }
   if (d.netWorth && d.netWorth.ok) { netWorthHist = d.netWorth.months || []; }
   if (d.prices) { priceInfo = d.prices; }
   if (d.holdings && d.holdings.ok) { holdings = d.holdings.holdings || []; holdingTotals = d.holdings.totals || holdingTotals; }
@@ -548,6 +549,7 @@ function renderCatGrid(gridId, cats, selected) {
 function selectCat(el) {
   el.closest('.cat-grid').querySelectorAll('.cat-option').forEach(function(x){x.classList.remove('selected');});
   el.classList.add('selected');
+  if (el.closest('.cat-grid').id === 'fe-cat-grid') amountHint();
 }
 
 function getSelectedCat(gridId) {
@@ -569,7 +571,7 @@ function selectAcct(el) {
   el.closest('.acct-list').querySelectorAll('.acct-option').forEach(function(x){x.classList.remove('selected');});
   el.classList.add('selected');
   var lid = el.closest('.acct-list').id;
-  if (lid === 'fe-acct-list') fxUpdate('fe'); else if (lid === 'fi-acct-list') fxUpdate('fi');
+  if (lid === 'fe-acct-list') { fxUpdate('fe'); amountHint(); } else if (lid === 'fi-acct-list') fxUpdate('fi');
 }
 
 function getSelectedAcct(listId) {

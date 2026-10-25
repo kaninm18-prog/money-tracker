@@ -281,6 +281,21 @@ CategoryBudgets:  Category | MonthlyLimit | AlertThreshold | IsActive | AppliesT
 
 ---
 
+## Session 12 — Smart Suggestions (pattern engine)
+
+New `js/suggest.js`. Learns from the last ~6 months of your own expenses, entirely on the device (no AI service, nothing sent anywhere). Ignores automatic recurring rows, installments, investment fees and project/trip spending.
+
+- **Quick add** (dashboard + top of the + menu): up to 4 one-tap suggestions for *right now* — scored by how often and how recently you log something, weighted by weekday and time of day. Tapping opens the expense form pre-filled with your usual amount, category, account and note. Things already logged today drop off.
+- **Note autocomplete**: typing in the note box offers your matching habits ("mak" → Makro · Food & Dining · Krungsri · ~฿1,600).
+- **Usual amount hint**: picking a category + account shows "usually 135" in the amount box.
+- **Unusual amount check**: saving an amount far above your normal for that category asks first (catches 1350 vs 135).
+- **Heads up** (dashboard): a monthly bill not logged yet this month; a fixed monthly charge you enter by hand → "Make it automatic?" (opens the recurring form pre-filled); a daily habit not logged yet today (only on weekdays you normally do it). Each can be dismissed.
+- Backend: Expenses get a `CreatedAt` column (time it was logged) to learn time of day; `bootstrap` returns `history` (last ~6 months of expenses).
+
+**Deploy:** paste `Code.gs` → Manage deployments → New version. Push `index.html`, `sw.js`, `css/app.css`, `js/`.
+
+---
+
 ## Features Deferred (from logic doc)
 
 These were reviewed and confirmed non-conflicting — ready to implement in a future session:
@@ -317,7 +332,7 @@ expense_app/
 ├── index.html                        ← Page markup
 ├── css/app.css                       ← Styles (light + dark)
 ├── js/                               ← App scripts: core, dashboard, transactions, accounts,
-│                                        holdings, settings, projects, reports (load order)
+│                                        holdings, settings, projects, reports, suggest (load order)
 ├── Code.gs                           ← Google Apps Script backend
 ├── manifest.json                     ← PWA manifest
 ├── sw.js                             ← Service worker (offline support)
