@@ -296,6 +296,17 @@ New `js/suggest.js`. Learns from the last ~6 months of your own expenses, entire
 
 ---
 
+## Session 13 — Shortcuts, Budget Alerts, Balance Check, Receivables in Net Worth
+
+- **Home-screen shortcuts** — long-press the app icon (Android/Chrome): Add expense, Quick add, Add income (`manifest.json` shortcuts → `index.html?add=…`). iPhone doesn't support web-app shortcuts.
+- **Budget alert on save** — saving an expense that takes its category past the alert level (default 80%) or over the limit shows a warning with what's left / how much over.
+- **Balance check** — "⚖️ Check balance" on every account: type what your bank app shows (or amount owed for a card); the difference is saved as a transfer to/from the pseudo-account "Balance adjustment", so the balance is corrected without counting as income or spending. Last check date shown on the card (per device).
+- **Receivables in net worth** — money still owed to you counts as an asset (lending money no longer lowers net worth). `NetWorthHistory` gets a `Receivables` column; earlier months are rebuilt with what was outstanding then.
+
+**Deploy:** paste `Code.gs` → Manage deployments → New version. Push `index.html`, `manifest.json`, `sw.js`, `css/app.css`, `js/`.
+
+---
+
 ## Features Deferred (from logic doc)
 
 These were reviewed and confirmed non-conflicting — ready to implement in a future session:

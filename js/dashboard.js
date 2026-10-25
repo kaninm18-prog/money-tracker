@@ -124,7 +124,11 @@ function computeBalance() {
     return accounts.filter(function(a){return a.type==='cash'||a.type==='bank';}).reduce(function(s,a){return s+acctThb(a);},0);
   }
   if (mode === 'portfolio') return holdingTotals.investments || 0;
-  return totalBalance + (holdingTotals.value || 0); // net worth = accounts + assets & investments
+  return totalBalance + (holdingTotals.value || 0) + receivablesOwed(); // net worth = accounts + holdings + owed to you
+}
+// Money people still owe you (pending advances / reimbursements) — it's yours, so it counts in net worth
+function receivablesOwed() {
+  return receivables.reduce(function(s, r){ return s + (r.status === 'pending' ? (r.left !== undefined ? r.left : r.amount) : 0); }, 0);
 }
 
 function cycleBalanceMode() {

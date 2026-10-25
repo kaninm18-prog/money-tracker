@@ -550,6 +550,25 @@
   </div>
 </div>
 
+<!-- ══ Balance check ══ -->
+<div class="modal-overlay" id="balcheck-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="bc-title">Check balance</div>
+    <div class="balance-mode-desc" id="bc-app" style="margin-bottom:12px"></div>
+    <div class="form-group">
+      <label class="form-label" id="bc-label">Balance in your bank app</label>
+      <input type="number" class="form-control" id="bc-actual" inputmode="decimal" step="0.01" oninput="balCheckPreview()">
+    </div>
+    <div class="fx-hint" id="bc-diff" style="display:block;margin:-4px 0 12px;line-height:1.45"></div>
+    <div class="form-group"><label class="form-label">Note (optional)</label>
+      <input type="text" class="form-control" id="bc-note" placeholder="e.g. bank fee, forgot cash spending"></div>
+    <button class="btn btn-primary" id="bc-save" onclick="saveBalanceCheck()">Save</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('balcheck-modal')">Cancel</button>
+  </div>
+</div>
+
 <!-- ══ Category icon picker ══ -->
 <div class="modal-overlay" id="icon-modal" style="z-index:1200">
   <div class="modal">

@@ -52,7 +52,7 @@ if (window.matchMedia) {
 }
 document.addEventListener('DOMContentLoaded', applyTheme);
 var BALANCE_MODES = {
-  net_worth:       { label: 'Net Worth',       sub: 'accounts + assets & investments − debts' },
+  net_worth:       { label: 'Net Worth',       sub: 'accounts + investments + owed to you − debts' },
   monthly_balance: { label: 'Monthly Balance', sub: 'income minus expenses this month' },
   available_cash:  { label: 'Available Cash',  sub: 'cash & bank accounts only' },
   portfolio:       { label: 'Investments',     sub: 'current value of gold, stocks, funds…' }
@@ -181,6 +181,20 @@ function pad(n) { return n<10?'0'+n:''+n; }
 // ════════════════════════════════════════════
 //  INIT
 // ════════════════════════════════════════════
+// Home-screen shortcut (long-press the app icon): index.html?add=expense | quick | income
+var LAUNCH_ACTION = null;
+try { LAUNCH_ACTION = new URLSearchParams(location.search).get('add'); } catch(e) {}
+function runLaunchAction() {
+  if (!LAUNCH_ACTION || !accounts.length) return;
+  var a = LAUNCH_ACTION; LAUNCH_ACTION = null;
+  try { history.replaceState(null, '', location.pathname); } catch(e) {}
+  setTimeout(function() {
+    if (a === 'expense') openExpenseForm();
+    else if (a === 'income') openIncomeForm();
+    else if (a === 'quick') openAddChooser();
+  }, 150);
+}
+
 window.addEventListener('DOMContentLoaded', function() {
   if (!SCRIPT_URL) {
     show('setup-screen');
@@ -408,6 +422,7 @@ function applyData(d) {
   if (d.prices) { priceInfo = d.prices; }
   if (d.holdings && d.holdings.ok) { holdings = d.holdings.holdings || []; holdingTotals = d.holdings.totals || holdingTotals; }
   renderAll();
+  runLaunchAction();
 }
 
 function saveCache(d) {
@@ -595,11 +610,11 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 //  TOAST
 // ════════════════════════════════════════════
 var toastTimer;
-function toast(msg) {
+function toast(msg, ms) {
   var el = document.getElementById('toast');
   el.textContent = msg; el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(function(){ el.classList.remove('show'); }, 2500);
+  toastTimer = setTimeout(function(){ el.classList.remove('show'); }, ms || 2500);
 }
 
 // ════════════════════════════════════════════

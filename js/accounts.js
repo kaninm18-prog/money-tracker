@@ -72,7 +72,7 @@ function renderNwReadout(i) {
     return '<span class="' + (dv > 0.5 ? 'tr-down' : dv < -0.5 ? 'tr-up' : '') + '">' + (dv >= 0 ? '▲ ' : '▼ ') + fmtMoney(Math.abs(dv)) + '</span> ' + txt; };
   document.getElementById('nw-readout').innerHTML =
     '<div><div class="tr-month">' + label + '</div><div class="tr-val">' + fmtMoney(m.netWorth) + '</div>' +
-    '<div class="tr-month" style="margin-top:2px">Accounts ' + fmtMoney(m.accounts) + ' · Investments ' + fmtMoney(m.investments) + (m.assets ? ' · Assets ' + fmtMoney(m.assets) : '') + '</div></div>' +
+    '<div class="tr-month" style="margin-top:2px">Accounts ' + fmtMoney(m.accounts) + ' · Investments ' + fmtMoney(m.investments) + (m.assets ? ' · Assets ' + fmtMoney(m.assets) : '') + (m.receivables ? ' · Owed to you ' + fmtMoney(m.receivables) : '') + '</div></div>' +
     '<div class="tr-cmp">' + [cmp(prev, 'vs last month'), cmp(yr, 'vs a year ago')].filter(Boolean).join('<br>') + '</div>';
 }
 
@@ -137,6 +137,7 @@ function renderAccountsPage() {
               (a.statementDay ? '<div class="acc-page-credit-row"><span>Statement Date</span><span>'+a.statementDay+(a.statementDay===1?'st':a.statementDay===2?'nd':a.statementDay===3?'rd':'th')+' of each month</span></div>' : '') +
               statementHtml(a) +
             '</div>' +
+            balCheckRow(a) +
             (accountsEditMode ? '<div class="acc-page-actions">' +
               '<button class="acc-edit-btn" onclick="openEditAccount('+a.rowIndex+')">✏️ Edit</button>' +
               '<button class="acc-del-btn"  onclick="deleteAccount('+a.rowIndex+',\''+escQ(a.name)+'\')">🗑️ Delete</button>' +
@@ -150,6 +151,7 @@ function renderAccountsPage() {
               '<div class="acc-page-info"><div class="acc-page-name">'+a.name+'</div><div class="acc-page-type">'+typeLabel(a.type)+(a.currency && a.currency !== 'THB' ? ' · '+a.currency+' @ ฿'+a.rate : '')+'</div></div>' +
               '<div class="acc-page-balance'+neg+'">'+fmtCur(a.balance, a.currency)+(a.currency && a.currency !== 'THB' ? '<div style="font-size:0.7rem;font-weight:500;color:var(--text2)">≈ '+fmtMoney(a.balanceThb)+'</div>' : '')+'</div>' +
             '</div>' +
+            balCheckRow(a) +
             (accountsEditMode ? '<div class="acc-page-actions">' +
               '<button class="acc-edit-btn" onclick="openEditAccount('+a.rowIndex+')">✏️ Edit</button>' +
               '<button class="acc-del-btn"  onclick="deleteAccount('+a.rowIndex+',\''+escQ(a.name)+'\')">🗑️ Delete</button>' +
@@ -255,3 +257,71 @@ function deleteAccount(rowIndex, name) {
   });
 }
 
+
+// ════════════════════════════════════════════
+//  BALANCE CHECK — compare with what your bank app shows
+//  The difference is saved as a transfer to/from "Balance adjustment", so the account becomes
+//  correct without counting as income or spending.
+// ════════════════════════════════════════════
+var ADJ_ACCOUNT = 'Balance adjustment';
+var balCheckAcct = null;
+function balCheckedKey(name) { return 'balChecked_' + name; }
+function lastBalCheck(name) { try { return localStorage.getItem(balCheckedKey(name)) || ''; } catch(e) { return ''; } }
+function balCheckRow(a) {
+  var last = lastBalCheck(a.name);
+  var age = last ? daysBetween(last, todayStr()) : null;
+  var txt = last ? 'Checked ' + (age === 0 ? 'today' : age === 1 ? 'yesterday' : fmtDate(last)) + ' ✓' : 'Not checked against your bank yet';
+  return '<div class="bal-check-row"><span class="' + (last && age <= 31 ? 'ok' : '') + '">' + txt + '</span>' +
+    '<button onclick="openBalanceCheck(' + a.rowIndex + ')">⚖️ Check balance</button></div>';
+}
+function openBalanceCheck(rowIndex) {
+  var a = accounts.find(function(x){ return x.rowIndex === rowIndex; });
+  if (!a) return;
+  balCheckAcct = a;
+  var credit = a.type === 'credit';
+  document.getElementById('bc-title').textContent = 'Check ' + a.name;
+  document.getElementById('bc-app').innerHTML = 'The app shows <b>' + (credit ? fmtMoney(ccOwed(a)) + ' owed' : fmtCur(a.balance, a.currency)) + '</b>';
+  document.getElementById('bc-label').textContent = credit ? 'Amount owed in your bank / card app' : 'Balance in your bank app' + (a.currency && a.currency !== 'THB' ? ' (' + a.currency + ')' : '');
+  document.getElementById('bc-actual').value = '';
+  document.getElementById('bc-note').value = '';
+  document.getElementById('bc-diff').innerHTML = '';
+  document.getElementById('bc-save').textContent = 'Save';
+  openModal('balcheck-modal');
+  setTimeout(function(){ document.getElementById('bc-actual').focus(); }, 300);
+}
+function balDiff() {
+  var a = balCheckAcct, v = parseFloat(document.getElementById('bc-actual').value);
+  if (!a || isNaN(v)) return null;
+  var actual = a.type === 'credit' ? -Math.abs(v) : v;
+  return Math.round((actual - a.balance) * 100) / 100;
+}
+function balCheckPreview() {
+  var d = balDiff(), el = document.getElementById('bc-diff'), btn = document.getElementById('bc-save');
+  if (d === null) { el.innerHTML = ''; btn.textContent = 'Save'; return; }
+  var a = balCheckAcct, cur = a.currency || 'THB';
+  if (Math.abs(d) < 0.005) { el.innerHTML = '<span class="pl-pos">✓ Matches — nothing to fix</span>'; btn.textContent = 'Mark as checked'; return; }
+  var more = a.type === 'credit' ? (d < 0 ? 'You owe ' + fmtCur(-d, cur) + ' more than the app shows' : 'You owe ' + fmtCur(d, cur) + ' less than the app shows')
+                                 : (d > 0 ? 'Your bank has ' + fmtCur(d, cur) + ' more than the app' : 'Your bank has ' + fmtCur(-d, cur) + ' less than the app');
+  el.innerHTML = more + '.<br><span class="hold-sub">Saving adds a balance adjustment of ' + (d > 0 ? '+' : '−') + fmtCur(Math.abs(d), cur) +
+    ' (not counted as income or spending). If you can, find and add the missing entry instead.</span>';
+  btn.textContent = 'Save adjustment';
+}
+function saveBalanceCheck() {
+  var a = balCheckAcct, d = balDiff();
+  if (!a || d === null) { toast('Enter the balance from your bank app'); return; }
+  var done = function(msg) {
+    try { localStorage.setItem(balCheckedKey(a.name), todayStr()); } catch(e) {}
+    closeModal('balcheck-modal'); toast(msg);
+  };
+  if (Math.abs(d) < 0.005) { done('✓ ' + a.name + ' matches your bank'); renderAccountsPage(); return; }
+  var note = document.getElementById('bc-note').value.trim() || 'Balance check';
+  var payload = d > 0 ? { action: 'addTransfer', fromAccount: ADJ_ACCOUNT, toAccount: a.name, amount: Math.abs(d), date: todayStr(), note: note }
+                      : { action: 'addTransfer', fromAccount: a.name, toAccount: ADJ_ACCOUNT, amount: Math.abs(d), date: todayStr(), note: note };
+  var btn = document.getElementById('bc-save'); btn.textContent = 'Saving…';
+  api(payload).then(function(res) {
+    btn.textContent = 'Save adjustment';
+    if (res.ok && res.queued) { done('Saved on this device — will sync when online'); refreshPending(); }
+    else if (res.ok) { done('Adjusted ' + a.name + ' by ' + (d > 0 ? '+' : '−') + fmtCur(Math.abs(d), a.currency)); loadAll(); }
+    else toast('Error: ' + (res.error || '?'));
+  }).catch(function(){ btn.textContent = 'Save adjustment'; toast('Connection error'); });
+}

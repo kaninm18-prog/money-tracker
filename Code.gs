@@ -16,7 +16,7 @@
 //    RecurringExpenses→ Description | Amount | Category | Account | DayOfMonth | StartDate | Status | LastGenerated | ProjectId | Frequency | MonthOfYear
 //    Holdings         → Id | Name | Kind | Symbol | Unit | CurrentPrice (THB/unit) | PriceDate | Note | Status
 //    HoldingTxns      → Id | HoldingId | Date | Type (buy/sell/dividend) | Quantity | Price | Amount (THB) | Fee | Account | Note | LinkedId
-//    NetWorthHistory  → Month (yyyy-MM) | Date | Accounts | Investments | Assets | NetWorth   (one snapshot per month, latest wins)
+//    NetWorthHistory  → Month (yyyy-MM) | Date | Accounts | Investments | Assets | NetWorth | Receivables  (one snapshot per month, latest wins)
 //    _Prices          → scratch sheet (hidden) where GOOGLEFINANCE formulas are evaluated
 // ============================================================
 
@@ -101,7 +101,7 @@ function getSheet(name) {
         sh.getRange(2, 3, 998, 1).setNumberFormat("@");
         break;
       case SHEET.NETWORTH:
-        sh.appendRow(["Month","Date","Accounts","Investments","Assets","NetWorth"]);
+        sh.appendRow(["Month","Date","Accounts","Investments","Assets","NetWorth","Receivables"]);
         sh.getRange(2, 1, 998, 2).setNumberFormat("@");
         break;
       case SHEET.PRICES:
@@ -456,7 +456,7 @@ function bootstrap(p) {
   var trd  = run(function(){ return getTrends(p); });
   var hist = expenseHistory(180);
   var hld  = holdingsData();
-  var live = { accounts: acc.totalBalance || 0, investments: hld.totals.investments, assets: hld.totals.assets };
+  var live = { accounts: acc.totalBalance || 0, investments: hld.totals.investments, assets: hld.totals.assets, receivables: receivablesAt("") };
   var nwh  = netWorthHistory(live);
   } finally { _readCache = null; }
   saveNetWorthSnapshot(live);
@@ -1795,7 +1795,7 @@ function dailyRefresh() {
   try {
     refreshPrices();
     var acc = JSON.parse(getAccounts().getContent()), hld = holdingsData();
-    saveNetWorthSnapshot({ accounts: acc.totalBalance || 0, investments: hld.totals.investments, assets: hld.totals.assets });
+    saveNetWorthSnapshot({ accounts: acc.totalBalance || 0, investments: hld.totals.investments, assets: hld.totals.assets, receivables: receivablesAt("") });
   } finally { lock.releaseLock(); }
 }
 
@@ -1836,10 +1836,22 @@ function holdingsAt(asOf) {                         // value at cost of what you
   Object.keys(byId).forEach(function(id){ r[kinds[id] === "investment" ? "investments" : "assets"] += byId[id].cost; });
   return r;
 }
+// Money people still owe you (advances, work expenses to be reimbursed) — counted in net worth.
+// asOf "" = now; otherwise what was outstanding on that date.
+function receivablesAt(asOf) {
+  var tot = 0;
+  loadReceivables().forEach(function(r) {
+    if (!asOf) { if (r.status === "pending") tot += r.left; return; }
+    if (!(r.status === "pending" || r.repayments.length) || !r.date || r.date > asOf) return;
+    var back = r.repayments.reduce(function(s, rp){ return s + (rp.date && rp.date <= asOf ? rp.amount : 0); }, 0);
+    tot += Math.max(0, r.amount - back);
+  });
+  return round2(tot);
+}
 function netWorthHistory(live) {
   var thisMonth = todayStr().substring(0, 7);
   var saved = {};
-  sheetToRows(getSheet(SHEET.NETWORTH), function(d){ return { month: String(d[0]).substring(0, 7), accounts: toFloat(d[2]), investments: toFloat(d[3]), assets: toFloat(d[4]) }; })
+  sheetToRows(getSheet(SHEET.NETWORTH), function(d){ return { month: String(d[0]).substring(0, 7), accounts: toFloat(d[2]), investments: toFloat(d[3]), assets: toFloat(d[4]), receivables: toFloat(d[6]) }; })
     .forEach(function(r){ if (/^\d{4}-\d{2}$/.test(r.month)) saved[r.month] = r; });
   // first month with any data
   var first = thisMonth;
@@ -1856,16 +1868,17 @@ function netWorthHistory(live) {
   }
   var out = months.map(function(ym) {
     var row;
-    if (ym === thisMonth && live) row = { accounts: live.accounts, investments: live.investments, assets: live.assets, estimated: false, live: true };
-    else if (saved[ym]) row = { accounts: saved[ym].accounts, investments: saved[ym].investments, assets: saved[ym].assets, estimated: false };
+    if (ym === thisMonth && live) row = { accounts: live.accounts, investments: live.investments, assets: live.assets, receivables: live.receivables || 0, estimated: false, live: true };
+    else if (saved[ym]) row = { accounts: saved[ym].accounts, investments: saved[ym].investments, assets: saved[ym].assets, receivables: saved[ym].receivables || 0, estimated: false };
     else {
       var end = monthEnd(ym), ab = accountBalances(end).accounts, h = holdingsAt(end);
       var tot = ab.reduce(function(s, a){ return s + a.balance * a.rate; }, 0);
-      row = { accounts: tot, investments: h.investments, assets: h.assets, estimated: true };
+      row = { accounts: tot, investments: h.investments, assets: h.assets, receivables: receivablesAt(end), estimated: true };
     }
     row.month = ym;
     row.accounts = round2(row.accounts); row.investments = round2(row.investments); row.assets = round2(row.assets);
-    row.netWorth = round2(row.accounts + row.investments + row.assets);
+    row.receivables = round2(row.receivables || 0);
+    row.netWorth = round2(row.accounts + row.investments + row.assets + row.receivables);
     return row;
   });
   return { ok: true, months: out };
@@ -1878,8 +1891,10 @@ function saveNetWorthSnapshot(v) {
   }
   if (!row) row = last + 1;
   sh.getRange(row, 1, 1, 2).setNumberFormat("@");
-  sh.getRange(row, 1, 1, 6).setValues([[ym, todayStr(), round2(v.accounts), round2(v.investments), round2(v.assets),
-    round2(v.accounts + v.investments + v.assets)]]);
+  ensureHeaders(sh, 7, ["Receivables"]);
+  var rc = round2(v.receivables || 0);
+  sh.getRange(row, 1, 1, 7).setValues([[ym, todayStr(), round2(v.accounts), round2(v.investments), round2(v.assets),
+    round2(v.accounts + v.investments + v.assets + rc), rc]]);
 }
 
 // ── HISTORY FOR SMART SUGGESTIONS ────────────────────────────

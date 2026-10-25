@@ -132,6 +132,11 @@ function txnHtml(t) {
     icon = '🤝'; label = 'Repayment received';
     sublabel = (t.counterparty || '—') + (t.note ? ' · '+t.note : '') + (t.account ? ' · '+t.account : '');
     amountStr = '+'+fmtMoney(t.amount); amountClass = 'income';
+  } else if (t.fromAccount === ADJ_ACCOUNT || t.toAccount === ADJ_ACCOUNT) {
+    var up = t.fromAccount === ADJ_ACCOUNT, acc = up ? t.toAccount : t.fromAccount;
+    icon = '⚖️'; label = 'Balance adjustment';
+    sublabel = recEsc(acc) + (t.note ? ' · ' + recEsc(t.note) : '');
+    amountStr = (up ? '+' : '−') + fmtCur(t.amount, curOf(acc)); amountClass = 'transfer';
   } else {
     icon = '↔️'; label = 'Transfer';
     var fcur = curOf(t.fromAccount), tcur = curOf(t.toAccount);
@@ -215,8 +220,10 @@ function saveExpense() {
   var projectId = document.getElementById('fe-project').value;
   var payload   = Object.assign({ category:cat, account:acct, note, date,
     isRecurring: recurring, recurrencePeriod: recurring ? recPeriod : '', projectId: projectId }, fxPayload(amount, acct));
+  var prevT = editingExpenseRow ? findTxn('expense', editingExpenseRow) : null;
+  pendingBudgetAlert = budgetAlertFor(payload, prevT);
   if (!editingExpenseRow) {
-    if (!unusualAmountCheck(payload.amount, cat)) return;   // e.g. 4500 typed instead of 45
+    if (!unusualAmountCheck(payload.amount, cat)) { pendingBudgetAlert = null; return; }   // e.g. 4500 typed instead of 45
     payload.createdAt = Date.now();                         // lets suggestions learn when you usually log this
   }
   submitTxn('expense', payload, editingExpenseRow, 'expense-modal', 'save-expense-btn', ['Save Expense', 'Update Expense'], 'Expense added!',
@@ -244,7 +251,7 @@ function submitTxn(type, payload, editingRow, modalId, btnId, labels, addedMsg, 
   btn.textContent = 'Saving…';
   saveWithDupCheck(payload, type).then(function(res) {
     btn.textContent = editingRow ? labels[1] : labels[0];
-    if (!res) return;                                       // user cancelled at the duplicate warning
+    if (!res) { pendingBudgetAlert = null; return; }       // user cancelled at the duplicate warning
     if (res.ok && res.queued) {
       closeModal(modalId);
       toast(editingRow ? 'Changed on this device — will sync when online'
@@ -253,8 +260,28 @@ function submitTxn(type, payload, editingRow, modalId, btnId, labels, addedMsg, 
     } else if (res.ok) {
       closeModal(modalId); toast(editingRow ? 'Updated!' : addedMsg);
       if (onSaved) onSaved(res); else loadAll();
-    } else toast('Error: ' + (res.error || '?'));
-  }).catch(function(){ btn.textContent = editingRow ? labels[1] : labels[0]; toast('Connection error'); });
+    } else { pendingBudgetAlert = null; toast('Error: ' + (res.error || '?')); }
+    if (res.ok && pendingBudgetAlert) { var msg = pendingBudgetAlert; pendingBudgetAlert = null; setTimeout(function(){ toast(msg, 6000); }, 1600); }
+  }).catch(function(){ pendingBudgetAlert = null; btn.textContent = editingRow ? labels[1] : labels[0]; toast('Connection error'); });
+}
+
+// ── Budget alert: after saving an expense that pushes its category past the alert level or the limit ──
+var pendingBudgetAlert = null;
+function budgetAlertFor(p, prevT) {
+  var b = budgets.find(function(x){ return x.category === p.category && x.isActive !== false && x.monthlyLimit > 0; });
+  if (!b || (p.projectId && !b.appliesToProjects)) return null;
+  if (!inViewMonth(p.date)) return null;          // budgets are tracked for the month on screen
+  var spent = transactions.reduce(function(s, t) {
+    return (t.type === 'expense' && t.category === p.category && (b.appliesToProjects || !t.projectId) && inViewMonth(t.date)) ? s + t.amount : s;
+  }, 0);
+  var before = spent, after = spent + p.amount;
+  if (prevT && prevT.category === p.category && inViewMonth(prevT.date)) { after -= prevT.amount; }
+  var lim = b.monthlyLimit, thr = b.alertThreshold || 0.8;
+  var pct = Math.round(after / lim * 100);
+  if (after > lim && before <= lim) return '⚠️ Over budget: ' + p.category + ' ' + fmtMoney(after) + ' of ' + fmtMoney(lim) + ' (' + pct + '%)';
+  if (after > lim) return '⚠️ ' + p.category + ' is ' + fmtMoney(after - lim) + ' over budget this month (' + pct + '%)';
+  if (after >= lim * thr && before < lim * thr) return p.category + ' budget at ' + pct + '% — ' + fmtMoney(lim - after) + ' left this month';
+  return null;
 }
 function deleteTxn(type, editingRow, modalId) {
   var t = findTxn(type, editingRow);
@@ -327,6 +354,8 @@ function openTransferForm(rowIndex) {
   document.getElementById('save-transfer-btn').textContent    = rowIndex ? 'Update Transfer' : 'Save Transfer';
   document.getElementById('delete-transfer-btn').style.display = rowIndex ? 'block' : 'none';
   var opts = sortedAccounts().map(function(a){ return '<option value="'+escQ(a.name)+'">'+acctIcon(a.type)+' '+a.name+'</option>'; }).join('');
+  var t0 = rowIndex ? findTxn('transfer', rowIndex) : null;
+  if (t0 && (t0.fromAccount === ADJ_ACCOUNT || t0.toAccount === ADJ_ACCOUNT)) opts += '<option value="'+ADJ_ACCOUNT+'">⚖️ '+ADJ_ACCOUNT+'</option>';
   document.getElementById('ft-from').innerHTML = opts;
   document.getElementById('ft-to').innerHTML   = opts;
   if (rowIndex) {
