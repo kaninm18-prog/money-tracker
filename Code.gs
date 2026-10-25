@@ -16,6 +16,8 @@
 //    RecurringExpenses→ Description | Amount | Category | Account | DayOfMonth | StartDate | Status | LastGenerated | ProjectId | Frequency | MonthOfYear
 //    Holdings         → Id | Name | Kind | Symbol | Unit | CurrentPrice (THB/unit) | PriceDate | Note | Status
 //    HoldingTxns      → Id | HoldingId | Date | Type (buy/sell/dividend) | Quantity | Price | Amount (THB) | Fee | Account | Note | LinkedId
+//    NetWorthHistory  → Month (yyyy-MM) | Date | Accounts | Investments | Assets | NetWorth   (one snapshot per month, latest wins)
+//    _Prices          → scratch sheet (hidden) where GOOGLEFINANCE formulas are evaluated
 // ============================================================
 
 var SHEET = {
@@ -32,7 +34,9 @@ var SHEET = {
   RECURRING:    "RecurringExpenses",
   REPAYMENTS:   "ReceivableRepayments",
   HOLDINGS:     "Holdings",
-  HOLDING_TXNS: "HoldingTxns"
+  HOLDING_TXNS: "HoldingTxns",
+  NETWORTH:     "NetWorthHistory",
+  PRICES:       "_Prices"
 };
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -96,6 +100,14 @@ function getSheet(name) {
         sh.appendRow(["Id","HoldingId","Date","Type","Quantity","Price","Amount","Fee","Account","Note","LinkedId"]);
         sh.getRange(2, 3, 998, 1).setNumberFormat("@");
         break;
+      case SHEET.NETWORTH:
+        sh.appendRow(["Month","Date","Accounts","Investments","Assets","NetWorth"]);
+        sh.getRange(2, 1, 998, 2).setNumberFormat("@");
+        break;
+      case SHEET.PRICES:
+        sh.appendRow(["Symbol","Price","Currency"]);
+        sh.hideSheet();
+        break;
       case SHEET.RECURRING:
         sh.appendRow(["Description","Amount","Category","Account","DayOfMonth","StartDate","Status","LastGenerated","ProjectId","Frequency","MonthOfYear"]);
         sh.getRange(2, 6, 998, 1).setNumberFormat("@");   // StartDate stays plain text
@@ -114,11 +126,15 @@ function jsonResponse(data) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+var _fmtMemo = {};
 function formatDate(val) {
   if (!val) return "";
   // Apps Script date objects from getValues() don't pass instanceof Date in V8 —
   // check for object type instead, then use Utilities.formatDate to format correctly.
-  if (typeof val === 'object') return Utilities.formatDate(val, "GMT+7", "yyyy-MM-dd");
+  if (typeof val === 'object') {                  // memoised: history rebuilds format the same dates many times
+    var k = val.getTime ? val.getTime() : String(val);
+    return _fmtMemo[k] || (_fmtMemo[k] = Utilities.formatDate(val, "GMT+7", "yyyy-MM-dd"));
+  }
   return String(val).slice(0, 10);
 }
 
@@ -365,6 +381,8 @@ function route(p) {
       case "addCategory":            return addCategory(p);
       case "deleteCategory":         return deleteCategory(p);
       case "setCategoryIcon":        return setCategoryIcon(p);
+      case "refreshPrices":          return jsonResponse(refreshPrices());
+      case "getNetWorthHistory":     return jsonResponse(netWorthHistory(null));
       case "getIncomeCategories":    return getIncomeCategories();
       case "addIncomeCategory":      return addIncomeCategory(p);
       case "deleteIncomeCategory":   return deleteIncomeCategory(p);
@@ -437,13 +455,17 @@ function bootstrap(p) {
   var rcr  = run(getRecurring);
   var trd  = run(function(){ return getTrends(p); });
   var hld  = holdingsData();
+  var live = { accounts: acc.totalBalance || 0, investments: hld.totals.investments, assets: hld.totals.assets };
+  var nwh  = netWorthHistory(live);
   } finally { _readCache = null; }
+  saveNetWorthSnapshot(live);
   var props = PropertiesService.getScriptProperties();
   return jsonResponse({
     ok: true,
     accounts: acc, categories: exp, incomeCategories: inc, transactions: txn,
     projects: prj, receivables: rec, installmentPlans: ins, budgets: bud, recurringExpenses: rcr,
-    trends: trd, holdings: hld, checked: !!p.runChecks, generated: generated,
+    trends: trd, holdings: hld, netWorth: nwh, checked: !!p.runChecks, generated: generated,
+    prices: { last: props.getProperty("LAST_PRICE_REFRESH") || "", daily: !!props.getProperty("PRICES_DAILY") },
     backup: { last: props.getProperty("LAST_BACKUP") || "", weekly: !!props.getProperty("BACKUP_WEEKLY") }
   });
 }
@@ -708,7 +730,10 @@ function updateTransfer(p) {
 
 // ── ACCOUNTS ─────────────────────────────────────────────────
 
-function getAccounts() {
+// Account balances, optionally "as of" a date (yyyy-MM-dd, inclusive) for net worth history.
+// Uses today's exchange rates for foreign-currency accounts.
+function accountBalances(asOf) {
+  function on(d) { return !asOf || (d && d <= asOf); }
   var sh = getSheet(SHEET.ACCOUNTS);
   var accounts = sheetToRows(sh, function(d, ri) {
     var cur = String(d[6] || "THB").trim().toUpperCase() || "THB";
@@ -722,13 +747,13 @@ function getAccounts() {
   });
   var byName = {};
   accounts.forEach(function(a){ byName[String(a.name||'').trim()] = a; });
-  function bump(name, delta) { var a = byName[name]; if (a) a.balance += delta; }
   var expRows  = sheetToRows(getSheet(SHEET.EXPENSES), function(d){ return { date: formatDate(d[0]), amount: toFloat(d[1]), account: String(d[4]||'').trim(), orig: toFloat(d[8]), cur: String(d[9]||'').trim().toUpperCase() }; });
-  var incRows  = sheetToRows(getSheet(SHEET.INCOME),   function(d){ return { amount: toFloat(d[1]), account: String(d[4]||'').trim(), orig: toFloat(d[5]), cur: String(d[6]||'').trim().toUpperCase() }; });
+  var incRows  = sheetToRows(getSheet(SHEET.INCOME),   function(d){ return { date: formatDate(d[0]), amount: toFloat(d[1]), account: String(d[4]||'').trim(), orig: toFloat(d[5]), cur: String(d[6]||'').trim().toUpperCase() }; });
   var trfRows  = sheetToRows(getSheet(SHEET.TRANSFERS), function(d){ return { date: formatDate(d[0]), amount: toFloat(d[1]), from: String(d[2]||'').trim(), to: String(d[3]||'').trim(), received: toFloat(d[5]) }; });
-  incRows.forEach(function(r){ var a = byName[r.account]; if (a) a.balance += amtForAccount(a, r.amount, r.orig, r.cur); });
-  expRows.forEach(function(r){ var a = byName[r.account]; if (a) a.balance -= amtForAccount(a, r.amount, r.orig, r.cur); });
+  incRows.forEach(function(r){ if (!on(r.date)) return; var a = byName[r.account]; if (a) a.balance += amtForAccount(a, r.amount, r.orig, r.cur); });
+  expRows.forEach(function(r){ if (!on(r.date)) return; var a = byName[r.account]; if (a) a.balance -= amtForAccount(a, r.amount, r.orig, r.cur); });
   trfRows.forEach(function(r){
+    if (!on(r.date)) return;
     var f = byName[r.from], t = byName[r.to];
     if (f) f.balance -= r.amount;                       // amount is in the From account's currency
     if (t) {
@@ -739,6 +764,7 @@ function getAccounts() {
   });
   // Assets & investments: buying takes cash out of the account, selling puts it back
   holdingTxnRows().forEach(function(t) {
+    if (!on(t.date)) return;
     var a = byName[t.account]; if (!a) return;
     var amt = a.currency === 'THB' ? t.amount : t.amount / a.rate;
     if (t.type === 'buy') a.balance -= amt;
@@ -746,15 +772,20 @@ function getAccounts() {
   });
   // Receivables: money lent out leaves the account; each repayment goes back into the account it landed in.
   // (Old settled receivables without a repayment log count as fully returned, so they net to zero.)
-  var rv = loadReceivables();
-  rv.forEach(function(r) {
-    if (r.status === 'pending' || r.repayments.length) {
+  loadReceivables().forEach(function(r) {
+    if ((r.status === 'pending' || r.repayments.length) && on(r.date)) {
       var a = byName[r.account]; if (a) a.balance -= (a.currency === 'THB' ? r.amount : r.amount / a.rate);
     }
     r.repayments.forEach(function(rp) {
+      if (!on(rp.date)) return;
       var a = byName[rp.account || r.account]; if (a) a.balance += (a.currency === 'THB' ? rp.amount : rp.amount / a.rate);
     });
   });
+  return { accounts: accounts, expRows: expRows, trfRows: trfRows };
+}
+
+function getAccounts() {
+  var ab = accountBalances(""), accounts = ab.accounts, expRows = ab.expRows, trfRows = ab.trfRows;
   var today = todayStr();
   accounts.forEach(function(a) {
     if (a.type === "credit" && a.statementDay) a.statement = cardStatement(a, today, expRows, trfRows);
@@ -1555,6 +1586,7 @@ function holdingsData() {
     h.unrealized = round2(h.value - h.cost);
     h.realized = round2(realized); h.dividends = round2(dividends); h.invested = round2(invested); h.fees = round2(fees);
     h.txns = mine.slice().reverse();
+    h.autoPrice = h.group === "investment" && !!quoteSymbol(h.symbol);
     totals.value += h.value; totals.cost += h.cost; totals.unrealized += h.unrealized;
     totals.realized += h.realized; totals.dividends += h.dividends;
     totals[h.group === "investment" ? "investments" : "assets"] += h.value;
@@ -1677,4 +1709,172 @@ function setCategoryIcon(p) {
   ensureHeaders(sh, 2, ["Icon"]);
   sh.getRange(row, 2).setValue(cleanIcon(p.icon));
   return jsonResponse({ ok: true });
+}
+
+// ── AUTOMATIC PRICES & EXCHANGE RATES ────────────────────────
+// Uses Google Sheets' GOOGLEFINANCE in a hidden "_Prices" sheet.
+//  • Holdings with a Symbol get today's price: "PTT.BK" or "BKK:PTT" (Thai stocks), "NASDAQ:AAPL",
+//    "CURRENCY:BTCTHB"… Prices in other currencies are converted to baht.
+//  • Foreign-currency accounts get today's rate (e.g. USD → THB).
+// Thai gold prices and Thai mutual funds are not in GOOGLEFINANCE — update those by hand.
+function quoteSymbol(sym) {
+  var s = String(sym || "").trim().toUpperCase();
+  if (!s) return "";
+  if (s.indexOf(":") > 0) return s;
+  var m = s.match(/^([A-Z0-9&\-]+)\.BK$/);
+  if (m) return "BKK:" + m[1];
+  return /^[A-Z0-9.\-]{1,12}$/.test(s) ? s : "";
+}
+function evalFormulas(formulas) {                 // [[f1, f2...], ...] -> values (waits for "Loading...")
+  var sh = getSheet(SHEET.PRICES);
+  var last = sh.getLastRow();
+  if (last > 1) sh.getRange(2, 1, last - 1, 3).clearContent();
+  if (!formulas.length) return [];
+  var rng = sh.getRange(2, 1, formulas.length, formulas[0].length);
+  rng.setFormulas(formulas);
+  var vals = [];
+  for (var attempt = 0; attempt < 6; attempt++) {
+    SpreadsheetApp.flush();
+    vals = rng.getValues();
+    var loading = vals.some(function(r){ return r.some(function(v){ return /loading/i.test(String(v)); }); });
+    if (!loading) break;
+    Utilities.sleep(1500);
+  }
+  return vals;
+}
+function goodNumber(v) { return typeof v === "number" && isFinite(v) && v > 0; }
+
+function refreshPrices() {
+  var today = todayStr(), result = { ok: true, updated: [], failed: [], rates: {} };
+  var hs = getSheet(SHEET.HOLDINGS);
+  var data = holdingsData().holdings.filter(function(h){ return h.autoPrice && h.quantity > 0; });
+  // 1) prices + their currency
+  var px = evalFormulas(data.map(function(h) {
+    var q = quoteSymbol(h.symbol).replace(/"/g, "");
+    return ['="' + q + '"', '=IFERROR(GOOGLEFINANCE("' + q + '","price"),"")', '=IFERROR(GOOGLEFINANCE("' + q + '","currency"),"")'];
+  }));
+  // 2) exchange rates for every non-THB currency we need (accounts + quote currencies)
+  var accSh = getSheet(SHEET.ACCOUNTS);
+  var accRows = sheetToRows(accSh, function(d, ri){ return { rowIndex: ri, name: d[0], cur: String(d[6] || "THB").trim().toUpperCase() || "THB" }; });
+  var curs = {};
+  accRows.forEach(function(a){ if (a.cur !== "THB") curs[a.cur] = true; });
+  px.forEach(function(r){ var c = String(r[2] || "").toUpperCase(); if (c && c !== "THB") curs[c] = true; });
+  var curList = Object.keys(curs);
+  var fx = evalFormulas(curList.map(function(c) {
+    return ['="' + c + '"', '=IFERROR(GOOGLEFINANCE("CURRENCY:' + c + 'THB"),"")', '=""'];
+  }));
+  curList.forEach(function(c, i){ if (goodNumber(fx[i][1])) result.rates[c] = fx[i][1]; });
+  // 3) write holding prices (in baht)
+  data.forEach(function(h, i) {
+    var price = px[i] ? px[i][1] : "", cur = String(px[i] ? px[i][2] : "").toUpperCase() || "THB";
+    if (goodNumber(price) && cur === "GBX") { price = price / 100; cur = "GBP"; }   // London quotes in pence
+    var thb = goodNumber(price) ? (cur === "THB" ? price : (result.rates[cur] ? price * result.rates[cur] : 0)) : 0;
+    if (!thb) { result.failed.push(h.name + " (" + h.symbol + ")"); return; }
+    var row = resolveRow(SHEET.HOLDINGS, { id: h.id });
+    if (!row) return;
+    hs.getRange(row, 7).setNumberFormat("@");
+    hs.getRange(row, 6, 1, 2).setValues([[Math.round(thb * 10000) / 10000, today]]);
+    result.updated.push(h.name);
+  });
+  // 4) account exchange rates
+  accRows.forEach(function(a) {
+    if (a.cur === "THB" || !result.rates[a.cur]) return;
+    accSh.getRange(a.rowIndex, 8).setValue(Math.round(result.rates[a.cur] * 10000) / 10000);
+  });
+  PropertiesService.getScriptProperties().setProperty("LAST_PRICE_REFRESH", new Date().toISOString());
+  return result;
+}
+
+// Daily job (set up by setupAutomation): refresh prices, then store this month's net worth
+function dailyRefresh() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(60000)) return;
+  try {
+    refreshPrices();
+    var acc = JSON.parse(getAccounts().getContent()), hld = holdingsData();
+    saveNetWorthSnapshot({ accounts: acc.totalBalance || 0, investments: hld.totals.investments, assets: hld.totals.assets });
+  } finally { lock.releaseLock(); }
+}
+
+// One-time setup from the Apps Script editor: weekly backup (Sun ~3am) + daily prices (~7am)
+function setupAutomation() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    var f = t.getHandlerFunction();
+    if (f === "backupNow" || f === "dailyRefresh") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("backupNow").timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(3).create();
+  ScriptApp.newTrigger("dailyRefresh").timeBased().everyDays(1).atHour(7).create();
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty("BACKUP_WEEKLY", "sunday");
+  props.setProperty("PRICES_DAILY", "7am");
+  var r = refreshPrices();
+  Logger.log("Automation is on: weekly backup (Sundays) + daily prices (7am).");
+  Logger.log("Prices updated: " + (r.updated.join(", ") || "none") + (r.failed.length ? " | not found: " + r.failed.join(", ") : ""));
+  if (!props.getProperty("LAST_BACKUP")) Logger.log("First backup: " + backupNow());
+}
+
+// ── NET WORTH HISTORY ────────────────────────────────────────
+// Month-end net worth for up to 24 months. Months with a saved snapshot use it (it has the real
+// market value of your investments at the time). Earlier months are rebuilt from your transactions,
+// with investments/assets at what you paid ("estimated").
+function monthEnd(ym) { var y = parseInt(ym.substring(0, 4)), m = parseInt(ym.substring(5, 7)); return ymd(y, m, 31); }
+function holdingsAt(asOf) {                         // value at cost of what you held on that date
+  var byId = {}, kinds = {};
+  sheetToRows(getSheet(SHEET.HOLDINGS), function(d){ return { id: String(d[0]), kind: String(d[2] || "other") }; })
+    .forEach(function(h){ kinds[h.id] = HOLDING_KINDS[h.kind] || "asset"; });
+  holdingTxnRows().filter(function(t){ return t.date && t.date <= asOf; })
+    .sort(function(a, b){ return a.date === b.date ? a.rowIndex - b.rowIndex : a.date.localeCompare(b.date); })
+    .forEach(function(t) {
+      var h = byId[t.holdingId] || (byId[t.holdingId] = { qty: 0, cost: 0 });
+      if (t.type === "buy") { h.qty += t.quantity; h.cost += t.amount; }
+      else if (t.type === "sell") { var out = h.qty > 0 ? h.cost / h.qty * t.quantity : 0; h.qty -= t.quantity; h.cost -= out; if (h.qty < 1e-9) { h.qty = 0; h.cost = 0; } }
+    });
+  var r = { investments: 0, assets: 0 };
+  Object.keys(byId).forEach(function(id){ r[kinds[id] === "investment" ? "investments" : "assets"] += byId[id].cost; });
+  return r;
+}
+function netWorthHistory(live) {
+  var thisMonth = todayStr().substring(0, 7);
+  var saved = {};
+  sheetToRows(getSheet(SHEET.NETWORTH), function(d){ return { month: String(d[0]).substring(0, 7), accounts: toFloat(d[2]), investments: toFloat(d[3]), assets: toFloat(d[4]) }; })
+    .forEach(function(r){ if (/^\d{4}-\d{2}$/.test(r.month)) saved[r.month] = r; });
+  // first month with any data
+  var first = thisMonth;
+  [SHEET.EXPENSES, SHEET.INCOME, SHEET.TRANSFERS].forEach(function(n) {
+    sheetToRows(getSheet(n), function(d){ return formatDate(d[0]); }).forEach(function(dt){ if (dt && dt.substring(0, 7) < first) first = dt.substring(0, 7); });
+  });
+  Object.keys(saved).forEach(function(m){ if (m < first) first = m; });
+  var months = [], y = parseInt(thisMonth.substring(0, 4)), m = parseInt(thisMonth.substring(5, 7));
+  for (var k = 0; k < 24; k++) {
+    var ym = y + "-" + pad2(m);
+    if (ym < first) break;
+    months.unshift(ym);
+    m--; if (m < 1) { m = 12; y--; }
+  }
+  var out = months.map(function(ym) {
+    var row;
+    if (ym === thisMonth && live) row = { accounts: live.accounts, investments: live.investments, assets: live.assets, estimated: false, live: true };
+    else if (saved[ym]) row = { accounts: saved[ym].accounts, investments: saved[ym].investments, assets: saved[ym].assets, estimated: false };
+    else {
+      var end = monthEnd(ym), ab = accountBalances(end).accounts, h = holdingsAt(end);
+      var tot = ab.reduce(function(s, a){ return s + a.balance * a.rate; }, 0);
+      row = { accounts: tot, investments: h.investments, assets: h.assets, estimated: true };
+    }
+    row.month = ym;
+    row.accounts = round2(row.accounts); row.investments = round2(row.investments); row.assets = round2(row.assets);
+    row.netWorth = round2(row.accounts + row.investments + row.assets);
+    return row;
+  });
+  return { ok: true, months: out };
+}
+function saveNetWorthSnapshot(v) {
+  var sh = getSheet(SHEET.NETWORTH), ym = todayStr().substring(0, 7), last = sh.getLastRow(), row = 0;
+  if (last >= 2) {
+    var col = sh.getRange(2, 1, last - 1, 1).getValues();
+    for (var i = 0; i < col.length; i++) if (String(col[i][0]).substring(0, 7) === ym) { row = i + 2; break; }
+  }
+  if (!row) row = last + 1;
+  sh.getRange(row, 1, 1, 2).setNumberFormat("@");
+  sh.getRange(row, 1, 1, 6).setValues([[ym, todayStr(), round2(v.accounts), round2(v.investments), round2(v.assets),
+    round2(v.accounts + v.investments + v.assets)]]);
 }

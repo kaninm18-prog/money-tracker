@@ -269,6 +269,18 @@ CategoryBudgets:  Category | MonthlyLimit | AlertThreshold | IsActive | AppliesT
 
 ---
 
+## Session 11 — Live Prices, Net Worth History, Privacy Mode, Code Split
+
+- **Live prices & exchange rates** — `refreshPrices()` evaluates GOOGLEFINANCE in a hidden `_Prices` sheet. Holdings with a Symbol (`PTT.BK` / `BKK:PTT`, `NASDAQ:AAPL`, `CURRENCY:BTCTHB`…) get today's price in baht (foreign quotes converted); foreign-currency accounts get today's rate. Runs daily at ~7am (`dailyRefresh` trigger) and from the "↻ Refresh" button on the Accounts page. Thai gold and Thai mutual funds aren't in GOOGLEFINANCE — still manual.
+- **Automation setup** — run `setupAutomation()` once (replaces `setupWeeklyBackup()`): weekly backup + daily prices.
+- **Net worth history** — new `NetWorthHistory` sheet stores one snapshot per month (updated whenever the app opens and by the daily job). Months before that are rebuilt from transactions with investments at cost (shown dashed, "estimated"). Line chart with month-on-month and year-on-year change at the top of the Accounts page.
+- **Privacy mode** — 👁️ button in the header hides every amount (and holding quantities); remembered per device.
+- **Code split** — `index.html` now holds only the page markup. Styles live in `css/app.css`; scripts in `js/` (core, dashboard, transactions, accounts, holdings, settings, projects, reports), loaded in that order as plain scripts. The offline cache (`sw.js`) includes them.
+
+**Deploy:** paste `Code.gs` → run `setupAutomation()` once → Manage deployments → New version. Push `index.html`, `sw.js`, `css/` and `js/`.
+
+---
+
 ## Features Deferred (from logic doc)
 
 These were reviewed and confirmed non-conflicting — ready to implement in a future session:
@@ -289,7 +301,7 @@ These were reviewed and confirmed non-conflicting — ready to implement in a fu
 **To push updates:**
 ```bash
 cd C:\Users\Admin\OneDrive\Financial\expense_app
-git add index.html Code.gs sw.js manifest.json *.png
+git add index.html Code.gs sw.js manifest.json *.png css js
 git commit -m "describe what changed"
 git push
 ```
@@ -302,7 +314,10 @@ git push
 
 ```
 expense_app/
-├── index.html                        ← Main PWA app (all UI + JS)
+├── index.html                        ← Page markup
+├── css/app.css                       ← Styles (light + dark)
+├── js/                               ← App scripts: core, dashboard, transactions, accounts,
+│                                        holdings, settings, projects, reports (load order)
 ├── Code.gs                           ← Google Apps Script backend
 ├── manifest.json                     ← PWA manifest
 ├── sw.js                             ← Service worker (offline support)
