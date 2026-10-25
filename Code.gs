@@ -6,8 +6,8 @@
 //    Income           → Date | Amount(THB) | Category | Note | Account | OrigAmount | Currency | Id
 //    Transfers        → Date | Amount (in From currency) | FromAccount | ToAccount | Note | ReceivedAmount (in To currency, optional) | Id
 //    Accounts         → Name | Type | StartingBalance | CreditLimit | DueDay | StatementDay | Currency | Rate (THB per 1 unit)
-//    Categories       → Name
-//    IncomeCategories → Name
+//    Categories       → Name | Icon
+//    IncomeCategories → Name | Icon
 //    Projects         → Name | Budget | StartDate | EndDate
 //    Receivables      → Date | Amount | Counterparty | Type | Note | ReimbursedBy | Status | SettledDate | Account | Id
 //    ReceivableRepayments → Id | ReceivableId | Date | Amount | Account | Note
@@ -364,6 +364,7 @@ function route(p) {
       case "getCategories":          return getCategories();
       case "addCategory":            return addCategory(p);
       case "deleteCategory":         return deleteCategory(p);
+      case "setCategoryIcon":        return setCategoryIcon(p);
       case "getIncomeCategories":    return getIncomeCategories();
       case "addIncomeCategory":      return addIncomeCategory(p);
       case "deleteIncomeCategory":   return deleteIncomeCategory(p);
@@ -809,7 +810,7 @@ function deleteAccount(p) {
 
 function getCategories() {
   var sh = getSheet(SHEET.CATEGORIES);
-  return jsonResponse({ ok: true, categories: sheetToRows(sh, function(d, ri){ return { rowIndex: ri, name: d[0] }; }) });
+  return jsonResponse({ ok: true, categories: sheetToRows(sh, function(d, ri){ return { rowIndex: ri, name: d[0], icon: String(d[1] || "") }; }) });
 }
 function categoryExists(sheetName, name) {
   return sheetToRows(getSheet(sheetName), function(d){ return cleanName(d[0]).toLowerCase(); })
@@ -819,7 +820,8 @@ function addCategory(p) {
   var name = cleanName(p.name);
   if (!name) return jsonResponse({ ok: false, error: "Name required" });
   if (categoryExists(SHEET.CATEGORIES, name)) return jsonResponse({ ok: false, error: "That category already exists" });
-  var sh = getSheet(SHEET.CATEGORIES); sh.appendRow([name]);
+  var sh = getSheet(SHEET.CATEGORIES); sh.appendRow([name, cleanIcon(p.icon)]);
+  if (cleanIcon(p.icon)) ensureHeaders(sh, 2, ["Icon"]);
   return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
 }
 function deleteCategory(p) {
@@ -830,13 +832,14 @@ function deleteCategory(p) {
 
 function getIncomeCategories() {
   var sh = getSheet(SHEET.INCOME_CATS);
-  return jsonResponse({ ok: true, categories: sheetToRows(sh, function(d, ri){ return { rowIndex: ri, name: d[0] }; }) });
+  return jsonResponse({ ok: true, categories: sheetToRows(sh, function(d, ri){ return { rowIndex: ri, name: d[0], icon: String(d[1] || "") }; }) });
 }
 function addIncomeCategory(p) {
   var name = cleanName(p.name);
   if (!name) return jsonResponse({ ok: false, error: "Name required" });
   if (categoryExists(SHEET.INCOME_CATS, name)) return jsonResponse({ ok: false, error: "That category already exists" });
-  var sh = getSheet(SHEET.INCOME_CATS); sh.appendRow([name]);
+  var sh = getSheet(SHEET.INCOME_CATS); sh.appendRow([name, cleanIcon(p.icon)]);
+  if (cleanIcon(p.icon)) ensureHeaders(sh, 2, ["Icon"]);
   return jsonResponse({ ok: true, rowIndex: sh.getLastRow() });
 }
 function deleteIncomeCategory(p) {
@@ -1660,5 +1663,18 @@ function deleteHoldingTxn(p) {
   }
   deleteLinkedRow(String(d[10] || ""));
   sh.deleteRow(resolveRow(SHEET.HOLDING_TXNS, p));
+  return jsonResponse({ ok: true });
+}
+
+// ── CATEGORY ICONS ───────────────────────────────────────────
+// Any emoji shown next to a category (column B of Categories / IncomeCategories); empty = app default.
+function cleanIcon(s) { return String(s == null ? "" : s).trim().slice(0, 16); }
+function setCategoryIcon(p) {
+  var name = p.type === "income" ? SHEET.INCOME_CATS : SHEET.CATEGORIES;
+  var row = resolveByKey(name, p);
+  if (!row) return staleResponse();
+  var sh = getSheet(name);
+  ensureHeaders(sh, 2, ["Icon"]);
+  sh.getRange(row, 2).setValue(cleanIcon(p.icon));
   return jsonResponse({ ok: true });
 }

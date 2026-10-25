@@ -259,6 +259,16 @@ CategoryBudgets:  Category | MonthlyLimit | AlertThreshold | IsActive | AppliesT
 
 ---
 
+## Session 10 — Category Icons
+
+- Tap a category's icon in Settings to change it: ~100 icons to pick from, or type/paste any emoji; "Use default" resets it. Saved in a new **Icon** column (B) of `Categories` / `IncomeCategories`, so it shows on every device (`setCategoryIcon` action).
+- Adding a category opens the icon picker straight away.
+- Categories without a chosen icon get one guessed from the name (e.g. Coffee → ☕, Subscription → 📺) instead of 📌.
+
+**Deploy:** paste `Code.gs` → Manage deployments → New version. Push `index.html`.
+
+---
+
 ## Features Deferred (from logic doc)
 
 These were reviewed and confirmed non-conflicting — ready to implement in a future session:

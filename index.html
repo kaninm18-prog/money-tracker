@@ -313,6 +313,12 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .up-sub { font-size:0.72rem; color:var(--text2); }
 .up-amt { font-size:0.88rem; font-weight:700; color:var(--text); text-align:right; }
 .up-more { font-size:0.75rem; color:var(--text2); text-align:center; padding-top:8px; }
+.cat-icon-btn { width:34px; height:34px; border-radius:9px; border:1.5px dashed var(--border); background:var(--surface2); font-size:1.05rem; margin-right:10px; cursor:pointer; flex-shrink:0; }
+.ip-preview { width:54px; height:54px; border-radius:14px; background:var(--surface2); display:flex; align-items:center; justify-content:center; font-size:1.9rem; flex-shrink:0; }
+.ip-group { font-size:0.66rem; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:.06em; margin:10px 0 5px; }
+.ip-row { display:grid; grid-template-columns:repeat(8, 1fr); gap:5px; }
+.ip-opt { aspect-ratio:1; border:1.5px solid transparent; border-radius:9px; background:var(--surface2); font-size:1.25rem; cursor:pointer; padding:0; }
+.ip-opt.sel { border-color:var(--primary); background:var(--primary-light); }
 .hold-total { display:flex; justify-content:space-between; align-items:baseline; margin:2px 2px 8px; font-size:0.78rem; color:var(--text2); }
 .hold-total b { color:var(--text); font-size:0.95rem; }
 .hold-card { background:var(--surface); border-radius:var(--radius); padding:13px 15px; margin-bottom:10px; box-shadow:var(--shadow-sm); display:grid; grid-template-columns:38px 1fr auto; gap:10px; align-items:center; cursor:pointer; }
@@ -1031,6 +1037,25 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
   </div>
 </div>
 
+<!-- ══ Category icon picker ══ -->
+<div class="modal-overlay" id="icon-modal" style="z-index:1200">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="ip-title">Icon</div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <div id="ip-preview" class="ip-preview">📌</div>
+      <input type="text" class="form-control" id="ip-custom" placeholder="Or type / paste any emoji" oninput="onIconTyped()" autocomplete="off">
+    </div>
+    <div id="ip-grid"></div>
+    <div style="height:10px"></div>
+    <button class="btn btn-primary" onclick="saveCategoryIcon(false)">Save icon</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="saveCategoryIcon(true)">Use default</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('icon-modal')">Cancel</button>
+  </div>
+</div>
+
 <!-- ══ Holding detail Modal ══ -->
 <div class="modal-overlay" id="holding-modal">
   <div class="modal">
@@ -1190,6 +1215,7 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
     </div>
     <div class="card" style="margin-bottom:12px">
       <div class="card-title">Expense Categories</div>
+      <div class="balance-mode-desc" style="margin-bottom:6px">Tap an icon to change it.</div>
       <div id="settings-exp-cats"></div>
       <div style="height:8px"></div>
       <button class="btn btn-ghost btn-sm" onclick="promptAddCategory('expense')">+ Add Category</button>
@@ -1389,7 +1415,25 @@ var backupInfo = null;
 var holdings = [], holdingTotals = { value: 0, investments: 0, assets: 0, cost: 0, unrealized: 0 };
 var CAT_COLORS  = ["#64748b","#ff6584","#22c55e","#f59e0b","#3b82f6","#ec4899","#14b8a6","#f97316","#eab308","#06b6d4","#84cc16","#e11d48","#0891b2"];
 
-function catIcon(n) { return CAT_ICONS[n] || "📌"; }
+// Icon for a category: the one you picked (saved in the sheet) → built-in → a guess from the name → 📌
+function catIcon(n) {
+  var c = expCategories.find(function(x){ return x.name === n; }) || incCategories.find(function(x){ return x.name === n; });
+  if (c && c.icon) return c.icon;
+  return CAT_ICONS[n] || guessIcon(n) || "📌";
+}
+var ICON_GUESS = [
+  [/coffee|tea|cafe|café|starbucks|boba/i,'☕'], [/grocer|supermarket|market|makro|lotus|big ?c/i,'🛒'], [/daily/i,'🧾'],
+  [/subscri|netflix|spotify|youtube|stream/i,'📺'], [/home|decor|furnitur|ikea/i,'🛋️'], [/fee|charge|bank/i,'🏧'],
+  [/rent|condo|house/i,'🏠'], [/insur/i,'🛡️'], [/fuel|gas|petrol|oil/i,'⛽'], [/park/i,'🅿️'], [/car|vehicle/i,'🚗'],
+  [/taxi|grab|bolt|bts|mrt|train|bus/i,'🚕'], [/flight|airline|travel|trip|hotel/i,'✈️'], [/phone|mobile/i,'📱'], [/internet|wifi/i,'🌐'],
+  [/electric|water|utilit|bill/i,'💡'], [/gym|fitness|sport|run|golf/i,'🏋️'], [/doctor|hospital|clinic|medic|pharm|health/i,'💊'],
+  [/beauty|hair|salon|spa|massage|personal/i,'💆'], [/cloth|fashion|shoe|uniqlo/i,'👕'], [/shop/i,'🛍️'], [/gift|present/i,'🎁'],
+  [/donat|charity|merit|temple/i,'🙏'], [/tax/i,'🏛️'], [/invest|stock|fund/i,'📈'], [/pet|dog|cat\b/i,'🐾'], [/kid|child|baby|school/i,'🧸'],
+  [/book|course|educat|learn/i,'📚'], [/game|steam|playstation|nintendo/i,'🎮'], [/movie|cinema|concert|entertain/i,'🎬'],
+  [/drink|beer|bar|alcohol|wine/i,'🍺'], [/food|dining|restaurant|lunch|dinner|eat/i,'🍜'], [/family|parent|mom|dad/i,'👨‍👩‍👧'],
+  [/salary|wage|pay/i,'💼'], [/bonus/i,'🎁'], [/interest|dividend|return/i,'📈'], [/refund|cashback/i,'↩️'], [/saving/i,'🏦']
+];
+function guessIcon(n) { n = String(n || ''); for (var i = 0; i < ICON_GUESS.length; i++) if (ICON_GUESS[i][0].test(n)) return ICON_GUESS[i][1]; return ''; }
 function catColor(n, list) {
   var idx = list.findIndex(function(c){ return c.name === n; });
   return CAT_COLORS[Math.max(idx,0) % CAT_COLORS.length];
@@ -2997,7 +3041,8 @@ function deleteAccount(rowIndex, name) {
 function renderSettingsCats() {
   var expHtml = expCategories.map(function(c) {
     return '<div style="display:flex;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">' +
-      '<span style="flex:1;font-size:0.85rem">'+catIcon(c.name)+' '+c.name+'</span>' +
+      '<button class="cat-icon-btn" title="Change icon" onclick="openIconPicker(\'expense\',\''+escQ(c.name)+'\')">'+catIcon(c.name)+'</button>' +
+      '<span style="flex:1;font-size:0.85rem">'+recEsc(c.name)+'</span>' +
       '<button onclick="deleteExpCat('+c.rowIndex+',\''+escQ(c.name)+'\')" style="background:none;border:none;color:var(--expense-color);cursor:pointer;font-size:1rem">🗑️</button>' +
     '</div>';
   }).join('');
@@ -3005,11 +3050,66 @@ function renderSettingsCats() {
 
   var incHtml = incCategories.map(function(c) {
     return '<div style="display:flex;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">' +
-      '<span style="flex:1;font-size:0.85rem">'+catIcon(c.name)+' '+c.name+'</span>' +
+      '<button class="cat-icon-btn" title="Change icon" onclick="openIconPicker(\'income\',\''+escQ(c.name)+'\')">'+catIcon(c.name)+'</button>' +
+      '<span style="flex:1;font-size:0.85rem">'+recEsc(c.name)+'</span>' +
       '<button onclick="deleteIncCat('+c.rowIndex+',\''+escQ(c.name)+'\')" style="background:none;border:none;color:var(--expense-color);cursor:pointer;font-size:1rem">🗑️</button>' +
     '</div>';
   }).join('');
   document.getElementById('settings-inc-cats').innerHTML = incHtml || '<p style="font-size:0.8rem;color:var(--text2)">No categories</p>';
+}
+
+// ── Category icon picker ──
+var ICON_CHOICES = [
+  ['Food & drink', '🍜 🍚 🍔 🍕 🍣 🥗 🍰 🍩 ☕ 🧋 🍺 🍷 🛒 🥤 🍱 🍳'],
+  ['Shopping & home', '🛍️ 👕 👟 👜 💄 🛋️ 🏠 🧹 🧺 🪴 🔧 💡 🛏️ 🧴 📦 🎁'],
+  ['Transport & travel', '🚗 ⛽ 🅿️ 🚕 🚆 🚌 🏍️ ✈️ 🏨 🧳 🗺️ 🚲'],
+  ['Bills & money', '🧾 💳 🏧 🏦 💰 💸 📈 🏛️ 🛡️ 📱 🌐 📺 🔁 💼 📄 🪙'],
+  ['Health & personal', '💊 🏥 🦷 👓 💆 💇 🏋️ 🧘 ✨ 🧼'],
+  ['Fun & family', '🎬 🎮 🎵 🎤 📚 🎓 🧸 🐾 👨‍👩‍👧 💝 🙏 🎉 ⚽ ⛳ 📷 🎨'],
+  ['Other', '📌 ⭐ ❤️ 🔥 ⚡ 🌱 🧩 🗂️ 🔔 ❓']
+];
+var iconPick = null;
+function openIconPicker(type, name) {
+  iconPick = { type: type, name: name };
+  var cur = catIcon(name);
+  document.getElementById('ip-title').textContent = 'Icon for ' + name;
+  document.getElementById('ip-custom').value = '';
+  setIconPreview(cur);
+  document.getElementById('ip-grid').innerHTML = ICON_CHOICES.map(function(g) {
+    return '<div class="ip-group">' + g[0] + '</div><div class="ip-row">' + g[1].split(' ').map(function(e) {
+      return '<button class="ip-opt" onclick="setIconPreview(\'' + e + '\')">' + e + '</button>';
+    }).join('') + '</div>';
+  }).join('');
+  openModal('icon-modal');
+}
+function setIconPreview(e) {
+  iconPick.icon = e;
+  document.getElementById('ip-preview').textContent = e || '📌';
+  document.querySelectorAll('#ip-grid .ip-opt').forEach(function(b){ b.classList.toggle('sel', b.textContent === e); });
+}
+function onIconTyped() {
+  var v = document.getElementById('ip-custom').value.trim();
+  if (v) setIconPreview(Array.from(v).slice(0, 4).join(''));
+}
+function saveCategoryIcon(useDefault) {
+  if (!iconPick) return;
+  var icon = useDefault ? '' : (iconPick.icon || '');
+  var list = iconPick.type === 'income' ? incCategories : expCategories;
+  var c = list.find(function(x){ return x.name === iconPick.name; });
+  if (!c) { toast('Category not found — refresh'); return; }
+  var old = c.icon;
+  c.icon = icon;                                   // show it right away
+  closeModal('icon-modal'); renderAll();
+  api({ action: 'setCategoryIcon', type: iconPick.type, key: c.name, rowIndex: c.rowIndex, icon: icon }).then(function(res) {
+    if (res.ok) {
+      toast(useDefault ? 'Icon reset' : 'Icon saved');
+      try {                                        // keep the offline copy in step
+        var cc = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+        if (cc && cc.d) { cc.d.categories = { ok:true, categories:expCategories }; cc.d.incomeCategories = { ok:true, categories:incCategories }; localStorage.setItem(CACHE_KEY, JSON.stringify(cc)); }
+      } catch(e) {}
+    }
+    else { c.icon = old; renderAll(); toast(/Unknown action/.test(res.error||'') ? 'Update Code.gs in Apps Script and redeploy first' : 'Error: ' + (res.error || '?')); }
+  }).catch(function(){ c.icon = old; renderAll(); toast('Changing icons needs a connection'); });
 }
 
 function promptAddCategory(type) {
@@ -3018,9 +3118,14 @@ function promptAddCategory(type) {
   var action = type==='income' ? 'addIncomeCategory' : 'addCategory';
   api({action:action, name:name.trim()}).then(function(res) {
     if (res.ok) {
-      toast('Category added');
-      if (type==='income') api({action:'getIncomeCategories'}).then(function(r){ if(r.ok){incCategories=r.categories;renderSettingsCats();} });
-      else api({action:'getCategories'}).then(function(r){ if(r.ok){expCategories=r.categories;renderSettingsCats();} });
+      toast('Category added — pick an icon');
+      var nm = name.trim();
+      api({action: type==='income' ? 'getIncomeCategories' : 'getCategories'}).then(function(r){
+        if (!r.ok) return;
+        if (type==='income') incCategories=r.categories; else expCategories=r.categories;
+        renderSettingsCats();
+        openIconPicker(type, nm);
+      });
     } else { toast('Error: '+res.error); }
   });
 }
