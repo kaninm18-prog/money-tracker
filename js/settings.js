@@ -212,3 +212,57 @@ function deleteRecurringItem() {
   }).catch(function(){ toast('Connection error'); });
 }
 
+
+// ════════════════════════════════════════════
+//  IMPORT DATA FILE (.json "money-tracker-import")
+// ════════════════════════════════════════════
+var packPending = null;
+function onPackFile(input) {
+  var f = input.files && input.files[0]; input.value = '';
+  if (!f) return;
+  f.text().then(function(txt) {
+    var p; try { p = JSON.parse(txt); } catch(e) { toast('That file is not a valid import file'); return; }
+    if (!p || p.format !== 'money-tracker-import') { toast('That file is not a Money Tracker import file'); return; }
+    packPending = p;
+    var tr = p.trades || [], hx = p.holdingTxns || [], ac = p.accounts || [];
+    var closed = tr.filter(function(t){ return t.closeTime; }).map(function(t){ return t.closeTime.substring(0, 10); }).sort();
+    var net = tr.reduce(function(s, t){ return s + (+t.profit || 0) + (+t.commission || 0) + (+t.swap || 0); }, 0);
+    var lines = [];
+    if (p.source) lines.push('<span class="hold-sub">From ' + recEsc(p.source) + '</span>');
+    ac.forEach(function(a) {
+      var exists = accounts.some(function(x){ return x.name.toLowerCase() === String(a.name).toLowerCase(); });
+      lines.push('🏦 Account <b>' + recEsc(a.name) + '</b>' + (a.currency && a.currency !== 'THB' && String(a.name).indexOf(a.currency) < 0 ? ' (' + a.currency + ')' : '') +
+        (exists ? ' — already exists, will be kept as is' : ', opening balance ' + fmtCur(a.startingBalance || 0, a.currency || 'THB')));
+    });
+    if (tr.length) lines.push('📈 <b>' + tr.length + ' trades</b>' + (closed.length ? ' · ' + fmtDateY(closed[0]) + ' – ' + fmtDateY(closed[closed.length - 1]) : '') +
+      ' · net ' + (tr[0].currency === 'USD' || !tr[0].currency ? fmtUsd(net) : net.toFixed(2)) + (p.tradeAccount ? ' · linked to ' + recEsc(p.tradeAccount) : ''));
+    hx.forEach(function(t) {
+      var h = t.holding || {};
+      lines.push((t.type === 'buy' ? '🥇 ' : '• ') + recEsc(h.name || 'Holding') + ': ' + t.type + ' ' + (t.quantity || '') + ' ' + recEsc(h.unit || '') +
+        (t.currency && t.currency !== 'THB' ? ' — priced in ' + t.currency + ', converted at the ' + fmtDateY(t.date) + ' rate' : '') + (t.account ? '' : ' (already owned, no money moves)'));
+    });
+    lines.push('<span class="hold-sub">Anything already in the app (same account name, trade or entry) is skipped.</span>');
+    document.getElementById('pack-summary').innerHTML = lines.join('<br>');
+    document.getElementById('pack-go').textContent = 'Import';
+    closeModal('settings-modal');
+    openModal('pack-modal');
+  });
+}
+function confirmPackImport() {
+  if (!packPending) return;
+  var btn = document.getElementById('pack-go'); btn.textContent = 'Importing… (looking up exchange rates)'; btn.disabled = true;
+  api(Object.assign({ action: 'importPack' }, packPending)).then(function(res) {
+    btn.disabled = false; btn.textContent = 'Import';
+    if (!res.ok) { toast(/Unknown action/.test(res.error || '') ? 'Update Code.gs in Apps Script and redeploy first' : 'Error: ' + (res.error || '?'), 5000); return; }
+    packPending = null; closeModal('pack-modal');
+    var parts = [];
+    if (res.accounts.added.length) parts.push(res.accounts.added.length + ' account' + (res.accounts.added.length > 1 ? 's' : ''));
+    if (res.trades && res.trades.added) parts.push(res.trades.added + ' trades');
+    if (res.holdings.added) parts.push(res.holdings.added + ' investment entr' + (res.holdings.added > 1 ? 'ies' : 'y'));
+    var skipped = (res.accounts.skipped.length) + (res.trades ? res.trades.skipped : 0) + res.holdings.skipped;
+    toast((parts.length ? 'Imported ' + parts.join(', ') : 'Nothing new to import') + (skipped ? ' · ' + skipped + ' already there' : ''), 6000);
+    if (res.holdings.fx.length) setTimeout(function(){ toast(res.holdings.fx.join(' · '), 7000); }, 6200);
+    trades = null;
+    loadAll();
+  }).catch(function(){ btn.disabled = false; btn.textContent = 'Import'; toast('Importing needs a connection'); });
+}

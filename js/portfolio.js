@@ -388,7 +388,7 @@ function tradingHtml() {
     ['Best trade', s.best ? fmtUsd(s.best.net) : '—', s.best ? fmtDate(s.best.closeTime.substring(0, 10)) : ''],
     ['Worst trade', s.worst ? fmtUsd(s.worst.net) : '—', s.worst ? fmtDate(s.worst.closeTime.substring(0, 10)) : '']
   ].map(function(x){ return '<div class="hd-stat"><div class="l">' + x[0] + '</div><div class="v">' + x[1] + '</div><div class="s">' + x[2] + '</div></div>'; }).join('') + '</div>';
-  if (s.curve.length >= 2) html += '<div class="card"><div class="card-title">Equity curve <span class="trend-sub">cumulative net, ' + s.lots.toFixed(2) + ' lots</span></div>' + equitySvg(s.curve) + '</div>';
+  if (s.curve.length >= 2) html += '<div class="card"><div class="card-title">Equity curve <span class="trend-sub">cumulative net · volume ' + s.lots.toFixed(2) + '</span></div>' + equitySvg(s.curve) + '</div>';
   // monthly
   var byM = {}; s.closed.forEach(function(t){ var k = t.closeTime.substring(0, 7); byM[k] = (byM[k] || 0) + t.net; });
   var mk = Object.keys(byM).sort().slice(-12);

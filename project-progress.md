@@ -320,6 +320,19 @@ New full-screen **📊 Portfolio** (Accounts → investments section), new `js/p
 
 ---
 
+## Session 15 — Import Data File + MTS Gold history
+
+- **Settings → Import data file** (`.json`, format `money-tracker-import`): adds accounts, holding entries and trades in one go, with a preview first. Foreign-currency holding prices are converted at that day's rate (GOOGLEFINANCE `CURRENCY:XXXTHB` close on/before the date). Safe to import twice — existing accounts (same name), entries (same id) and trades (same ticket) are skipped. Backend action `importPack`.
+- **MTS Gold statement** (`gold_investment.xlsx`, Apr 2025 – Feb 2026) converted to `gold_investment_import.json`:
+  - Account **MTS Gold (USD)**, opening balance $4,958.32 (net deposits) → with trades = $5,904.53, matching the statement's final balance.
+  - **29 round-trip trades** (first-in-first-out, MTSBGUSD baht-weight and MTSOZUSD ounce), net +$946.21, linked to that account.
+  - **Gold bar 96.5%, 0.5 baht-weight** withdrawn 12 Jan 2026 → Investments (already owned), cost = $2,165.25/baht-weight × that day's USD/THB + ฿200 making fee.
+- Both files are personal data and are git-ignored (the GitHub repo is public).
+
+**Deploy:** paste `Code.gs` → Manage deployments → New version. Push `index.html`, `sw.js`, `js/`.
+
+---
+
 ## Features Deferred (from logic doc)
 
 These were reviewed and confirmed non-conflicting — ready to implement in a future session:

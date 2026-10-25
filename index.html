@@ -612,6 +612,18 @@
   </div>
 </div>
 
+<!-- ══ Import data file ══ -->
+<div class="modal-overlay" id="pack-modal" style="z-index:450">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Import</div>
+    <div id="pack-summary" class="balance-mode-desc" style="line-height:1.55;margin-bottom:14px"></div>
+    <button class="btn btn-primary" id="pack-go" onclick="confirmPackImport()">Import</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('pack-modal')">Cancel</button>
+  </div>
+</div>
+
 <!-- ══ Balance check ══ -->
 <div class="modal-overlay" id="balcheck-modal">
   <div class="modal">
@@ -825,6 +837,12 @@
       <div class="card-title">Backup & automation</div>
       <div class="balance-mode-desc" id="backup-status" style="margin-bottom:8px"></div>
       <button class="btn btn-ghost btn-sm" id="backup-btn" onclick="backupNow()">☁️ Back up now</button>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div class="card-title">Import data file</div>
+      <div class="balance-mode-desc" style="margin-bottom:8px">Add accounts, investments and trades from an import file (.json) prepared for this app. Importing the same file twice adds nothing new.</div>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('pack-file').click()">⬆ Choose file…</button>
+      <input type="file" id="pack-file" accept=".json,application/json" style="display:none" onchange="onPackFile(this)">
     </div>
     <div class="card" style="margin-top:12px;margin-bottom:12px">
       <div class="card-title">Export Data</div>

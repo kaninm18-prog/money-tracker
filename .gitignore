@@ -7,3 +7,7 @@ ttb_card*
 Money Tracker - Expenses*.csv
 krungthai_alerts*
 _to_delete/
+
+# Investment statements and import files (personal data)
+gold_investment*
+*_import.json
