@@ -421,7 +421,9 @@ function applyData(d) {
   if (d.netWorth && d.netWorth.ok) { netWorthHist = d.netWorth.months || []; }
   if (d.prices) { priceInfo = d.prices; }
   if (d.holdings && d.holdings.ok) { holdings = d.holdings.holdings || []; holdingTotals = d.holdings.totals || holdingTotals; }
+  if (d.portfolio && d.portfolio.ok) setPortfolioMeta(d.portfolio);
   renderAll();
+  renderPortfolio();
   runLaunchAction();
 }
 

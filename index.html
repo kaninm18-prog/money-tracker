@@ -550,6 +550,68 @@
   </div>
 </div>
 
+<!-- ══ Portfolio (full screen) ══ -->
+<div class="annual-modal-overlay" id="portfolio-modal">
+  <div class="annual-modal">
+    <div class="annual-modal-header">
+      <div class="annual-modal-title">📊 Portfolio</div>
+      <button class="btn btn-ghost btn-sm" onclick="closePortfolio()">✕ Close</button>
+    </div>
+    <div class="type-tabs" style="margin-bottom:14px">
+      <button class="type-tab" id="pf-tab-allocation" onclick="setPfTab('allocation')">Allocation</button>
+      <button class="type-tab" id="pf-tab-returns" onclick="setPfTab('returns')">Returns</button>
+      <button class="type-tab" id="pf-tab-dividends" onclick="setPfTab('dividends')">Dividends</button>
+      <button class="type-tab" id="pf-tab-trading" onclick="setPfTab('trading')">Trading</button>
+    </div>
+    <div id="pf-body"></div>
+    <input type="file" id="tj-file" accept=".htm,.html,.csv,.txt,.xml,text/html,text/csv" style="display:none" onchange="onTradeFile(this)">
+  </div>
+</div>
+
+<!-- ══ Add trade ══ -->
+<div class="modal-overlay" id="tj-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Add trade</div>
+    <div style="display:flex;gap:10px">
+      <div class="form-group" style="flex:1.2"><label class="form-label">Symbol</label><input type="text" class="form-control" id="tj-symbol" autocomplete="off"></div>
+      <div class="form-group" style="flex:1"><label class="form-label">Side</label><select class="form-control" id="tj-side"><option value="buy">Buy</option><option value="sell">Sell</option></select></div>
+      <div class="form-group" style="flex:1"><label class="form-label">Lots</label><input type="number" class="form-control" id="tj-volume" step="0.01" inputmode="decimal"></div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <div class="form-group" style="flex:1.4"><label class="form-label">Opened</label><input type="datetime-local" class="form-control" id="tj-open-time"></div>
+      <div class="form-group" style="flex:1"><label class="form-label">Price</label><input type="number" class="form-control" id="tj-open-price" step="any" inputmode="decimal"></div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <div class="form-group" style="flex:1.4"><label class="form-label">Closed (empty = still open)</label><input type="datetime-local" class="form-control" id="tj-close-time"></div>
+      <div class="form-group" style="flex:1"><label class="form-label">Price</label><input type="number" class="form-control" id="tj-close-price" step="any" inputmode="decimal"></div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <div class="form-group" style="flex:1"><label class="form-label">Profit ($)</label><input type="number" class="form-control" id="tj-profit" step="0.01" inputmode="decimal"></div>
+      <div class="form-group" style="flex:1"><label class="form-label">Commission</label><input type="number" class="form-control" id="tj-commission" step="0.01" inputmode="decimal" placeholder="-0.70"></div>
+      <div class="form-group" style="flex:1"><label class="form-label">Swap</label><input type="number" class="form-control" id="tj-swap" step="0.01" inputmode="decimal"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Broker account</label><select class="form-control" id="tj-account"></select></div>
+    <div class="form-group"><label class="form-label">Note / setup</label><input type="text" class="form-control" id="tj-note" placeholder="e.g. breakout, news, EA name"></div>
+    <button class="btn btn-primary" onclick="saveTradeForm()">Save trade</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('tj-modal')">Cancel</button>
+  </div>
+</div>
+
+<!-- ══ Import trades ══ -->
+<div class="modal-overlay" id="tj-import-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Import trades</div>
+    <div class="balance-mode-desc" id="tji-summary" style="margin-bottom:12px;line-height:1.5"></div>
+    <div class="form-group"><label class="form-label">Broker account (closed trades change its balance)</label><select class="form-control" id="tji-account"></select></div>
+    <button class="btn btn-primary" id="tji-go" onclick="confirmTradeImport()">Import</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('tj-import-modal')">Cancel</button>
+  </div>
+</div>
+
 <!-- ══ Balance check ══ -->
 <div class="modal-overlay" id="balcheck-modal">
   <div class="modal">
@@ -644,7 +706,7 @@
     <div style="display:flex;gap:10px">
       <div class="form-group" style="flex:1"><label class="form-label" id="tr-amount-label">Total (฿)</label>
         <input type="number" class="form-control" id="tr-amount" inputmode="decimal" step="any" oninput="this.dataset.touched='1'"></div>
-      <div class="form-group" style="flex:1" id="tr-fee-group"><label class="form-label">Fee (฿)</label>
+      <div class="form-group" style="flex:1" id="tr-fee-group"><label class="form-label" id="tr-fee-label">Fee (฿)</label>
         <input type="number" class="form-control" id="tr-fee" inputmode="decimal" step="any" placeholder="0"></div>
     </div>
     <div class="fx-hint" id="tr-hint" style="display:block;margin:-4px 0 10px"></div>
@@ -889,6 +951,7 @@
 <script src="js/settings.js"></script>
 <script src="js/projects.js"></script>
 <script src="js/reports.js"></script>
+<script src="js/portfolio.js"></script>
 <script src="js/suggest.js"></script>
 </body>
 </html>

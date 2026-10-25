@@ -57,6 +57,9 @@ function renderHoldings() {
       (priceInfo && priceInfo.daily ? ' · daily at 7am' : '') + '</span><button class="btn btn-ghost btn-sm" id="price-btn" onclick="refreshPricesNow()">↻ Refresh</button></div>' + html;
   }
   if (!html) html = '<div class="acc-page-section-header">📈 Assets & Investments</div><div class="hold-sub" style="padding:4px 2px 10px">Track gold, stocks, funds, property or a car here. Buying them moves money out of an account but is not counted as spending.</div>';
+  if (holdings.some(function(h){ return h.group === 'investment'; }) || (portfolioMeta && portfolioMeta.tradeCount))
+    html += '<button class="btn btn-primary hold-add" style="margin-bottom:8px" onclick="openPortfolio()">📊 Portfolio — allocation, returns, dividends, trading</button>';
+  else html += '<button class="btn btn-ghost hold-add" style="margin-bottom:8px" onclick="openPortfolio(\'trading\')">🥇 Trading journal</button>';
   html += '<button class="btn btn-ghost hold-add" onclick="openTrade(\'buy\')">+ Add asset / investment</button>';
   el.innerHTML = html;
 }
@@ -80,7 +83,7 @@ function openHolding(id) {
       ['Value', fmtMoney(h.value), h.priced ? fmtMoney(h.currentPrice || 0) + ' / unit' + (h.priceDate ? ' · ' + fmtDate(h.priceDate) : '') : 'no price yet — at cost'],
       ['Unrealised', plHtml(h.unrealized, h.cost), 'cost ' + fmtMoney(h.cost)],
       ['Realised', plHtml(h.realized, 0), 'from sales'],
-      ['Dividends', fmtMoney(h.dividends), 'saved as income'],
+      ['Dividends', fmtMoney(h.dividends), h.taxWithheld ? 'after ' + fmtMoney(h.taxWithheld) + ' tax' : 'saved as income'],
       ['Fees', fmtMoney(h.fees), 'saved as expenses']
     ];
   var priceLabel = asset ? 'Current value (฿)' : 'Current price per ' + (h.unit ? recEsc(h.unit.replace(/s$/, '')) : 'unit') + ' (฿)';
@@ -101,7 +104,7 @@ function openHolding(id) {
     var what = t.type === 'buy' ? 'Bought' : t.type === 'sell' ? 'Sold' : 'Dividend';
     var detail = t.type === 'dividend' ? '' : fmtQty(t.quantity) + (h.unit ? ' ' + recEsc(h.unit) : '') + (t.price ? ' @ ' + fmtMoney(t.price) : '');
     return '<div class="hd-txn"><div><div class="t">' + what + (detail ? ' · ' + detail : '') + '</div>' +
-      '<div class="d">' + fmtDateY(t.date) + ' · ' + (t.account ? recEsc(t.account) : 'no cash moved') + (t.fee ? ' · fee ' + fmtMoney(t.fee) : '') + (t.note ? ' · ' + recEsc(t.note) : '') + '</div></div>' +
+      '<div class="d">' + fmtDateY(t.date) + ' · ' + (t.account ? recEsc(t.account) : 'no cash moved') + (t.fee ? (t.type === 'dividend' ? ' · tax ' : ' · fee ') + fmtMoney(t.fee) : '') + (t.note ? ' · ' + recEsc(t.note) : '') + '</div></div>' +
       '<div class="a">' + (t.type === 'buy' ? '−' : '+') + fmtMoney(t.amount) + '</div>' +
       '<button title="Delete" onclick="deleteHoldingTxn(\'' + escQ(t.id) + '\')">✕</button></div>';
   }).join('') : '<div class="hold-sub">No entries yet.</div>';
@@ -188,7 +191,9 @@ function tradeFormUpdate() {
   if (isNew && !document.getElementById('tr-unit').value) document.getElementById('tr-unit').placeholder = kindInfo(kind)[4] || 'units';
   var div = tradeType === 'dividend';
   document.getElementById('tr-qp').style.display = (div || asset) ? 'none' : 'flex';
-  document.getElementById('tr-fee-group').style.display = div ? 'none' : '';
+  document.getElementById('tr-fee-group').style.display = '';
+  document.getElementById('tr-fee-label').textContent = div ? 'Tax withheld (฿)' : 'Fee (฿)';
+  document.getElementById('tr-fee').placeholder = div ? 'e.g. 10% for Thai stocks' : '0';
   document.getElementById('tr-amount-label').textContent = div ? 'Dividend received (฿)' : asset ? (tradeType === 'sell' ? 'Sold for (฿)' : 'Price paid (฿)') : 'Total (฿)';
   var unit = h ? (h.unit || 'unit') : (document.getElementById('tr-unit').value || kindInfo(kind)[4] || 'unit');
   document.getElementById('tr-price-label').textContent = 'Price per ' + unit.replace(/s$/, '') + ' (฿)';
@@ -223,7 +228,8 @@ function saveTrade() {
   if (!div && !asset && !(price > 0)) price = amount / qty;
   if (asset && tradeType === 'sell') price = amount / qty;
   var payload = { action: 'addHoldingTxn', type: tradeType, holdingId: id, quantity: div ? 0 : qty, price: div ? 0 : price,
-    amount: amount, fee: parseFloat(document.getElementById('tr-fee').value) || 0,
+    amount: amount, fee: div ? 0 : (parseFloat(document.getElementById('tr-fee').value) || 0),
+    tax: div ? (parseFloat(document.getElementById('tr-fee').value) || 0) : 0,
     account: document.getElementById('tr-account').value, date: document.getElementById('tr-date').value || todayStr(),
     note: document.getElementById('tr-note').value.trim(), id: newClientId('X') };
   if (!h) payload.holding = { name: document.getElementById('tr-name').value.trim(), kind: kind,

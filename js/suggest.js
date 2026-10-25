@@ -239,7 +239,8 @@ function buildNudges() {
       }
     }
   });
-  return out.sort(function(a, b){ return b.prio - a.prio; }).slice(0, 3);
+  if (typeof allocationNudges === 'function') out = out.concat(allocationNudges());
+  return out.sort(function(a, b){ return b.prio - a.prio; }).slice(0, 4);
 }
 function renderNudges() {
   var card = document.getElementById('nudge-card'); if (!card) return;

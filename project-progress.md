@@ -307,6 +307,19 @@ New `js/suggest.js`. Learns from the last ~6 months of your own expenses, entire
 
 ---
 
+## Session 14 — Portfolio: Allocation, Returns, Dividends, Trading Journal
+
+New full-screen **📊 Portfolio** (Accounts → investments section), new `js/portfolio.js`.
+
+- **Allocation** — by asset type (Gold, Thai stocks, Thai ETFs, Foreign stocks, Global ETFs, Mutual funds, Bonds, Crypto, optional Cash) and by currency (from each price's quote currency). Target % per type (`AllocationTargets` sheet) shown as a marker on each bar; 5+ point drift is highlighted and appears as a dashboard heads-up.
+- **Returns** — money-weighted yearly return (XIRR) per holding and overall, counting buys, sales, dividends and fees; breakdown into price gain (sold / not sold), dividends, fees. **Benchmark**: the same cash flows put into an index on the same dates (weekly closes via GOOGLEFINANCE, stored in Script Properties `BENCH`); presets SET, S&P 500, ACWI, GLD or any symbol.
+- **Dividends** — last 12 months by month, per year gross / tax / net, yield on cost and current yield, upcoming XD dates with expected amount (entered per holding: Holdings cols `NextXD`, `NextDividend`). Dividend form now has **Tax withheld** (stored in the Fee column of the dividend row).
+- **Trading journal** — `Trades` sheet (ticket, symbol, side, lots, open/close time & price, commission, swap, profit, account, note). Import MT5 report (HTML, SpreadsheetML XML or CSV; UTF-16 handled; only the Positions table; existing tickets skipped) or add by hand. Stats: net result (USD and ≈THB), win rate, profit factor, avg win/loss, max drawdown, best/worst, equity curve, monthly P/L, by symbol and long/short. Trades linked to an account move its balance by their net result.
+
+**Deploy:** paste `Code.gs` → Manage deployments → New version. Push `index.html`, `sw.js`, `css/app.css`, `js/`.
+
+---
+
 ## Features Deferred (from logic doc)
 
 These were reviewed and confirmed non-conflicting — ready to implement in a future session:
@@ -343,7 +356,7 @@ expense_app/
 ├── index.html                        ← Page markup
 ├── css/app.css                       ← Styles (light + dark)
 ├── js/                               ← App scripts: core, dashboard, transactions, accounts,
-│                                        holdings, settings, projects, reports, suggest (load order)
+│                                        holdings, settings, projects, reports, portfolio, suggest (load order)
 ├── Code.gs                           ← Google Apps Script backend
 ├── manifest.json                     ← PWA manifest
 ├── sw.js                             ← Service worker (offline support)

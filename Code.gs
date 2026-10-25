@@ -14,8 +14,10 @@
 //    InstallmentPlans → Description | PurchaseDate | Merchant | TotalAmount | InstallmentCount | InstallmentAmount | FirstInstallmentDate | Account | Category | ProjectId | Status | InstallmentsPaid
 //    CategoryBudgets  → Category | MonthlyLimit | AlertThreshold | IsActive | AppliesToProjects
 //    RecurringExpenses→ Description | Amount | Category | Account | DayOfMonth | StartDate | Status | LastGenerated | ProjectId | Frequency | MonthOfYear
-//    Holdings         → Id | Name | Kind | Symbol | Unit | CurrentPrice (THB/unit) | PriceDate | Note | Status
-//    HoldingTxns      → Id | HoldingId | Date | Type (buy/sell/dividend) | Quantity | Price | Amount (THB) | Fee | Account | Note | LinkedId
+//    Holdings         → Id | Name | Kind | Symbol | Unit | CurrentPrice (THB/unit) | PriceDate | Note | Status | QuoteCurrency | NextXD | NextDividend (per unit)
+//    Trades           → Id | Ticket | Symbol | Side | Volume | OpenTime | OpenPrice | CloseTime | ClosePrice | Commission | Swap | Profit | Account | Note | Currency
+//    AllocationTargets→ Class | TargetPct
+//    HoldingTxns      → Id | HoldingId | Date | Type (buy/sell/dividend) | Quantity | Price | Amount (THB) | Fee (dividends: tax withheld) | Account | Note | LinkedId
 //    NetWorthHistory  → Month (yyyy-MM) | Date | Accounts | Investments | Assets | NetWorth | Receivables  (one snapshot per month, latest wins)
 //    _Prices          → scratch sheet (hidden) where GOOGLEFINANCE formulas are evaluated
 // ============================================================
@@ -36,6 +38,8 @@ var SHEET = {
   HOLDINGS:     "Holdings",
   HOLDING_TXNS: "HoldingTxns",
   NETWORTH:     "NetWorthHistory",
+  TRADES:       "Trades",
+  TARGETS:      "AllocationTargets",
   PRICES:       "_Prices"
 };
 
@@ -99,6 +103,13 @@ function getSheet(name) {
       case SHEET.HOLDING_TXNS:
         sh.appendRow(["Id","HoldingId","Date","Type","Quantity","Price","Amount","Fee","Account","Note","LinkedId"]);
         sh.getRange(2, 3, 998, 1).setNumberFormat("@");
+        break;
+      case SHEET.TRADES:
+        sh.appendRow(["Id","Ticket","Symbol","Side","Volume","OpenTime","OpenPrice","CloseTime","ClosePrice","Commission","Swap","Profit","Account","Note","Currency"]);
+        sh.getRange(2, 6, 998, 1).setNumberFormat("@"); sh.getRange(2, 8, 998, 1).setNumberFormat("@"); sh.getRange(2, 2, 998, 1).setNumberFormat("@");
+        break;
+      case SHEET.TARGETS:
+        sh.appendRow(["Class","TargetPct"]);
         break;
       case SHEET.NETWORTH:
         sh.appendRow(["Month","Date","Accounts","Investments","Assets","NetWorth","Receivables"]);
@@ -210,6 +221,7 @@ ID_COL[SHEET.RECEIVABLES] = 10;
 ID_COL[SHEET.REPAYMENTS]  = 1;
 ID_COL[SHEET.HOLDINGS]    = 1;
 ID_COL[SHEET.HOLDING_TXNS] = 1;
+ID_COL[SHEET.TRADES]      = 1;
 var ID_PREFIX = {};
 ID_PREFIX[SHEET.EXPENSES] = "E"; ID_PREFIX[SHEET.INCOME] = "I"; ID_PREFIX[SHEET.TRANSFERS] = "T";
 
@@ -382,6 +394,12 @@ function route(p) {
       case "deleteCategory":         return deleteCategory(p);
       case "setCategoryIcon":        return setCategoryIcon(p);
       case "refreshPrices":          return jsonResponse(refreshPrices());
+      case "getTrades":              return jsonResponse(getTrades());
+      case "addTrade":               return addTrade(p);
+      case "deleteTrade":            return deleteTrade(p);
+      case "importTrades":           return importTrades(p);
+      case "setTargets":             return setTargets(p);
+      case "setBenchmark":           return setBenchmark(p);
       case "getNetWorthHistory":     return jsonResponse(netWorthHistory(null));
       case "getIncomeCategories":    return getIncomeCategories();
       case "addIncomeCategory":      return addIncomeCategory(p);
@@ -456,6 +474,7 @@ function bootstrap(p) {
   var trd  = run(function(){ return getTrends(p); });
   var hist = expenseHistory(180);
   var hld  = holdingsData();
+  var pf   = portfolioMeta();
   var live = { accounts: acc.totalBalance || 0, investments: hld.totals.investments, assets: hld.totals.assets, receivables: receivablesAt("") };
   var nwh  = netWorthHistory(live);
   } finally { _readCache = null; }
@@ -465,7 +484,7 @@ function bootstrap(p) {
     ok: true,
     accounts: acc, categories: exp, incomeCategories: inc, transactions: txn,
     projects: prj, receivables: rec, installmentPlans: ins, budgets: bud, recurringExpenses: rcr,
-    trends: trd, holdings: hld, netWorth: nwh, history: hist, checked: !!p.runChecks, generated: generated,
+    trends: trd, holdings: hld, netWorth: nwh, history: hist, portfolio: pf, checked: !!p.runChecks, generated: generated,
     prices: { last: props.getProperty("LAST_PRICE_REFRESH") || "", daily: !!props.getProperty("PRICES_DAILY") },
     backup: { last: props.getProperty("LAST_BACKUP") || "", weekly: !!props.getProperty("BACKUP_WEEKLY") }
   });
@@ -772,6 +791,11 @@ function accountBalances(asOf) {
     var amt = a.currency === 'THB' ? t.amount : t.amount / a.rate;
     if (t.type === 'buy') a.balance -= amt;
     else if (t.type === 'sell') a.balance += amt;
+  });
+  // Trading journal: closed trades linked to an account add their net profit/loss (in the account's currency)
+  tradeRows().forEach(function(t) {
+    if (!t.closeTime || !t.account || !on(t.closeTime.substring(0, 10))) return;
+    var a = byName[t.account]; if (a) a.balance += t.net;
   });
   // Receivables: money lent out leaves the account; each repayment goes back into the account it landed in.
   // (Old settled receivables without a repayment log count as fully returned, so they net to zero.)
@@ -1563,15 +1587,15 @@ function holdingsData() {
     return { rowIndex: ri, id: String(d[0] || ""), name: String(d[1] || ""), kind: kind,
       group: HOLDING_KINDS[kind] || "asset", symbol: String(d[3] || ""), unit: String(d[4] || ""),
       currentPrice: toFloat(d[5]), priceDate: formatDate(d[6]), note: String(d[7] || ""),
-      status: String(d[8] || "active") };
+      status: String(d[8] || "active"), quoteCurrency: String(d[9] || ""), nextXD: formatDate(d[10]), nextDividend: toFloat(d[11]) };
   });
   var totals = { value: 0, cost: 0, unrealized: 0, realized: 0, dividends: 0, investments: 0, assets: 0 };
   holdings.forEach(function(h) {
     var mine = txns.filter(function(t){ return t.holdingId === h.id; })
       .sort(function(a, b){ return a.date === b.date ? a.rowIndex - b.rowIndex : a.date.localeCompare(b.date); });
-    var qty = 0, cost = 0, realized = 0, dividends = 0, invested = 0, fees = 0, lastPrice = 0;
+    var qty = 0, cost = 0, realized = 0, dividends = 0, invested = 0, fees = 0, lastPrice = 0, tax = 0;
     mine.forEach(function(t) {
-      fees += t.fee;
+      if (t.type === "dividend") tax += t.fee; else fees += t.fee;     // on dividends the Fee column holds tax withheld
       if (t.type === "buy") { qty += t.quantity; cost += t.amount; invested += t.amount; if (t.price) lastPrice = t.price; }
       else if (t.type === "sell") {
         var avg = qty > 0 ? cost / qty : 0, out = avg * t.quantity;
@@ -1587,7 +1611,7 @@ function holdingsData() {
     h.value = round2(price ? qty * price : cost);
     h.priced = !!price;
     h.unrealized = round2(h.value - h.cost);
-    h.realized = round2(realized); h.dividends = round2(dividends); h.invested = round2(invested); h.fees = round2(fees);
+    h.realized = round2(realized); h.dividends = round2(dividends); h.invested = round2(invested); h.fees = round2(fees); h.taxWithheld = round2(tax);
     h.txns = mine.slice().reverse();
     h.autoPrice = h.group === "investment" && !!quoteSymbol(h.symbol);
     totals.value += h.value; totals.cost += h.cost; totals.unrealized += h.unrealized;
@@ -1620,6 +1644,11 @@ function updateHolding(p) {
   sh.getRange(row, 7).setNumberFormat("@");
   sh.getRange(row, 2, 1, 7).setValues([[f.name, f.kind, f.symbol, f.unit, f.price || "",
     priceChanged ? (p.priceDate || todayStr()) : cur[6], f.note]]);
+  if (p.nextXD !== undefined || p.nextDividend !== undefined) {      // expected next dividend (you type it in)
+    ensureHeaders(sh, 10, ["QuoteCurrency", "NextXD", "NextDividend"]);
+    sh.getRange(row, 11).setNumberFormat("@");
+    sh.getRange(row, 11, 1, 2).setValues([[p.nextXD || "", toFloat(p.nextDividend) || ""]]);
+  }
   return jsonResponse({ ok: true });
 }
 function deleteLinkedRow(linkedId) {
@@ -1678,8 +1707,9 @@ function addHoldingTxn(p) {
   }
   var sh = getSheet(SHEET.HOLDING_TXNS), r = sh.getLastRow() + 1, id = p.id || newId("X");
   sh.getRange(r, 3).setNumberFormat("@");
+  var tax = round2(toFloat(p.tax));
   sh.getRange(r, 1, 1, 11).setValues([[id, holdingId, date, type, type === "dividend" ? "" : qty, price || "",
-    amount, type === "dividend" ? "" : (fee || ""), account, String(p.note || ""), linked]]);
+    amount, type === "dividend" ? (tax || "") : (fee || ""), account, String(p.note || ""), linked]]);
   // latest trade price becomes the current price, unless a newer price was set by hand
   if (price && type !== "dividend" && (!h.priceDate || date >= h.priceDate)) {
     var hs = getSheet(SHEET.HOLDINGS), hrow = resolveRow(SHEET.HOLDINGS, { id: holdingId });
@@ -1777,6 +1807,8 @@ function refreshPrices() {
     if (!row) return;
     hs.getRange(row, 7).setNumberFormat("@");
     hs.getRange(row, 6, 1, 2).setValues([[Math.round(thb * 10000) / 10000, today]]);
+    ensureHeaders(hs, 10, ["QuoteCurrency", "NextXD", "NextDividend"]);
+    hs.getRange(row, 10).setValue(cur);
     result.updated.push(h.name);
   });
   // 4) account exchange rates
@@ -1784,6 +1816,7 @@ function refreshPrices() {
     if (a.cur === "THB" || !result.rates[a.cur]) return;
     accSh.getRange(a.rowIndex, 8).setValue(Math.round(result.rates[a.cur] * 10000) / 10000);
   });
+  try { result.benchmark = fetchBenchmark(); } catch (e) { result.benchmark = { ok: false, error: e.message }; }
   PropertiesService.getScriptProperties().setProperty("LAST_PRICE_REFRESH", new Date().toISOString());
   return result;
 }
@@ -1912,4 +1945,123 @@ function expenseHistory(days) {
       toBool(d[5]) ? 1 : 0, String(d[7] || ""), created]);
   });
   return { ok: true, from: from, rows: rows };
+}
+
+// ── PORTFOLIO: targets, benchmark ────────────────────────────
+function portfolioMeta() {
+  var targets = {};
+  sheetToRows(getSheet(SHEET.TARGETS), function(d){ return [String(d[0]), toFloat(d[1])]; }).forEach(function(r){ if (r[0]) targets[r[0]] = r[1]; });
+  var props = PropertiesService.getScriptProperties();
+  var bench = null;
+  try { bench = JSON.parse(props.getProperty("BENCH") || "null"); } catch (e) {}
+  return { ok: true, targets: targets, benchmarkSymbol: props.getProperty("BENCH_SYMBOL") || "INDEXBKK:SET",
+           benchmark: bench, tradeCount: Math.max(0, getSheet(SHEET.TRADES).getLastRow() - 1) };
+}
+function setTargets(p) {                           // p.targets = { "Gold": 20, "Thai stocks": 30, ... }
+  var sh = getSheet(SHEET.TARGETS), last = sh.getLastRow();
+  if (last > 1) sh.getRange(2, 1, last - 1, 2).clearContent();
+  var rows = Object.keys(p.targets || {}).filter(function(k){ return toFloat(p.targets[k]) > 0; })
+    .map(function(k){ return [k, toFloat(p.targets[k])]; });
+  if (rows.length) sh.getRange(2, 1, rows.length, 2).setValues(rows);
+  return jsonResponse({ ok: true });
+}
+function setBenchmark(p) {
+  var sym = String(p.symbol || "").trim().toUpperCase();
+  if (!sym) return jsonResponse({ ok: false, error: "Symbol required" });
+  PropertiesService.getScriptProperties().setProperty("BENCH_SYMBOL", sym);
+  return jsonResponse({ ok: true, benchmark: fetchBenchmark() });
+}
+// Weekly closing prices of the comparison index since your first investment (max ~5 years),
+// saved in Script Properties so the app can ask "what if the same money had gone into the index?"
+function fetchBenchmark() {
+  var props = PropertiesService.getScriptProperties();
+  var sym = props.getProperty("BENCH_SYMBOL") || "INDEXBKK:SET";
+  var first = "";
+  holdingTxnRows().forEach(function(t){ if (t.date && (!first || t.date < first)) first = t.date; });
+  if (!first) return { ok: false, error: "No investments yet" };
+  var minStart = addMonths(todayStr(), -60);
+  if (first < minStart) first = minStart;
+  var start = addMonths(first, 0), y = parseInt(start.substring(0, 4)), m = parseInt(start.substring(5, 7)), d = parseInt(start.substring(8, 10));
+  var sh = getSheet(SHEET.PRICES), last = sh.getLastRow();
+  if (last > 1) sh.getRange(2, 1, last - 1, 3).clearContent();
+  sh.getRange(2, 1).setFormula('=IFERROR(GOOGLEFINANCE("' + sym.replace(/"/g, "") + '","close",DATE(' + y + "," + m + "," + (d > 7 ? d - 7 : 1) + '),TODAY(),"WEEKLY"),"")');
+  var vals = [];
+  for (var attempt = 0; attempt < 6; attempt++) {
+    SpreadsheetApp.flush();
+    var lr = Math.max(2, sh.getLastRow());
+    vals = sh.getRange(2, 1, lr - 1, 2).getValues();
+    if (!vals.some(function(r){ return /loading/i.test(String(r[0])); })) break;
+    Utilities.sleep(1500);
+  }
+  var series = [];
+  vals.forEach(function(r) {
+    if (r[0] && typeof r[0] === "object" && typeof r[1] === "number" && r[1] > 0) series.push([formatDate(r[0]), Math.round(r[1] * 100) / 100]);
+  });
+  sh.getRange(2, 1, Math.max(1, sh.getLastRow() - 1), 3).clearContent();
+  if (!series.length) return { ok: false, error: "No prices for " + sym };
+  var out = { symbol: sym, series: series.slice(-300) };
+  props.setProperty("BENCH", JSON.stringify(out));
+  return { ok: true, symbol: sym, points: out.series.length };
+}
+
+// ── TRADING JOURNAL (e.g. XAUUSD on MT5) ─────────────────────
+// Kept apart from long-term holdings. Profit/Commission/Swap are in the trade currency (usually USD).
+// If a trade is linked to an account, its net result changes that account's balance.
+function tradeRows() {
+  return sheetToRows(getSheet(SHEET.TRADES), function(d, ri) {
+    var profit = toFloat(d[11]), comm = toFloat(d[9]), swap = toFloat(d[10]);
+    return { rowIndex: ri, id: String(d[0] || ""), ticket: String(d[1] || ""), symbol: String(d[2] || ""), side: String(d[3] || ""),
+      volume: toFloat(d[4]), openTime: tradeTime(d[5]), openPrice: toFloat(d[6]), closeTime: tradeTime(d[7]), closePrice: toFloat(d[8]),
+      commission: comm, swap: swap, profit: profit, net: round2(profit + comm + swap), account: String(d[12] || "").trim(),
+      note: String(d[13] || ""), currency: String(d[14] || "USD") };
+  });
+}
+function tradeTime(v) {
+  if (!v) return "";
+  if (typeof v === "object" && v.getTime) return Utilities.formatDate(v, "GMT+7", "yyyy-MM-dd HH:mm");
+  return String(v).replace(/\./g, "-").replace("T", " ").substring(0, 16);
+}
+function getTrades() {
+  var rows = tradeRows().map(function(t) {
+    return [t.id, t.ticket, t.symbol, t.side, t.volume, t.openTime, t.openPrice, t.closeTime, t.closePrice, t.commission, t.swap, t.profit, t.account, t.note, t.currency];
+  });
+  return { ok: true, trades: rows };
+}
+function tradeRowValues(t, id) {
+  return [id, String(t.ticket || ""), String(t.symbol || "").toUpperCase(), String(t.side || "").toLowerCase(), toFloat(t.volume),
+    tradeTime(t.openTime), toFloat(t.openPrice) || "", tradeTime(t.closeTime), toFloat(t.closePrice) || "",
+    toFloat(t.commission) || 0, toFloat(t.swap) || 0, toFloat(t.profit), String(t.account || ""), String(t.note || ""),
+    String(t.currency || "USD").toUpperCase()];
+}
+function addTrade(p) {
+  if (!p.symbol || !(toFloat(p.volume) > 0)) return jsonResponse({ ok: false, error: "Symbol and volume required" });
+  if (p.id && idExists(SHEET.TRADES, p.id)) return jsonResponse({ ok: true, duplicate: true, id: p.id });
+  var sh = getSheet(SHEET.TRADES), r = sh.getLastRow() + 1, id = p.id || newId("K");
+  sh.getRange(r, 1, 1, 15).setNumberFormats([["@","@","@","@","0.00","@","0.00###","@","0.00###","0.00","0.00","0.00","@","@","@"]]);
+  sh.getRange(r, 1, 1, 15).setValues([tradeRowValues(p, id)]);
+  return jsonResponse({ ok: true, id: id });
+}
+function deleteTrade(p) {
+  var row = resolveRow(SHEET.TRADES, p);
+  if (!row) return staleResponse();
+  getSheet(SHEET.TRADES).deleteRow(row);
+  return jsonResponse({ ok: true });
+}
+// Bulk import (from an MT5 report parsed in the app). Trades whose ticket is already saved are skipped.
+function importTrades(p) {
+  var have = {};
+  tradeRows().forEach(function(t){ if (t.ticket) have[t.ticket] = true; });
+  var rows = [], skipped = 0;
+  (p.trades || []).forEach(function(t) {
+    var tk = String(t.ticket || "");
+    if (!t.symbol || !(toFloat(t.volume) > 0) || (tk && have[tk])) { skipped++; return; }
+    if (tk) have[tk] = true;
+    rows.push(tradeRowValues(Object.assign({}, t, { account: p.account || t.account || "" }), newId("K")));
+  });
+  if (rows.length) {
+    var sh = getSheet(SHEET.TRADES), r = sh.getLastRow() + 1;
+    sh.getRange(r, 1, rows.length, 15).setNumberFormats(rows.map(function(){ return ["@","@","@","@","0.00","@","0.00###","@","0.00###","0.00","0.00","0.00","@","@","@"]; }));
+    sh.getRange(r, 1, rows.length, 15).setValues(rows);
+  }
+  return jsonResponse({ ok: true, added: rows.length, skipped: skipped });
 }
