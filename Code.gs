@@ -17,7 +17,8 @@
 //    Holdings         → Id | Name | Kind | Symbol | Unit | CurrentPrice (THB/unit) | PriceDate | Note | Status | QuoteCurrency | NextXD | NextDividend (per unit)
 //    Trades           → Id | Ticket | Symbol | Side | Volume | OpenTime | OpenPrice | CloseTime | ClosePrice | Commission | Swap | Profit | Account | Note | Currency
 //    AllocationTargets→ Class | TargetPct
-//    HoldingTxns      → Id | HoldingId | Date | Type (buy/sell/dividend) | Quantity | Price | Amount (THB) | Fee (dividends: tax withheld) | Account | Note | LinkedId
+//    HoldingTxns      → Id | HoldingId | Date | Type (buy/sell/dividend) | Quantity | Price | Amount (THB) | Fee (dividends: tax withheld) | Account | Note | LinkedId | OrigAmount | Currency
+//                       (OrigAmount/Currency: the exact amount in a foreign-currency account, e.g. USD paid/received)
 //    NetWorthHistory  → Month (yyyy-MM) | Date | Accounts | Investments | Assets | NetWorth | Receivables  (one snapshot per month, latest wins)
 //    _Prices          → scratch sheet (hidden) where GOOGLEFINANCE formulas are evaluated
 // ============================================================
@@ -789,7 +790,8 @@ function accountBalances(asOf) {
   holdingTxnRows().forEach(function(t) {
     if (!on(t.date)) return;
     var a = byName[t.account]; if (!a) return;
-    var amt = a.currency === 'THB' ? t.amount : t.amount / a.rate;
+    var amt = (t.origAmount && t.currency && t.currency === a.currency) ? t.origAmount   // exact USD moved
+            : (a.currency === 'THB' ? t.amount : t.amount / a.rate);
     if (t.type === 'buy') a.balance -= amt;
     else if (t.type === 'sell') a.balance += amt;
   });
@@ -1577,7 +1579,8 @@ function holdingTxnRows() {
   return sheetToRows(getSheet(SHEET.HOLDING_TXNS), function(d, ri) {
     return { rowIndex: ri, id: String(d[0] || ""), holdingId: String(d[1] || ""), date: formatDate(d[2]),
       type: String(d[3] || ""), quantity: toFloat(d[4]), price: toFloat(d[5]), amount: toFloat(d[6]),
-      fee: toFloat(d[7]), account: String(d[8] || "").trim(), note: String(d[9] || ""), linkedId: String(d[10] || "") };
+      fee: toFloat(d[7]), account: String(d[8] || "").trim(), note: String(d[9] || ""), linkedId: String(d[10] || ""),
+      origAmount: toFloat(d[11]), currency: String(d[12] || "").toUpperCase() };
   });
 }
 
@@ -1711,6 +1714,10 @@ function addHoldingTxn(p) {
   var tax = round2(toFloat(p.tax));
   sh.getRange(r, 1, 1, 11).setValues([[id, holdingId, date, type, type === "dividend" ? "" : qty, price || "",
     amount, type === "dividend" ? (tax || "") : (fee || ""), account, String(p.note || ""), linked]]);
+  if (toFloat(p.origAmount) && p.currency && String(p.currency).toUpperCase() !== "THB") {
+    ensureHeaders(sh, 12, ["OrigAmount", "Currency"]);
+    sh.getRange(r, 12, 1, 2).setValues([[round2(toFloat(p.origAmount)), String(p.currency).toUpperCase()]]);
+  }
   // latest trade price becomes the current price, unless a newer price was set by hand
   if (price && type !== "dividend" && (!h.priceDate || date >= h.priceDate)) {
     var hs = getSheet(SHEET.HOLDINGS), hrow = resolveRow(SHEET.HOLDINGS, { id: holdingId });
@@ -2050,11 +2057,14 @@ function deleteTrade(p) {
 }
 // Bulk import (from an MT5 report parsed in the app). Trades whose ticket is already saved are skipped.
 function importTrades(p) {
-  var have = {};
-  tradeRows().forEach(function(t){ if (t.ticket) have[t.ticket] = true; });
-  var rows = [], skipped = 0;
+  var have = {}, rowOf = {};
+  tradeRows().forEach(function(t){ if (t.ticket) { have[t.ticket] = true; rowOf[t.ticket] = t; } });
+  var rows = [], skipped = 0, relinked = 0, tsh = getSheet(SHEET.TRADES);
   (p.trades || []).forEach(function(t) {
     var tk = String(t.ticket || "");
+    if (tk && have[tk] && p.relink && rowOf[tk] && rowOf[tk].account !== String(p.account || "")) {
+      tsh.getRange(rowOf[tk].rowIndex, 13).setValue(String(p.account || "")); relinked++; skipped++; return;   // e.g. unlink from an account
+    }
     if (!t.symbol || !(toFloat(t.volume) > 0) || (tk && have[tk])) { skipped++; return; }
     if (tk) have[tk] = true;
     rows.push(tradeRowValues(Object.assign({}, t, { account: p.account || t.account || "" }), newId("K")));
@@ -2064,7 +2074,7 @@ function importTrades(p) {
     sh.getRange(r, 1, rows.length, 15).setNumberFormats(rows.map(function(){ return ["@","@","@","@","0.00","@","0.00###","@","0.00###","0.00","0.00","0.00","@","@","@"]; }));
     sh.getRange(r, 1, rows.length, 15).setValues(rows);
   }
-  return jsonResponse({ ok: true, added: rows.length, skipped: skipped });
+  return jsonResponse({ ok: true, added: rows.length, skipped: skipped, relinked: relinked });
 }
 
 // ── IMPORT DATA FILE ─────────────────────────────────────────
@@ -2082,6 +2092,31 @@ function fxOnDate(cur, date) {                     // THB per 1 unit of cur on t
     .find(function(a){ return a.cur === cur && a.rate; });
   return acc ? { rate: acc.rate, source: "today's account rate (historical rate not found)" } : { rate: 0, source: "not found" };
 }
+// Daily closes of CURRENCY:XXXTHB for a date range, in one GOOGLEFINANCE call: [[yyyy-MM-dd, rate], ...]
+function fxSeries(cur, from, to) {
+  var f = from, t = to;
+  var sh = getSheet(SHEET.PRICES), last = sh.getLastRow();
+  if (last > 1) sh.getRange(2, 1, last - 1, 3).clearContent();
+  var d = function(s){ return 'DATE(' + parseInt(s.substring(0, 4)) + ',' + parseInt(s.substring(5, 7)) + ',' + parseInt(s.substring(8, 10)) + ')'; };
+  sh.getRange(2, 1).setFormula('=IFERROR(GOOGLEFINANCE("CURRENCY:' + cur + 'THB","close",' + d(f) + '-7,' + d(t) + ',"DAILY"),"")');
+  var vals = [];
+  for (var attempt = 0; attempt < 6; attempt++) {
+    SpreadsheetApp.flush();
+    vals = sh.getRange(2, 1, Math.max(1, sh.getLastRow() - 1), 2).getValues();
+    if (!vals.some(function(r){ return /loading/i.test(String(r[0])); })) break;
+    Utilities.sleep(1500);
+  }
+  var out = [];
+  vals.forEach(function(r){ if (r[0] && typeof r[0] === "object" && goodNumber(r[1])) out.push([formatDate(r[0]), r[1]]); });
+  sh.getRange(2, 1, Math.max(1, sh.getLastRow() - 1), 3).clearContent();
+  return out;
+}
+function rateFromSeries(sr, date) {
+  if (!sr || !sr.length) return null;
+  var r = null;
+  for (var i = 0; i < sr.length && sr[i][0] <= date; i++) r = sr[i][1];
+  return r ? { rate: r, source: "Google Finance daily close" } : null;
+}
 function importPack(p) {
   var out = { ok: true, accounts: { added: [], skipped: [] }, holdings: { added: 0, skipped: 0, fx: [] }, trades: null };
   // accounts
@@ -2090,7 +2125,13 @@ function importPack(p) {
   (p.accounts || []).forEach(function(a) {
     var name = String(a.name || "").trim();
     if (!name) return;
-    if (have[name.toLowerCase()]) { out.accounts.skipped.push(name); return; }
+    if (have[name.toLowerCase()]) {
+      if (a.setStartingBalance) {                  // the file says what the opening balance should be
+        var row = resolveByKey(SHEET.ACCOUNTS, { key: name });
+        if (row) { getSheet(SHEET.ACCOUNTS).getRange(row, 3).setValue(toFloat(a.startingBalance)); out.accounts.updated = (out.accounts.updated || []).concat([name]); return; }
+      }
+      out.accounts.skipped.push(name); return;
+    }
     JSON.parse(addAccount({ name: name, type: a.type || "bank", startingBalance: a.startingBalance || 0, currency: a.currency || "THB",
       rate: a.rate, creditLimit: a.creditLimit, dueDay: a.dueDay, statementDay: a.statementDay }).getContent());
     have[name.toLowerCase()] = true; out.accounts.added.push(name);
@@ -2098,10 +2139,20 @@ function importPack(p) {
   // holdings
   var hByName = {};
   holdingsData().holdings.forEach(function(h){ hByName[h.name.toLowerCase()] = h.id; });
+  // one look-up of daily rates per currency for the whole period (instead of one per entry)
+  var series = {}, ranges = {};
+  (p.holdingTxns || []).forEach(function(t) {
+    var c = String(t.currency || "THB").toUpperCase(), d = t.date || todayStr();
+    if (c === "THB") return;
+    var r = ranges[c] || (ranges[c] = { from: d, to: d });
+    if (d < r.from) r.from = d; if (d > r.to) r.to = d;
+  });
+  Object.keys(ranges).forEach(function(c){ series[c] = fxSeries(c, ranges[c].from, ranges[c].to); });
+  var noted = {};
   (p.holdingTxns || []).forEach(function(t) {
     if (t.id && idExists(SHEET.HOLDING_TXNS, t.id)) { out.holdings.skipped++; return; }
     var cur = String(t.currency || "THB").toUpperCase(), date = t.date || todayStr();
-    var fx = cur === "THB" ? { rate: 1, source: "THB" } : fxOnDate(cur, date);
+    var fx = cur === "THB" ? { rate: 1, source: "THB" } : (rateFromSeries(series[cur], date) || fxOnDate(cur, date));
     if (!fx.rate) { out.holdings.skipped++; out.holdings.fx.push(cur + " rate not found for " + date); return; }
     var qty = toFloat(t.quantity);
     var price = t.priceForeign !== undefined ? toFloat(t.priceForeign) * fx.rate : toFloat(t.price);
@@ -2109,14 +2160,15 @@ function importPack(p) {
     var hName = String((t.holding || {}).name || "").trim(), hid = t.holdingId || hByName[hName.toLowerCase()] || "";
     var payload = { id: t.id, type: t.type || "buy", holdingId: hid, holding: t.holding, quantity: qty, price: round2(amount / (qty || 1)),
       amount: round2(amount), fee: toFloat(t.fee), tax: toFloat(t.tax), account: t.account || "", date: date,
+      origAmount: cur !== "THB" ? (t.amountForeign !== undefined ? toFloat(t.amountForeign) : qty * toFloat(t.priceForeign)) : 0, currency: cur,
       note: String(t.note || "") + (cur !== "THB" ? " · " + cur + " @ " + (Math.round(fx.rate * 10000) / 10000) + " THB" : "") };
     var r = JSON.parse(addHoldingTxn(payload).getContent());
     if (!r.ok) { out.holdings.skipped++; out.holdings.fx.push((hName || "holding") + ": " + r.error); return; }
     if (r.holdingId && hName) hByName[hName.toLowerCase()] = r.holdingId;
     out.holdings.added++;
-    if (cur !== "THB") out.holdings.fx.push(hName + ": " + cur + " " + (Math.round(fx.rate * 10000) / 10000) + " (" + fx.source + ")");
+    if (cur !== "THB" && !noted[hName]) { noted[hName] = true; out.holdings.fx.push(hName + ": " + cur + " at each day's rate (" + fx.source + ")"); }
   });
   // trades
-  if ((p.trades || []).length) out.trades = JSON.parse(importTrades({ trades: p.trades, account: p.tradeAccount || "" }).getContent());
+  if ((p.trades || []).length) out.trades = JSON.parse(importTrades({ trades: p.trades, account: p.tradeAccount || "", relink: !!p.relinkTrades }).getContent());
   return jsonResponse(out);
 }

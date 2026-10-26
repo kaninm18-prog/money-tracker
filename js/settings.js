@@ -232,14 +232,27 @@ function onPackFile(input) {
     ac.forEach(function(a) {
       var exists = accounts.some(function(x){ return x.name.toLowerCase() === String(a.name).toLowerCase(); });
       lines.push('🏦 Account <b>' + recEsc(a.name) + '</b>' + (a.currency && a.currency !== 'THB' && String(a.name).indexOf(a.currency) < 0 ? ' (' + a.currency + ')' : '') +
-        (exists ? ' — already exists, will be kept as is' : ', opening balance ' + fmtCur(a.startingBalance || 0, a.currency || 'THB')));
+        (exists ? (a.setStartingBalance ? ' — opening balance will be set to ' + fmtCur(a.startingBalance || 0, a.currency || 'THB') : ' — already exists, will be kept as is')
+                : ', opening balance ' + fmtCur(a.startingBalance || 0, a.currency || 'THB')));
     });
     if (tr.length) lines.push('📈 <b>' + tr.length + ' trades</b>' + (closed.length ? ' · ' + fmtDateY(closed[0]) + ' – ' + fmtDateY(closed[closed.length - 1]) : '') +
-      ' · net ' + (tr[0].currency === 'USD' || !tr[0].currency ? fmtUsd(net) : net.toFixed(2)) + (p.tradeAccount ? ' · linked to ' + recEsc(p.tradeAccount) : ''));
+      ' · net ' + (tr[0].currency === 'USD' || !tr[0].currency ? fmtUsd(net) : net.toFixed(2)) + (p.tradeAccount ? ' · linked to ' + recEsc(p.tradeAccount) : ' · journal only (no account)'));
+    // investments: one line per holding (buys / sells, dates, money in/out)
+    var byH = {};
     hx.forEach(function(t) {
-      var h = t.holding || {};
-      lines.push((t.type === 'buy' ? '🥇 ' : '• ') + recEsc(h.name || 'Holding') + ': ' + t.type + ' ' + (t.quantity || '') + ' ' + recEsc(h.unit || '') +
-        (t.currency && t.currency !== 'THB' ? ' — priced in ' + t.currency + ', converted at the ' + fmtDateY(t.date) + ' rate' : '') + (t.account ? '' : ' (already owned, no money moves)'));
+      var h = t.holding || {}, k = h.name || 'Holding';
+      var g = byH[k] || (byH[k] = { unit: h.unit || '', buys: 0, sells: 0, from: t.date, to: t.date, cur: t.currency || 'THB', acct: t.account || '' , noCash: 0 });
+      if (t.type === 'buy') g.buys++; else if (t.type === 'sell') g.sells++;
+      if (!t.account) g.noCash++;
+      if (t.date < g.from) g.from = t.date; if (t.date > g.to) g.to = t.date;
+      if (t.account) g.acct = t.account;
+    });
+    Object.keys(byH).forEach(function(k) {
+      var g = byH[k];
+      lines.push('🥇 <b>' + recEsc(k) + '</b>: ' + (g.buys ? g.buys + ' buy' + (g.buys > 1 ? 's' : '') : '') + (g.buys && g.sells ? ', ' : '') + (g.sells ? g.sells + ' sell' + (g.sells > 1 ? 's' : '') : '') +
+        (g.from !== g.to ? ' · ' + fmtDateY(g.from) + ' – ' + fmtDateY(g.to) : ' · ' + fmtDateY(g.from)) +
+        (g.acct ? ' · money moves with ' + recEsc(g.acct) : '') + (g.noCash ? ' · ' + (g.noCash === g.buys + g.sells ? 'already owned, no money moves' : g.noCash + ' without money moving') : '') +
+        (g.cur !== 'THB' ? ' · ' + g.cur + ' converted at each day\'s rate' : ''));
     });
     lines.push('<span class="hold-sub">Anything already in the app (same account name, trade or entry) is skipped.</span>');
     document.getElementById('pack-summary').innerHTML = lines.join('<br>');
@@ -256,11 +269,13 @@ function confirmPackImport() {
     if (!res.ok) { toast(/Unknown action/.test(res.error || '') ? 'Update Code.gs in Apps Script and redeploy first' : 'Error: ' + (res.error || '?'), 5000); return; }
     packPending = null; closeModal('pack-modal');
     var parts = [];
-    if (res.accounts.added.length) parts.push(res.accounts.added.length + ' account' + (res.accounts.added.length > 1 ? 's' : ''));
-    if (res.trades && res.trades.added) parts.push(res.trades.added + ' trades');
-    if (res.holdings.added) parts.push(res.holdings.added + ' investment entr' + (res.holdings.added > 1 ? 'ies' : 'y'));
+    if (res.accounts.added.length) parts.push(res.accounts.added.length + ' account' + (res.accounts.added.length > 1 ? 's' : '') + ' added');
+    if ((res.accounts.updated || []).length) parts.push('updated ' + res.accounts.updated.join(', '));
+    if (res.trades && res.trades.relinked) parts.push(res.trades.relinked + ' trades moved to journal-only');
+    if (res.trades && res.trades.added) parts.push(res.trades.added + ' trades added');
+    if (res.holdings.added) parts.push(res.holdings.added + ' investment entr' + (res.holdings.added > 1 ? 'ies' : 'y') + ' added');
     var skipped = (res.accounts.skipped.length) + (res.trades ? res.trades.skipped : 0) + res.holdings.skipped;
-    toast((parts.length ? 'Imported ' + parts.join(', ') : 'Nothing new to import') + (skipped ? ' · ' + skipped + ' already there' : ''), 6000);
+    toast((parts.length ? 'Done: ' + parts.join(' · ') : 'Nothing new to import') + (skipped ? ' · ' + skipped + ' already there' : ''), 6000);
     if (res.holdings.fx.length) setTimeout(function(){ toast(res.holdings.fx.join(' · '), 7000); }, 6200);
     trades = null;
     loadAll();

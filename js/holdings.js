@@ -105,7 +105,8 @@ function openHolding(id) {
     var detail = t.type === 'dividend' ? '' : fmtQty(t.quantity) + (h.unit ? ' ' + recEsc(h.unit) : '') + (t.price ? ' @ ' + fmtMoney(t.price) : '');
     return '<div class="hd-txn"><div><div class="t">' + what + (detail ? ' · ' + detail : '') + '</div>' +
       '<div class="d">' + fmtDateY(t.date) + ' · ' + (t.account ? recEsc(t.account) : 'no cash moved') + (t.fee ? (t.type === 'dividend' ? ' · tax ' : ' · fee ') + fmtMoney(t.fee) : '') + (t.note ? ' · ' + recEsc(t.note) : '') + '</div></div>' +
-      '<div class="a">' + (t.type === 'buy' ? '−' : '+') + fmtMoney(t.amount) + '</div>' +
+      '<div class="a">' + (t.type === 'buy' ? '−' : '+') + (t.origAmount && t.currency && t.currency !== 'THB'
+        ? fmtCur(t.origAmount, t.currency) + '<div class="d">≈ ' + fmtMoney(t.amount) + '</div>' : fmtMoney(t.amount)) + '</div>' +
       '<button title="Delete" onclick="deleteHoldingTxn(\'' + escQ(t.id) + '\')">✕</button></div>';
   }).join('') : '<div class="hold-sub">No entries yet.</div>';
   openModal('holding-modal');

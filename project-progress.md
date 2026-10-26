@@ -333,6 +333,17 @@ New full-screen **📊 Portfolio** (Accounts → investments section), new `js/p
 
 ---
 
+## Session 16 — MTS Gold as USD account + gold holdings
+
+- Holding entries can carry the exact foreign amount (HoldingTxns cols `OrigAmount`, `Currency`): buying gold with a USD account takes exactly that many dollars out, selling puts them back; cost/value stay in baht (each day's rate).
+- `importPack`: daily FX for the whole period in one GOOGLEFINANCE call (`fxSeries`); `setStartingBalance` updates an existing account's opening balance; `relinkTrades` moves existing trades to journal-only.
+- `gold_investment_import_v2.json`: MTS Gold (USD) opening $6,040.94 (deposits less $0.03 price rounding); holdings **MTS Gold (baht-weight)** 19 buys / 18 sells and **MTS Gold (ounce)** 9 buys / 6 sells, money moving with the USD account; bar withdrawal = sell without cash + Gold bar 96.5% (already there); 29 trades kept as journal-only. Ends at $5,904.53, both MTS holdings 0.
+- Import preview summarises per holding; holding history shows USD amount with ≈ baht; toasts wrap.
+
+**Deploy:** paste `Code.gs` → Manage deployments → New version → then import v2. Push `js/`, `css/app.css`, `sw.js`.
+
+---
+
 ## Features Deferred (from logic doc)
 
 These were reviewed and confirmed non-conflicting — ready to implement in a future session:
