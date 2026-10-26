@@ -19,6 +19,7 @@ function plHtml(v, base) {
   var pct = base > 0 ? ' (' + (v >= 0 ? '+' : '') + (v / base * 100).toFixed(1) + '%)' : '';
   return '<span class="' + cls + '">' + (v > 0.005 ? '+' : v < -0.005 ? '−' : '') + fmtMoney(Math.abs(v)) + pct + '</span>';
 }
+function fmtMonY(d) { var p = String(d).split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(p[1], 10) - 1] + ' ' + p[0].slice(2); }
 function holdingById(id) { return holdings.find(function(h){ return h.id === id; }) || null; }
 
 function renderHoldings() {
@@ -45,10 +46,16 @@ function renderHoldings() {
   });
   var closed = holdings.filter(function(h){ return h.quantity <= 0 && h.txns.length; });
   if (closed.length) {
-    html += '<div class="acc-page-section-header">Sold</div>' + closed.map(function(h) {
-      return '<div class="hold-card" onclick="openHolding(\'' + escQ(h.id) + '\')" style="opacity:.75"><div class="hold-icon">' + kindInfo(h.kind)[1] + '</div>' +
-        '<div style="min-width:0"><div class="hold-name">' + recEsc(h.name) + '</div><div class="hold-sub">Realised ' + plHtml(h.realized, 0) + (h.dividends ? ' · dividends ' + fmtMoney(h.dividends) : '') + '</div></div><div></div></div>';
-    }).join('');
+    var rz = closed.reduce(function(a, h){ return a + h.realized + h.dividends; }, 0), inv = closed.reduce(function(a, h){ return a + h.invested; }, 0);
+    html += '<div class="acc-page-section-header">✅ Closed positions</div>' +
+      '<div class="hold-total"><span>Realised profit</span><span>' + plHtml(rz, inv) + '</span></div>';
+    closed.sort(function(a, b){ return (b.lastDate || '').localeCompare(a.lastDate || ''); }).forEach(function(h) {
+      var span = h.firstDate ? fmtMonY(h.firstDate) + (h.lastDate && h.lastDate.slice(0, 7) !== h.firstDate.slice(0, 7) ? ' – ' + fmtMonY(h.lastDate) : '') : '';
+      html += '<div class="hold-card" onclick="openHolding(\'' + escQ(h.id) + '\')"><div class="hold-icon">' + kindInfo(h.kind)[1] + '</div>' +
+        '<div style="min-width:0"><div class="hold-name">' + recEsc(h.name) + '</div>' +
+        '<div class="hold-sub">Put in ' + fmtMoney(h.invested) + ' · got back ' + fmtMoney(h.proceeds) + (h.dividends ? ' + ' + fmtMoney(h.dividends) + ' dividends' : '') + (span ? ' · ' + span : '') + '</div></div>' +
+        '<div><div class="hold-val">' + plHtml(h.realized + h.dividends, h.invested) + '</div><div class="hold-pl">sold</div></div></div>';
+    });
   }
   var autoN = holdings.filter(function(h){ return h.autoPrice && h.quantity > 0; }).length;
   if (autoN || accounts.some(function(a){ return a.currency && a.currency !== 'THB'; })) {
@@ -157,7 +164,11 @@ function deleteHolding() {
 }
 
 // ── buy / sell / dividend form ──
+// Amounts are typed in the currency of the account the money comes from / goes to, then converted to ฿.
 var tradeType = 'buy';
+function tradeAcct() { var n = document.getElementById('tr-account').value; return n ? accounts.find(function(a){ return a.name === n; }) || null : null; }
+function tradeCur() { var a = tradeAcct(); return a && a.currency && a.currency !== 'THB' ? a.currency : 'THB'; }
+function tradeRate() { var a = tradeAcct(); return tradeCur() === 'THB' ? 1 : (a.rate || 1); }
 function openTrade(type, holdingId) {
   closeModal('chooser-modal'); closeModal('holding-modal');
   var sel = document.getElementById('tr-holding');
@@ -191,22 +202,25 @@ function tradeFormUpdate() {
   document.getElementById('tr-unit-group').style.display = asset ? 'none' : '';
   if (isNew && !document.getElementById('tr-unit').value) document.getElementById('tr-unit').placeholder = kindInfo(kind)[4] || 'units';
   var div = tradeType === 'dividend';
-  document.getElementById('tr-qp').style.display = (div || asset) ? 'none' : 'flex';
-  document.getElementById('tr-fee-group').style.display = '';
-  document.getElementById('tr-fee-label').textContent = div ? 'Tax withheld (฿)' : 'Fee (฿)';
-  document.getElementById('tr-fee').placeholder = div ? 'e.g. 10% for Thai stocks' : '0';
-  document.getElementById('tr-amount-label').textContent = div ? 'Dividend received (฿)' : asset ? (tradeType === 'sell' ? 'Sold for (฿)' : 'Price paid (฿)') : 'Total (฿)';
-  var unit = h ? (h.unit || 'unit') : (document.getElementById('tr-unit').value || kindInfo(kind)[4] || 'unit');
-  document.getElementById('tr-price-label').textContent = 'Price per ' + unit.replace(/s$/, '') + ' (฿)';
-  document.getElementById('tr-qty-label').textContent = 'Quantity' + (unit && unit !== 'unit' ? ' (' + unit + ')' : '');
-  document.getElementById('tr-acct-label').textContent = tradeType === 'buy' ? 'Paid from' : 'Received into';
+  document.getElementById('tr-acct-label').textContent = div ? 'Received into' : tradeType === 'buy' ? 'Paid from' : 'Received into';
   var accSel = document.getElementById('tr-account'), keep = accSel.value;
   accSel.innerHTML = (div ? '' : '<option value="">' + (tradeType === 'buy' ? '— Already owned (no money moves) —' : '— Not received in an account —') + '</option>') +
-    sortedAccounts().map(function(a){ return '<option value="' + escAttr(a.name) + '">' + acctIcon(a.type) + ' ' + recEsc(a.name) + '</option>'; }).join('');
+    sortedAccounts().map(function(a){ return '<option value="' + escAttr(a.name) + '">' + acctIcon(a.type) + ' ' + recEsc(a.name) + (a.currency && a.currency !== 'THB' && a.name.indexOf(a.currency) < 0 ? ' (' + a.currency + ')' : '') + '</option>'; }).join('');
   accSel.value = keep && accSel.querySelector('option[value="' + CSS.escape(keep) + '"]') ? keep : (accSel.options[div ? 0 : 1] ? accSel.options[div ? 0 : 1].value : '');
+  var cur = tradeCur(), rate = tradeRate(), cs = curSym(cur), fxEl = document.getElementById('tr-fx');
+  fxEl.style.display = cur === 'THB' ? 'none' : 'block';
+  fxEl.textContent = cur === 'THB' ? '' : 'Enter amounts in ' + cur + ' — 1 ' + cur + ' = ฿' + rate + ' (the account\'s rate; ↻ Refresh prices to update it).';
+  document.getElementById('tr-qp').style.display = (div || asset) ? 'none' : 'flex';
+  document.getElementById('tr-fee-group').style.display = '';
+  document.getElementById('tr-fee-label').textContent = (div ? 'Tax withheld (' : 'Fee (') + cs + ')';
+  document.getElementById('tr-fee').placeholder = div ? 'e.g. 10% for Thai stocks' : '0';
+  document.getElementById('tr-amount-label').textContent = (div ? 'Dividend received' : asset ? (tradeType === 'sell' ? 'Sold for' : 'Price paid') : 'Total') + ' (' + cs + ')';
+  var unit = h ? (h.unit || 'unit') : (document.getElementById('tr-unit').value || kindInfo(kind)[4] || 'unit');
+  document.getElementById('tr-price-label').textContent = 'Price per ' + unit.replace(/s$/, '') + ' (' + cs + ')';
+  document.getElementById('tr-qty-label').textContent = 'Quantity' + (unit && unit !== 'unit' ? ' (' + unit + ')' : '');
   document.getElementById('tr-title').textContent = div ? 'Dividend' : (tradeType === 'sell' ? 'Sell' : (isNew ? 'Add asset / investment' : 'Buy more'));
   var hint = '';
-  if (tradeType === 'sell' && h) hint = 'You hold ' + fmtQty(h.quantity) + (h.unit ? ' ' + h.unit : '') + (h.avgCost ? ' · avg cost ' + fmtMoney(h.avgCost) : '') + '.';
+  if (tradeType === 'sell' && h) hint = 'You hold ' + fmtQty(h.quantity) + (h.unit ? ' ' + h.unit : '') + (h.avgCost ? ' · avg cost ' + fmtMoney(h.avgCost) + (cur !== 'THB' ? ' ≈ ' + fmtCur(h.avgCost / rate, cur) : '') : '') + '.';
   else if (div) hint = 'Saved as income (Investment Returns).';
   else if (tradeType === 'buy') hint = 'Not counted as spending — it moves money into an asset. A fee is saved as an expense.';
   document.getElementById('tr-hint').textContent = hint;
@@ -236,6 +250,14 @@ function saveTrade() {
   if (!h) payload.holding = { name: document.getElementById('tr-name').value.trim(), kind: kind,
     symbol: document.getElementById('tr-symbol').value, unit: asset ? '' : (document.getElementById('tr-unit').value.trim() || kindInfo(kind)[4]) };
   if (payload.fee && !payload.account) { toast('Choose the account the fee was paid from'); return; }
+  var cur = payload.account ? tradeCur() : 'THB', rate = tradeRate();
+  if (cur !== 'THB') {                 // typed in the account's currency → keep the exact amount, store ฿ too
+    payload.currency = cur; payload.origAmount = amount;
+    payload.amount = Math.round(amount * rate * 100) / 100;
+    payload.price = Math.round(payload.price * rate * 10000) / 10000;
+    if (payload.fee) { payload.feeOrig = payload.fee; payload.fee = Math.round(payload.fee * rate * 100) / 100; }
+    if (payload.tax) payload.tax = Math.round(payload.tax * rate * 100) / 100;
+  }
   var btn = document.getElementById('tr-save'); btn.textContent = 'Saving…';
   api(payload).then(function(res) {
     btn.textContent = 'Save';

@@ -1617,7 +1617,10 @@ function holdingsData() {
     h.unrealized = round2(h.value - h.cost);
     h.realized = round2(realized); h.dividends = round2(dividends); h.invested = round2(invested); h.fees = round2(fees); h.taxWithheld = round2(tax);
     h.txns = mine.slice().reverse();
-    h.autoPrice = h.group === "investment" && !!quoteSymbol(h.symbol);
+    h.autoPrice = h.group === "investment" && !!priceSource(h);
+    h.proceeds = round2(mine.reduce(function(a, t){ return a + (t.type === "sell" ? t.amount : 0); }, 0));
+    var trades = mine.filter(function(t){ return t.type !== "dividend"; });
+    h.firstDate = trades.length ? trades[0].date : ""; h.lastDate = trades.length ? trades[trades.length - 1].date : "";
     totals.value += h.value; totals.cost += h.cost; totals.unrealized += h.unrealized;
     totals.realized += h.realized; totals.dividends += h.dividends;
     totals[h.group === "investment" ? "investments" : "assets"] += h.value;
@@ -1700,13 +1703,16 @@ function addHoldingTxn(p) {
   if (type === "dividend") {
     linked = newId("I");
     ensureRowIds(SHEET.INCOME);
-    getSheet(SHEET.INCOME).appendRow([date, amount, "Investment Returns", "Dividend · " + h.name + (p.note ? " · " + p.note : ""), account, "", "", linked]);
+    var fxCur = String(p.currency || "").toUpperCase(), foreign = fxCur && fxCur !== "THB";
+    getSheet(SHEET.INCOME).appendRow([date, amount, "Investment Returns", "Dividend · " + h.name + (p.note ? " · " + p.note : ""), account,
+      foreign && toFloat(p.origAmount) ? round2(toFloat(p.origAmount)) : "", foreign && toFloat(p.origAmount) ? fxCur : "", linked]);
     if (!categoryExists(SHEET.INCOME_CATS, "Investment Returns")) getSheet(SHEET.INCOME_CATS).appendRow(["Investment Returns"]);
   } else if (fee > 0) {
+    var feeForeign = toFloat(p.feeOrig) && p.currency && String(p.currency).toUpperCase() !== "THB";
     linked = newId("E");
     ensureRowIds(SHEET.EXPENSES);
     getSheet(SHEET.EXPENSES).appendRow([date, fee, "Investment Fees", (type === "buy" ? "Buy fee · " : "Sell fee · ") + h.name, account,
-      "FALSE", "", "", "", "", linked]);
+      "FALSE", "", "", feeForeign ? round2(toFloat(p.feeOrig)) : "", feeForeign ? String(p.currency).toUpperCase() : "", linked]);
     if (!categoryExists(SHEET.CATEGORIES, "Investment Fees")) getSheet(SHEET.CATEGORIES).appendRow(["Investment Fees"]);
   }
   var sh = getSheet(SHEET.HOLDING_TXNS), r = sh.getLastRow() + 1, id = p.id || newId("X");
@@ -1757,7 +1763,32 @@ function setCategoryIcon(p) {
 //  • Holdings with a Symbol get today's price: "PTT.BK" or "BKK:PTT" (Thai stocks), "NASDAQ:AAPL",
 //    "CURRENCY:BTCTHB"… Prices in other currencies are converted to baht.
 //  • Foreign-currency accounts get today's rate (e.g. USD → THB).
-// Thai gold prices and Thai mutual funds are not in GOOGLEFINANCE — update those by hand.
+//  • Gold (kind gold, unit oz / baht-weight / gram, or symbol XAUUSD, GOLD:BAHT, GOLD:GRAM) follows spot gold.
+// Thai mutual funds are not in GOOGLEFINANCE — update those by hand.
+// Gold has no stock symbol: it is priced from spot gold (XAU/USD, per troy ounce).
+// Thai 96.5% gold: 1 baht-weight = 15.244 g × 96.5% = 0.47295 oz of pure gold (an estimate — shops add a spread).
+var GOLD_UNITS = { OZ: 1, BAHT: 0.47295, GRAM: 1 / 31.1035 };
+function goldUnit(sym, unit, kind) {
+  var s = String(sym || "").trim().toUpperCase();
+  if (s === "XAUUSD" || s === "GOLD" || s === "GOLD:OZ" || s === "CURRENCY:XAUUSD") return "OZ";
+  if (s === "GOLD:BAHT") return "BAHT";
+  if (s === "GOLD:GRAM") return "GRAM";
+  if (s || kind !== "gold") return "";
+  var u = String(unit || "").toLowerCase();
+  if (/baht/.test(u)) return "BAHT";
+  if (/^(oz|ounce|ounces|troy)/.test(u)) return "OZ";
+  if (/^(g|gram|grams)$/.test(u)) return "GRAM";
+  return "";
+}
+// What to ask GOOGLEFINANCE for a holding: { q, factor, cur } (cur = known quote currency) or null
+function priceSource(h) {
+  var g = goldUnit(h.symbol, h.unit, h.kind);
+  if (g) return { q: "CURRENCY:XAUUSD", factor: GOLD_UNITS[g], cur: "USD" };
+  var q = quoteSymbol(h.symbol);
+  if (!q) return null;
+  var m = q.match(/^CURRENCY:[A-Z]{3}([A-Z]{3})$/);
+  return { q: q, factor: 1, cur: m ? m[1] : "" };
+}
 function quoteSymbol(sym) {
   var s = String(sym || "").trim().toUpperCase();
   if (!s) return "";
@@ -1790,10 +1821,15 @@ function refreshPrices() {
   var hs = getSheet(SHEET.HOLDINGS);
   var data = holdingsData().holdings.filter(function(h){ return h.autoPrice && h.quantity > 0; });
   // 1) prices + their currency
-  var px = evalFormulas(data.map(function(h) {
-    var q = quoteSymbol(h.symbol).replace(/"/g, "");
+  var srcs = data.map(priceSource);
+  var px = evalFormulas(data.map(function(h, i) {
+    var q = srcs[i].q.replace(/"/g, "");
     return ['="' + q + '"', '=IFERROR(GOOGLEFINANCE("' + q + '","price"),"")', '=IFERROR(GOOGLEFINANCE("' + q + '","currency"),"")'];
   }));
+  px.forEach(function(r, i) {                     // apply gold unit factor; known quote currency wins
+    if (goodNumber(r[1])) r[1] = r[1] * srcs[i].factor;
+    if (srcs[i].cur) r[2] = srcs[i].cur;
+  });
   // 2) exchange rates for every non-THB currency we need (accounts + quote currencies)
   var accSh = getSheet(SHEET.ACCOUNTS);
   var accRows = sheetToRows(accSh, function(d, ri){ return { rowIndex: ri, name: d[0], cur: String(d[6] || "THB").trim().toUpperCase() || "THB" }; });
@@ -1810,7 +1846,7 @@ function refreshPrices() {
     var price = px[i] ? px[i][1] : "", cur = String(px[i] ? px[i][2] : "").toUpperCase() || "THB";
     if (goodNumber(price) && cur === "GBX") { price = price / 100; cur = "GBP"; }   // London quotes in pence
     var thb = goodNumber(price) ? (cur === "THB" ? price : (result.rates[cur] ? price * result.rates[cur] : 0)) : 0;
-    if (!thb) { result.failed.push(h.name + " (" + h.symbol + ")"); return; }
+    if (!thb) { result.failed.push(h.name + (h.symbol ? " (" + h.symbol + ")" : "")); return; }
     var row = resolveRow(SHEET.HOLDINGS, { id: h.id });
     if (!row) return;
     hs.getRange(row, 7).setNumberFormat("@");

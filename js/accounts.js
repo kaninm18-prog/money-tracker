@@ -175,6 +175,27 @@ function toggleCreditFields() {
   document.getElementById('fa-balance-hint').style.display  = isCredit ? 'block' : 'none';
   onAcctCurChange();
 }
+var ACCT_CURS = [['THB','Thai baht'],['USD','US dollar'],['EUR','Euro'],['GBP','British pound'],['JPY','Japanese yen'],['SGD','Singapore dollar'],
+  ['CNY','Chinese yuan'],['HKD','Hong Kong dollar'],['AUD','Australian dollar'],['NZD','New Zealand dollar'],['CAD','Canadian dollar'],['CHF','Swiss franc'],
+  ['KRW','Korean won'],['TWD','Taiwan dollar'],['MYR','Malaysian ringgit'],['IDR','Indonesian rupiah'],['VND','Vietnamese dong'],['PHP','Philippine peso'],
+  ['INR','Indian rupee'],['AED','UAE dirham'],['CZK','Czech koruna'],['SEK','Swedish krona'],['NOK','Norwegian krone'],['DKK','Danish krone']];
+// Currency picker: a list of common currencies, "Other…" reveals a 3-letter box
+function setAcctCurrency(cur) {
+  cur = (cur || 'THB').toUpperCase();
+  var sel = document.getElementById('fa-currency-sel'), known = ACCT_CURS.some(function(c){ return c[0] === cur; });
+  sel.innerHTML = ACCT_CURS.map(function(c){ return '<option value="' + c[0] + '">' + c[0] + ' — ' + c[1] + '</option>'; }).join('') + '<option value="__other">Other…</option>';
+  sel.value = known ? cur : '__other';
+  var box = document.getElementById('fa-currency');
+  box.value = cur; box.style.display = known ? 'none' : '';
+}
+function onAcctCurSelect() {
+  var v = document.getElementById('fa-currency-sel').value, box = document.getElementById('fa-currency');
+  if (v === '__other') { box.style.display = ''; box.value = ''; box.focus(); }
+  else { box.style.display = 'none'; box.value = v; }
+  var r = document.getElementById('fa-rate'), same = accounts.find(function(a){ return a.currency === v && a.rate; });
+  if (!r.value && same) r.value = same.rate;     // reuse a rate we already know
+  onAcctCurChange();
+}
 function onAcctCurChange() {
   var isCredit = document.getElementById('fa-type').value === 'credit';
   var cur = (document.getElementById('fa-currency').value || 'THB').trim().toUpperCase();
@@ -195,7 +216,7 @@ function openAddAccount() {
   document.getElementById('fa-limit').value   = '';
   document.getElementById('fa-dueday').value  = '';
   document.getElementById('fa-stmtday').value = '';
-  document.getElementById('fa-currency').value = 'THB';
+  setAcctCurrency('THB');
   document.getElementById('fa-rate').value = '';
   toggleCreditFields();
   openModal('account-modal');
@@ -214,7 +235,7 @@ function openEditAccount(rowIndex) {
   document.getElementById('fa-limit').value   = a.creditLimit || '';
   document.getElementById('fa-dueday').value  = a.dueDay || '';
   document.getElementById('fa-stmtday').value = a.statementDay || '';
-  document.getElementById('fa-currency').value = a.currency || 'THB';
+  setAcctCurrency(a.currency || 'THB');
   document.getElementById('fa-rate').value = (a.currency && a.currency !== 'THB') ? a.rate : '';
   toggleCreditFields();
   openModal('account-modal');

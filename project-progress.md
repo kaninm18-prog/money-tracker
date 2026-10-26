@@ -388,3 +388,10 @@ expense_app/
 ├── personal_finance_tracking_logic.md ← Finance logic reference spec
 └── project-progress.md               ← This file
 ```
+
+## Session 17 — Currency-aware investing, gold prices, closed positions, currency picker
+- Buy / sell / dividend: amounts are typed in the chosen account's currency (labels show $, € …, with the rate); the app stores the exact foreign amount plus the ฿ value. Fees from a foreign account are saved as expenses with the exact foreign amount; dividends likewise as income.
+- Gold auto-price from spot XAU/USD (GOOGLEFINANCE CURRENCY:XAUUSD): unit oz = 1 oz, baht-weight = 0.47295 oz (15.244 g × 96.5%), gram = 1/31.1035 oz; or symbol XAUUSD / GOLD:BAHT / GOLD:GRAM. Estimate only (no shop spread).
+- Closed positions: fully sold holdings listed with put-in, got-back, date range and realised profit (+dividends) and %; total realised on top. holdingsData adds proceeds, firstDate, lastDate.
+- Account currency: dropdown of 24 common currencies + "Other…" (3-letter box); picking a currency reuses a known rate from another account.
+- Tests: test_s17.js (backend), ui11.js (UI). sw cache v10.
