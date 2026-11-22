@@ -4,7 +4,7 @@
 # One-time setup (repo Settings → Secrets and variables → Actions):
 #   Secret   CLASPRC_JSON   contents of ~/.clasprc.json after `clasp login` (clasp 2.4.2)
 #   Variable SCRIPT_ID      Apps Script → Project Settings → Script ID
-#   Variable DEPLOYMENT_ID  Apps Script → Deploy → Manage deployments → Deployment ID
+#   Secret   DEPLOYMENT_ID  Apps Script → Deploy → Manage deployments → Deployment ID (secret: it is the key to your data, keep it out of logs)
 name: Deploy backend
 
 on:
@@ -19,11 +19,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Check Code.gs parses
         run: cp Code.gs /tmp/code.js && node --check /tmp/code.js
@@ -54,7 +54,7 @@ jobs:
           mkdir -p ../backup && cp *.js appsscript.json ../backup/
 
       - name: Upload backup of the previous live code
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: live-backend-before-${{ github.sha }}
           path: backup/
@@ -68,8 +68,9 @@ jobs:
 
       - name: Update the existing deployment (same URL)
         env:
-          DEPLOYMENT_ID: ${{ vars.DEPLOYMENT_ID }}
+          DEPLOYMENT_ID: ${{ secrets.DEPLOYMENT_ID }}
         run: |
-          test -n "$DEPLOYMENT_ID" || { echo "Variable DEPLOYMENT_ID is missing"; exit 1; }
+          test -n "$DEPLOYMENT_ID" || { echo "Secret DEPLOYMENT_ID is missing"; exit 1; }
+          case "$DEPLOYMENT_ID" in AKfyc*AKfyc*) echo "DEPLOYMENT_ID looks pasted twice — check the secret"; exit 1;; esac
           cd build
           clasp deploy -i "$DEPLOYMENT_ID" -d "github ${GITHUB_SHA::7}"
