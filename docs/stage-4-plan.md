@@ -78,6 +78,8 @@ Each step is one branch → one PR → `npm run check` green → Arm reviews and
 - No behaviour change. This step can run in parallel with step 2.
 
 ### Step 2 — Create the Wealth Planner shell
+**Done 2026-11-22:** `kaninm18-prog/wealth-planner` with backend, tests, lint, checks + deploy workflows and the PWA; the first deploys worked and Arm's phone is connected. Both apps share `kaninm18-prog.github.io`, so each keeps its own `localStorage` keys and service-worker caches.
+
 - **(A)** Create the GitHub repo, a new Google Sheet "Wealth Planner", and a bound Apps Script project. Make one deployment and send the Script ID and Deployment ID. `CLASPRC_JSON` can be reused as a secret in the new repo.
 - Agent: scaffold the new repo with what Stages 1–3 built in Money Tracker: the `deploy-backend.yml` + `checks.yml` workflows, ESLint, `tests/harness.js`, `CLAUDE.md`, `CHANGELOG.md` + `APP_VERSION` test, `sw.js`, GitHub Pages. Copy `api()` and the offline queue from `js/core.js`. Copying is fine: the two apps should not share code at run time.
 

@@ -1,7 +1,8 @@
 // Money Tracker service worker — lets the app open without signal.
 // The page itself is fetched fresh when online (so updates show up right away)
 // and served from the cache when offline. Calls to Apps Script are never cached.
-var CACHE = 'money-tracker-v10';
+// The Wealth Planner shares this github.io address and its cache storage, so only touch caches named "money-tracker-…".
+var CACHE = 'money-tracker-v11';
 var SHELL = ['./', './index.html', './manifest.json', './css/app.css',
   './js/core.js', './js/dashboard.js', './js/transactions.js', './js/accounts.js',
   './js/holdings.js', './js/settings.js', './js/projects.js', './js/reports.js', './js/portfolio.js', './js/suggest.js',
@@ -16,7 +17,7 @@ self.addEventListener('install', function(e) {
 
 self.addEventListener('activate', function(e) {
   e.waitUntil(caches.keys().then(function(keys) {
-    return Promise.all(keys.filter(function(k){ return k !== CACHE; }).map(function(k){ return caches.delete(k); }));
+    return Promise.all(keys.filter(function(k){ return k.indexOf('money-tracker-') === 0 && k !== CACHE; }).map(function(k){ return caches.delete(k); }));
   }).then(function(){ return self.clients.claim(); }));
 });
 

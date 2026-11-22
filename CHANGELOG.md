@@ -3,6 +3,7 @@
 One line per change the user would notice. Newest first.
 
 ## 2026-11-22
+- Updating Money Tracker no longer wipes the Wealth Planner's offline copy (both apps share one web address).
 - Settings shows the app version at the bottom, so you can check the phone has the latest update.
 - Lint (ESLint) and tests run on every push; an error stops the backend deploy.
 - Backend split into feature files under `src/`; tests added for balances, currencies, transfers and receivables.
