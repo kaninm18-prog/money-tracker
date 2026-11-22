@@ -71,6 +71,8 @@ Money Tracker  ──reads───▶  one Income row per dividend ("Investment
 Each step is one branch → one PR → `npm run check` green → Arm reviews and merges. **(A)** marks the steps only Arm can do.
 
 ### Step 1 — Pin today's behaviour with tests (Money Tracker)
+**Done 2026-11-22:** `tests/holdings.test.js` (12 tests) and `reconcile()` in `src/24_reconcile.gs`. Found along the way: net-worth history starts at the first expense, income or transfer, so months that only have holding entries are not shown. This is pinned as-is; revisit it with D5 in step 4.
+
 - Add `tests/holdings.test.js` against the fake sheet: average cost, realised/unrealised, sell more than held is refused, buy/sell moving account cash (THB and USD accounts, `OrigAmount`), fee → Expenses, dividend → Income with tax, deleting a holding removes its linked rows, `holdingsAt()` for net worth, and trade P/L changing an account balance.
 - Add a read-only `reconcile` function returning every account balance (own currency and THB), holdings totals, receivables and net worth as one JSON object. Arm runs it from the Apps Script editor (running a function is fine; editing code there is not) and keeps the output as **before.json**.
 - No behaviour change. This step can run in parallel with step 2.
