@@ -48,6 +48,7 @@ Goal: mistakes are caught before they reach the phone.
 ## Stage 4 — Split out the Wealth Planner
 
 Goal: Money Tracker stays a fast cashflow app; assets and investments get their own app.
+Plan: [`docs/stage-4-plan.md`](docs/stage-4-plan.md) (draft, decisions D1–D5 open).
 
 - [ ] Create the new repo + GitHub Pages site + Google Sheet + Apps Script (with Stages 1–3 built in from day one)
 - [ ] Move holdings, buy/sell/dividend, live prices, allocation & targets, returns vs index, dividends and the trading journal
