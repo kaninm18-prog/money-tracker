@@ -164,7 +164,6 @@ function renderDashboard() {
   // Separate regular vs project expenses
   var expenses        = transactions.filter(function(t){return t.type==='expense';});
   var regularExpenses = expenses.filter(function(t){return !t.projectId;});
-  var projectExpenses = expenses.filter(function(t){return !!t.projectId;});
   var incomes         = transactions.filter(function(t){return t.type==='income';});
   var totalExp  = regularExpenses.reduce(function(s,t){return s+t.amount;},0);
   var totalInc  = incomes.reduce(function(s,t){return s+t.amount;},0);
