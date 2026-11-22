@@ -1,0 +1,75 @@
+# Deploys Code.gs to Google Apps Script and updates the EXISTING web-app deployment,
+# so the URL in the app's Settings never changes.
+#
+# One-time setup (repo Settings → Secrets and variables → Actions):
+#   Secret   CLASPRC_JSON   contents of ~/.clasprc.json after `clasp login` (clasp 2.4.2)
+#   Variable SCRIPT_ID      Apps Script → Project Settings → Script ID
+#   Variable DEPLOYMENT_ID  Apps Script → Deploy → Manage deployments → Deployment ID
+name: Deploy backend
+
+on:
+  push:
+    branches: [main]
+    paths: ['Code.gs', '.github/workflows/deploy-backend.yml']
+  workflow_dispatch:
+
+concurrency: deploy-backend
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check Code.gs parses
+        run: cp Code.gs /tmp/code.js && node --check /tmp/code.js
+
+      - name: Install clasp
+        run: npm install -g @google/clasp@2.4.2
+
+      - name: Sign in
+        env:
+          CLASPRC: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          test -n "$CLASPRC" || { echo "Secret CLASPRC_JSON is missing"; exit 1; }
+          printf '%s' "$CLASPRC" > ~/.clasprc.json
+
+      - name: Pull the live project (keeps its manifest, makes a backup)
+        env:
+          SCRIPT_ID: ${{ vars.SCRIPT_ID }}
+        run: |
+          test -n "$SCRIPT_ID" || { echo "Variable SCRIPT_ID is missing"; exit 1; }
+          mkdir build && cd build
+          printf '{"scriptId":"%s","rootDir":"."}' "$SCRIPT_ID" > .clasp.json
+          clasp pull
+          ls -la
+          n=$(ls *.js 2>/dev/null | wc -l)
+          if [ "$n" -ne 1 ] || ls *.html >/dev/null 2>&1; then
+            echo "Expected exactly one script file in the Apps Script project — stopping so nothing is overwritten."; exit 1
+          fi
+          mkdir -p ../backup && cp *.js appsscript.json ../backup/
+
+      - name: Upload backup of the previous live code
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-backend-before-${{ github.sha }}
+          path: backup/
+          retention-days: 90
+
+      - name: Push new code
+        run: |
+          cd build
+          cp ../Code.gs "$(ls *.js)"
+          clasp push -f
+
+      - name: Update the existing deployment (same URL)
+        env:
+          DEPLOYMENT_ID: ${{ vars.DEPLOYMENT_ID }}
+        run: |
+          test -n "$DEPLOYMENT_ID" || { echo "Variable DEPLOYMENT_ID is missing"; exit 1; }
+          cd build
+          clasp deploy -i "$DEPLOYMENT_ID" -d "github ${GITHUB_SHA::7}"
