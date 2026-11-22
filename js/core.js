@@ -4,6 +4,9 @@
 // ════════════════════════════════════════════
 //  STATE
 // ════════════════════════════════════════════
+// Shown in Settings so you can tell whether the phone has the latest update.
+// Bump with every release: the date of the newest CHANGELOG.md heading (add .2, .3 for more the same day).
+var APP_VERSION = '2026.11.22';
 var SCRIPT_URL = localStorage.getItem('moneyScriptUrl') || '';
 var API_TOKEN  = '';
 try { API_TOKEN = localStorage.getItem('moneyToken') || ''; } catch(e) {}

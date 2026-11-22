@@ -52,7 +52,7 @@ Writes made offline are queued and replayed (`QUEUEABLE` in `js/core.js`); adds 
 4. Work on a branch and open a pull request unless told to commit to `main`. Never force-push. Never rewrite pushed history.
 5. Keep changes small and focused; one topic per commit. Say what you changed and how you checked it.
 6. Don't change the money rules above without being asked — if a task seems to need it, stop and explain.
-7. Add a line to `CHANGELOG.md` for anything the user would notice.
+7. Add a line to `CHANGELOG.md` for anything the user would notice, and set `APP_VERSION` in `js/core.js` to the newest changelog date (a test checks they match).
 8. Commit messages end with the attribution lines given in your session (if any).
 
 ## Planned
