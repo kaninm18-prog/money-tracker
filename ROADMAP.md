@@ -34,13 +34,14 @@ Goal: small, tested pieces instead of one big file.
 
 Goal: mistakes are caught before they reach the phone.
 
-- [ ] Add ESLint with bug-focused rules (undefined variables, unused code, `==` vs `===`, unreachable code) — not style nitpicks
-- [ ] Run ESLint in the same workflow as tests and deploy
-- [ ] Write `CLAUDE.md`: how the app is structured, how to run tests, how data flows, and the rules:
+- [x] Add ESLint with bug-focused rules (undefined names, the same function defined twice across files, `if (a = b)`, unreachable code, unused variables) — not style nitpicks
+- [x] Run ESLint in the same workflow as tests and deploy (`checks.yml` on every push/PR; `deploy-backend.yml` before deploying)
+- [ ] Fix the 3 lint warnings — good first task to hand to an agent
+- [x] Write `CLAUDE.md`: how the app is structured, how to run tests, how data flows, and the rules:
   - never write to the live Google Sheet
   - every change to money logic needs a test
   - work on a branch and open a pull request; never force-push
-- [ ] Add a small `CHANGELOG` habit (one line per release) so phone updates are easy to check
+- [x] Add a small `CHANGELOG` habit (one line per release) so phone updates are easy to check
 
 **You learn:** linting, writing instructions that make agents reliable.
 
