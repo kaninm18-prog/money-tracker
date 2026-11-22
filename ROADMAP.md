@@ -8,12 +8,12 @@ Two goals run side by side: make the apps easier and safer to develop, and learn
 
 Goal: a push to GitHub updates the Apps Script backend, and the web-app URL never changes.
 
-- [ ] Turn on "Google Apps Script API" at script.google.com/home/usersettings *(Arm)*
-- [ ] Install clasp (`npm install -g @google/clasp`) and run `clasp login` *(Arm — sign-in is yours)*
-- [ ] Add the contents of `~/.clasprc.json` as the GitHub secret `CLASPRC_JSON` *(Arm)*
-- [ ] Share the Script ID (Project Settings) and current Deployment ID (Deploy → Manage deployments) *(Arm)*
-- [ ] Add `.clasp.json` and a GitHub Actions workflow: on push to `main` that changes the backend → `clasp push` → `clasp deploy -i <DeploymentID>`
-- [ ] Test with a harmless change; confirm the URL in Settings still works
+- [x] Turn on "Google Apps Script API" at script.google.com/home/usersettings *(Arm)*
+- [x] Install clasp (`npm install -g @google/clasp`) and run `clasp login` *(Arm — sign-in is yours)*
+- [x] Add the contents of `~/.clasprc.json` as the GitHub secret `CLASPRC_JSON` *(Arm)*
+- [x] Share the Script ID (Project Settings) and current Deployment ID (Deploy → Manage deployments) *(Arm)*
+- [x] Add `.clasp.json` and a GitHub Actions workflow: on push to `main` that changes the backend → `clasp push` → `clasp deploy -i <DeploymentID>`
+- [x] Test with a harmless change; confirm the URL in Settings still works
 
 **You learn:** CI/CD basics, secrets, what a deployment is.
 
