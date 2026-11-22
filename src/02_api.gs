@@ -103,6 +103,7 @@ function bootstrap(p) {
   cleanupCategoriesOnce();
   ensureRowIds(SHEET.EXPENSES); ensureRowIds(SHEET.INCOME); ensureRowIds(SHEET.TRANSFERS);
   recvEnsureIds(getSheet(SHEET.RECEIVABLES));
+  var wealth = syncWealth();                       // Wealth Planner dividends in, linked flows out (skipped when not set up)
   var generated = 0;
   if (p.runChecks) {
     generated += run(checkInstallments).generated || 0;
@@ -123,9 +124,10 @@ function bootstrap(p) {
   var hist = expenseHistory(180);
   var hld  = holdingsData();
   var pf   = portfolioMeta();
-  var live = { accounts: acc.totalBalance || 0, investments: hld.totals.investments, assets: hld.totals.assets, receivables: receivablesAt("") };
+  var live = liveNetWorth(acc, hld);
   var nwh  = netWorthHistory(live);
   } finally { _readCache = null; }
+  if (wealth.flows !== undefined && generated) writeLinkedFlows();   // new recurring transfers
   saveNetWorthSnapshot(live);
   var props = PropertiesService.getScriptProperties();
   return jsonResponse({
