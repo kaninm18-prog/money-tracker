@@ -10,7 +10,7 @@ name: Deploy backend
 on:
   push:
     branches: [main]
-    paths: ['src/**', 'tests/**', 'package.json', '.github/workflows/deploy-backend.yml']
+    paths: ['src/**', 'tests/**', 'scripts/**', 'package.json', 'package-lock.json', '.github/workflows/deploy-backend.yml']
   workflow_dispatch:
 
 concurrency: deploy-backend
@@ -27,6 +27,12 @@ jobs:
 
       - name: Check the backend parses
         run: cat src/*.gs > /tmp/backend.js && node --check /tmp/backend.js
+
+      - name: Install tools
+        run: npm ci
+
+      - name: Lint (an error stops the deploy)
+        run: npm run lint
 
       - name: Run tests (a failing test stops the deploy)
         run: npm test

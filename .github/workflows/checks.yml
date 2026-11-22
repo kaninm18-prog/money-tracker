@@ -1,0 +1,22 @@
+# Lint + tests on every push and pull request (front end and back end).
+# Deploying the backend is handled separately by deploy-backend.yml.
+name: Checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Lint (errors fail, warnings are listed)
+        run: npm run lint
+      - name: Tests
+        run: npm test

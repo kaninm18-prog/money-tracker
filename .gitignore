@@ -11,3 +11,6 @@ _to_delete/
 # Investment statements and import files (personal data)
 gold_investment*
 *_import.json
+
+# Tooling
+node_modules/
