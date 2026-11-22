@@ -109,7 +109,9 @@ function deleteRepayment(p) {
   var recvId = String(sh.getRange(row, 2).getValue() || "");
   sh.deleteRow(row);
   loadReceivables().forEach(function(rv){
-    if (rv.id === recvId && rv.status === "settled" && rv.repayments.length && rv.left > 0.005) markRecvStatus(rv.rowIndex, "pending", "");
+    // Reopen if money is now outstanding. With no repayments left it would otherwise look like an
+    // old-style settled receivable (counted as fully returned), so reopen that case too.
+    if (rv.id === recvId && rv.status === "settled" && (!rv.repayments.length || rv.left > 0.005)) markRecvStatus(rv.rowIndex, "pending", "");
   });
   return jsonResponse({ ok: true });
 }

@@ -21,10 +21,12 @@ Goal: a push to GitHub updates the Apps Script backend, and the web-app URL neve
 
 Goal: small, tested pieces instead of one big file.
 
-- [ ] Split `Code.gs` into files by feature (`accounts.gs`, `expenses.gs`, `income.gs`, `transfers.gs`, `receivables.gs`, `recurring.gs`, `budgets.gs`, `holdings.gs`, `api.gs` for the `doPost` router)
-- [ ] Turn the in-memory Google Sheets mock into a permanent test suite (`tests/`), run with `npm test`
-- [ ] Cover the money rules first: account balances, transfers across currencies, receivable repayments, net worth
-- [ ] Run the tests in the GitHub workflow — a failing test blocks the deploy
+- [x] Split `Code.gs` into 24 feature files under `src/` (`00_config.gs`, `02_api.gs`, `07_accounts.gs`, `10_receivables.gs`, …) — numbered so they load in order
+- [x] Turn the in-memory Google Sheets mock into a permanent test suite (`tests/harness.js` + `tests/*.test.js`), run with `npm test`
+- [x] Cover the money rules first: account balances, transfers across currencies, receivable repayments, total balance (net-worth history still to add)
+- [x] Run the tests in the GitHub workflow — a failing test blocks the deploy
+
+- [x] First catch: deleting the only repayment of a settled receivable left it "settled" — fixed, with a test
 
 **You learn:** unit tests, mocks, why tests make refactoring safe.
 
