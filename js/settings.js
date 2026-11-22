@@ -139,6 +139,7 @@ function deleteIncCat(rowIndex, name) {
 // ════════════════════════════════════════════
 function openSettings() {
   document.getElementById('settings-url').value = SCRIPT_URL;
+  document.getElementById('app-version').textContent = 'Version ' + APP_VERSION;
   renderSettingsCats();
   renderBackupStatus();
   openModal('settings-modal');
