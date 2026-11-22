@@ -36,7 +36,7 @@ Goal: mistakes are caught before they reach the phone.
 
 - [x] Add ESLint with bug-focused rules (undefined names, the same function defined twice across files, `if (a = b)`, unreachable code, unused variables) — not style nitpicks
 - [x] Run ESLint in the same workflow as tests and deploy (`checks.yml` on every push/PR; `deploy-backend.yml` before deploying)
-- [ ] Fix the 3 lint warnings — good first task to hand to an agent
+- [x] Fix the 3 lint warnings — good first task to hand to an agent
 - [x] Write `CLAUDE.md`: how the app is structured, how to run tests, how data flows, and the rules:
   - never write to the live Google Sheet
   - every change to money logic needs a test
@@ -85,6 +85,6 @@ Start read-only: scheduled agents report, they don't change records.
 
 ## Also noted
 
-- [ ] Version number in the app, for faster phone updates
+- [x] Version number in the app, for faster phone updates (Settings → bottom; `APP_VERSION` in `js/core.js`, kept in step with `CHANGELOG.md` by a test)
 - [ ] Add the USD / EUR / GBP accounts (XX1330, XX1342, XX9973) with the currency feature
 - [ ] 11 Salary outflows from the Krungthai review still to identify
