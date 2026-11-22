@@ -405,6 +405,16 @@
       <input type="number" class="form-control" id="fa-rate" placeholder="e.g. 33" inputmode="decimal" step="0.0001" min="0">
       <div style="font-size:0.72rem;color:var(--text2);margin-top:4px">You set this rate yourself and can update it any time. The balance is shown in its own currency with the ฿ value underneath.</div>
     </div>
+    <!-- Linked investment account (shown for type = investment): its value comes from the Wealth Planner -->
+    <div class="form-group" id="fa-linked-group" style="display:none">
+      <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="fa-linked" onchange="toggleLinkedFields()"> Linked investment account (Wealth Planner)
+      </label>
+      <div id="fa-linked-fields" style="display:none;margin-top:6px">
+        <input type="text" class="form-control" id="fa-linkedto" placeholder="Name in the Wealth Planner, e.g. Kasikorn Securities">
+        <div style="font-size:0.72rem;color:var(--text2);margin-top:4px">The balance is the value the Wealth Planner reports. Move money in and out with transfers; dividends paid here are recorded as income but don't add to the balance.</div>
+      </div>
+    </div>
     <div class="form-group">
       <label class="form-label" id="fa-balance-label">Starting Balance (฿)</label>
       <div class="amount-wrap"><span class="amount-prefix" id="fa-prefix">฿</span>
