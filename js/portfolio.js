@@ -264,7 +264,7 @@ function dividendsHtml() {
     if (x.t.date > yAgo) { ttm += x.t.amount; ttmTax += tax; }
   });
   var hs = investHoldings();
-  var cost = hs.reduce(function(s, h){ return s + h.cost; }, 0), value = hs.reduce(function(s, h){ return s + h.value; }, 0);
+  var cost = hs.reduce(function(s, h){ return s + h.cost; }, 0);
   var html = '<div class="pf-hero"><div class="pf-hero-l">Dividends, last 12 months</div><div class="pf-hero-v pl-pos">' + fmtMoney(ttm) + '</div>' +
     '<div class="pf-hero-s">≈ ' + fmtMoney(ttm / 12) + ' a month' + (ttmTax ? ' · ' + fmtMoney(ttmTax) + ' tax withheld' : '') +
     (cost ? ' · yield on cost ' + pct(ttm, cost).toFixed(2) + '%' : '') + '</div></div>';
@@ -516,7 +516,7 @@ function parseReportText(text, name) {
     var doc = new DOMParser().parseFromString(text, 'text/html');
     var rows = Array.prototype.map.call(doc.querySelectorAll('tr'), function(tr) {
       var out = [];
-      Array.prototype.forEach.call(tr.children, function(td) { if (td.classList && td.classList.contains('hidden')) return; var span = parseInt(td.getAttribute('colspan')) || 1; out.push(td.textContent.trim()); for (var i = 1; i < span && span < 8; i++) out.push(''); });
+      Array.prototype.forEach.call(tr.children, function(td) { if (td.classList && td.classList.contains('hidden')) return; var span = parseInt(td.getAttribute('colspan')) || 1; if (span >= 8) span = 1; out.push(td.textContent.trim()); for (var i = 1; i < span; i++) out.push(''); });
       return out;
     });
     return parseTradeTable(rows);
