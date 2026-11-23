@@ -70,6 +70,9 @@ Money Tracker  ──reads───▶  one Income row per dividend ("Investment
 - **C3. USD fees:** `HoldingTxns` gets a new column at the end, **`FeeOrig`**: the fee in the trade's `Currency` when that isn't THB, added with `ensureHeaders`. The broker-cash ledger (3d) uses it for USD brokers.
 - **C4. `AsOf` is a date:** a transfer dated the same day as the export's `AsOf` counts as already inside the value. A same-day transfer after the morning export dips the total until the next daily export. Accepted for now.
 - **C5. Old dividends:** see step 5. Only dividends recorded in the Wealth Planner after the migration are exported with `WD` Ids.
+- **C6. USD tax withheld:** `HoldingTxns` gets **`TaxOrig`** at the end (after `FeeOrig`): tax withheld on a dividend in the dividend's `Currency` when that isn't THB. Same rule as C3. *(Agreed 2026-11-23.)*
+- **C7. Assets with no broker** (car, property: holdings whose entries have no `Account`): the Wealth Planner exports them as **one extra `_Export_Values` row, `Account` = `Other assets`**, in THB. In step 5 Arm adds a linked Money Tracker account for it (`LinkedTo` = `Other assets`), so assets stay in net worth once Money Tracker stops adding its own holdings. *(Proposed by the reviewer 2026-11-23; Arm can change the name.)*
+- **C8. Which dividends are exported:** the Wealth Planner gives each new dividend entry an Id starting with `WD` and exports only those. Rows copied from Money Tracker keep their old Ids, so they are never exported (C5).
 
 ---
 
@@ -91,7 +94,7 @@ Each step is one branch → one PR → `npm run check` green → Arm reviews and
 - Agent: scaffold the new repo with what Stages 1–3 built in Money Tracker: the `deploy-backend.yml` + `checks.yml` workflows, ESLint, `tests/harness.js`, `CLAUDE.md`, `CHANGELOG.md` + `APP_VERSION` test, `sw.js`, GitHub Pages. Copy `api()` and the offline queue from `js/core.js`. Copying is fine: the two apps should not share code at run time.
 
 ### Step 3 — Port the investment code into the Wealth Planner
-**3a done 2026-11-22** (Wealth-Planner#2): holdings, prices and portfolio backend, with tests. Next: 3b trades + import, 3c screens, 3d broker-cash ledger + export tabs (with C1–C3).
+**3a done 2026-11-22** (Wealth-Planner#2): holdings, prices and portfolio backend. **3b and 3c done 2026-11-23** (Wealth-Planner#3, #4): trades, import, `FeeOrig`, and the screens. Next: **3d** broker-cash ledger + export tabs (C1–C8).
 
 - Move the files listed in section 1, and the step 1 tests with them. The tests must pass unchanged, apart from the cash leg, which now uses the broker-cash ledger (D2).
 - Add the broker-cash ledger, the reader for `_Export_LinkedFlows`, the writers for `_Export_Values` and `_Export_Dividends`, the per-broker "dividends paid to" setting (broker or a bank account), and the daily price refresh trigger. A dividend paid to a bank does **not** add to broker cash.
