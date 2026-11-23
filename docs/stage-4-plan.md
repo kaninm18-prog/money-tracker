@@ -73,6 +73,10 @@ Money Tracker  ──reads───▶  one Income row per dividend ("Investment
 - **C6. USD tax withheld:** `HoldingTxns` gets **`TaxOrig`** at the end (after `FeeOrig`): tax withheld on a dividend in the dividend's `Currency` when that isn't THB. Same rule as C3. *(Agreed 2026-11-23.)*
 - **C7. Assets with no broker** (car, property: holdings whose entries have no `Account`): the Wealth Planner exports them as **one extra `_Export_Values` row, `Account` = `Other assets`**, in THB. In step 5 Arm adds a linked Money Tracker account for it (`LinkedTo` = `Other assets`), so assets stay in net worth once Money Tracker stops adding its own holdings. *(Proposed by the reviewer 2026-11-23; Arm can change the name.)*
 - **C8. Which dividends are exported:** the Wealth Planner gives each new dividend entry an Id starting with `WD` and exports only those. Rows copied from Money Tracker keep their old Ids, so they are never exported (C5).
+- **C9. A linked account's other cash** *(proposed by the step 5 agent 2026-11-23; Arm to agree)*. Once an account is linked, Money Tracker skips everything on it except transfers, so the Wealth Planner must get the rest as cash, or it is lost. Two halves:
+  - **Money Tracker → `_Export_LinkedFlows`** also carries, for each linked account: its **opening balance** (`Id` = `OPENING`, no date, the `StartingBalance`), every **Income** row on it (+) except the `WD` dividends (already inside the Wealth Planner value, D3), every **Expense** row on it (−), each **receivable** lent from it (−) and each **repayment** received into it (+). Amounts in the account's currency, by the same rules as `accountBalances()`. A sixth column **`Kind`** says which: `transfer`, `opening`, `income`, `expense`, `receivable`, `repayment`. The Wealth Planner only reads columns 1–5, so an older one still works. These rows are rebuilt every time, like the transfers, so it holds for anything typed on a linked account later too. Money Tracker's own at-cost value of a linked account (history, D5, and "value unknown") uses the same rows, and rows dated after the export's `AsOf` are added on top (C4).
+  - **Wealth Planner ledger:** an entry with a **`LinkedId`** was copied from Money Tracker, which booked its fee or dividend as an Expense/Income row (the Wealth Planner never writes `LinkedId`). That row *is* the cash: on the linked account it now arrives as a C9 flow; on a bank (case b, a gold shop paid from KBank) it stays on the bank. So the ledger does **not** count those fees and dividends again. `DividendsTo` applies only to dividends recorded in the Wealth Planner.
+  - Why this and not a one-off "opening" row written by the migration: the cash of a copied entry is decided by the row Money Tracker actually holds (edited, moved or deleted fee rows included), and the same rule covers both case (a) and case (b) with no special cases. Money Tracker stays the record of every movement of money.
 
 ---
 
@@ -112,6 +116,29 @@ Each step is one branch → one PR → `npm run check` green → Arm reviews and
 - Steps 3 and 4 can run in parallel (two agents) once the contract in section 3 is agreed. A third agent reviews both PRs against the contract.
 
 ### Step 5 — Migration (rehearsed on the fake sheet, then run once for real)
+**Built 2026-11-23** (money-tracker `step-5-migration`, Wealth-Planner `step-5-migration`): `migrationPlan` / `migrateToLinked` / `undoMigration` (`src/26_migration.gs`), the Wealth Planner's `applyBrokerMapping` (`src/16_migration.gs`), C9 on both sides, and `tests/migration.test.js`, which rehearses the whole runbook with both apps' real code. Arm's steps: `docs/stage-4-migration-runbook.md`.
+
+**The migration mapping** (Arm writes it; both tools read the same JSON, from their Script Property `MIGRATION_MAPPING` or as an argument):
+```json
+{
+  "accounts": {
+    "MTS Gold (USD)": { "link": true },
+    "KBank": { "holdings": { "Gold 96.5%": "Gold shop" } }
+  },
+  "brokers": {
+    "MTS Gold (USD)": { "currency": "USD", "rate": 34.12, "dividendsTo": "" },
+    "Gold shop":      { "currency": "THB", "dividendsTo": "KBank" }
+  },
+  "otherAssets": "Other assets"
+}
+```
+- `accounts`: one entry per Money Tracker account that has holding entries or trades.
+  - `{ "link": true }` = case (a), link in place: `LinkedTo` = the account's own name (`"link": "<name>"` for another Wealth Planner name). Its trades, entries, transfers, opening balance, Income/Expense rows and receivables all stay; C9 carries the cash.
+  - `{ "holdings": { "<holding name or Id>": "<broker>" } }` = case (b), a bank that paid a shop directly. Every holding with entries on that bank must be listed (use the Id when two holdings share a name). Each buy becomes a transfer *bank → broker* and each sell *broker → bank* (same date; the bank side moves by exactly what the entry moved before; `ReceivedAmount` when the currencies differ); the entries' `Account` becomes the broker. Fee and dividend rows stay on the bank (C5, C9). A broker that isn't an account yet is created as a linked account with the same name.
+- `brokers`: every broker named above, keyed by its Wealth Planner name: `currency` (default THB), `rate` (THB per 1 unit; required when not THB, and equal to the Money Tracker account's rate for a linked-in-place account), `dividendsTo` (empty = the broker's cash, or a Money Tracker bank account name; for dividends recorded from now on).
+- `otherAssets`: the Money Tracker account to create, linked to `Other assets` (C7), for things held with no broker (the car, the gold bar). Required when there are any.
+- The tools refuse, and change nothing, when an entry or trade isn't covered, a holding name is ambiguous, a broker is missing from `brokers`, a broker name is already an unlinked account, a currency or rate doesn't match, or a trade sits on a bank (trades can't become transfers).
+
 - Agent writes `migrateToLinked` (Money Tracker) and a test that runs it on a fake sheet built from the step 1 fixtures. Then it checks that every non-linked account balance and the total net worth come out identical.
 - What it does:
   1. Create one linked account per place money went (each distinct `HoldingTxns.Account` used by a buy/sell, plus the trade accounts such as MTS Gold (USD)).
