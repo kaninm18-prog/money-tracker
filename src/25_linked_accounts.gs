@@ -58,19 +58,48 @@ function wealthValues() {
 // One entry per transfer into (+) or out of (−) a linked account, in that account's currency
 function linkedFlowsOf(r, byName) {
   var f = byName[r.from], t = byName[r.to], out = [];
-  if (f && f.linked) out.push({ id: r.id, date: r.date, account: f, amount: -r.amount });
-  if (t && t.linked) out.push({ id: r.id, date: r.date, account: t, amount: transferReceived(r, f, t) });
+  if (f && f.linked) out.push({ id: r.id, date: r.date, account: f, amount: -r.amount, kind: "transfer" });
+  if (t && t.linked) out.push({ id: r.id, date: r.date, account: t, amount: transferReceived(r, f, t), kind: "transfer" });
+  return out;
+}
+
+// C9: the rest of a linked account's cash that only Money Tracker knows about, so the Wealth Planner
+// gets it through _Export_LinkedFlows too (a linked account's own rows are skipped in its balance here):
+//  • Income rows on it (+) and Expense rows on it (−), in the account's currency. Not the WD dividends:
+//    those come from the Wealth Planner and are already inside its value (D3).
+//  • Receivables lent from it (−) and repayments received into it (+), by the same rule as accountBalances.
+// The opening balance (StartingBalance) is added by writeLinkedFlows.
+function linkedOtherFlows(byName, incRows, expRows, receivables) {
+  var out = [];
+  function linked(n) { var a = byName[n]; return a && a.linked ? a : null; }
+  function own(a, thb) { return a.currency === "THB" ? thb : thb / a.rate; }
+  incRows.forEach(function(r) {
+    var a = linked(r.account);
+    if (a && !DIVIDEND_ID.test(r.id)) out.push({ id: r.id, date: r.date, account: a, amount: amtForAccount(a, r.amount, r.orig, r.cur), kind: "income" });
+  });
+  expRows.forEach(function(r) {
+    var a = linked(r.account);
+    if (a) out.push({ id: r.id, date: r.date, account: a, amount: -amtForAccount(a, r.amount, r.orig, r.cur), kind: "expense" });
+  });
+  receivables.forEach(function(r) {
+    var a = linked(r.account);
+    if (a && (r.status === "pending" || r.repayments.length)) out.push({ id: r.id, date: r.date, account: a, amount: -own(a, r.amount), kind: "receivable" });
+    r.repayments.forEach(function(rp) {
+      var b = linked(rp.account || r.account);
+      if (b) out.push({ id: String(rp.id || ""), date: rp.date, account: b, amount: own(b, rp.amount), kind: "repayment" });
+    });
+  });
   return out;
 }
 
 // Today's balance of each linked account (called by accountBalances with no asOf).
-//  • Known value: the export Value, plus transfers dated after its AsOf, which the Wealth Planner
+//  • Known value: the export Value, plus flows (transfers and the C9 rows) dated after its AsOf, which the Wealth Planner
 //    can't have seen yet. That keeps the rule "a transfer never changes the total" on the day it is
 //    made. balanceThb = ValueTHB when the export has it, else Value × rate.
 //  • From the cache (export missing / unreadable): the same, marked stale with its AsOf.
-//  • Never known: the at-cost balance (starting balance + transfers in − out), marked valueUnknown,
+//  • Never known: the at-cost balance (starting balance + every flow), marked valueUnknown,
 //    so it is never silently 0.
-function applyLinkedValues(accounts, byName, trfRows) {
+function applyLinkedValues(accounts, byName, trfRows, other) {
   var vals = wealthValues(), pending = {};
   accounts.forEach(function(a) {
     if (!a.linked) return;
@@ -80,11 +109,11 @@ function applyLinkedValues(accounts, byName, trfRows) {
     if (!v) a.valueUnknown = true;
     pending[a.linkedTo] = 0;
   });
-  trfRows.forEach(function(r) {
-    linkedFlowsOf(r, byName).forEach(function(x) {
-      var v = vals[x.account.linkedTo];
-      if (v && v.asOf && r.date && r.date > v.asOf) pending[x.account.linkedTo] += x.amount;
-    });
+  var flows = [];
+  trfRows.forEach(function(r){ flows = flows.concat(linkedFlowsOf(r, byName)); });
+  flows.concat(other || []).forEach(function(x) {
+    var v = vals[x.account.linkedTo];
+    if (v && v.asOf && x.date && x.date > v.asOf) pending[x.account.linkedTo] += x.amount;
   });
   accounts.forEach(function(a) {
     var v = a.linked && vals[a.linkedTo];
@@ -102,22 +131,32 @@ function anyLinkedAccount() {
 }
 
 // Rebuild _Export_LinkedFlows (whole tab) for the Wealth Planner. Only when an account is linked.
-function writeLinkedFlows() {
+// Rows: every transfer into / out of a linked account, and (C9) each linked account's opening balance
+// (Id OPENING, no date), its Income/Expense rows and receivables. Column 6 Kind says which; the Wealth
+// Planner only needs columns 1–5, so an older Wealth Planner still reads the tab.
+function linkedFlowRows() {
   var accounts = sheetToRows(getSheet(SHEET.ACCOUNTS), accountFromRow), byName = {};
   accounts.forEach(function(a){ byName[String(a.name || "").trim()] = a; });
-  if (!accounts.some(function(a){ return a.linked; })) return -1;
-  ensureRowIds(SHEET.TRANSFERS);                    // the Wealth Planner matches flows by Id
-  var rows = [["Id", "Date", "Account", "Amount", "Currency"]];
-  sheetToRows(getSheet(SHEET.TRANSFERS), transferFromRow).forEach(function(r) {
-    linkedFlowsOf(r, byName).forEach(function(x) {
-      rows.push([x.id, x.date, x.account.linkedTo, round2(x.amount), x.account.currency]);
-    });
+  if (!accounts.some(function(a){ return a.linked; })) return null;
+  ensureRowIds(SHEET.TRANSFERS); ensureRowIds(SHEET.INCOME); ensureRowIds(SHEET.EXPENSES);   // the Wealth Planner matches flows by Id
+  var rows = [["Id", "Date", "Account", "Amount", "Currency", "Kind"]];
+  function push(x) { rows.push([x.id, x.date, x.account.linkedTo, round2(x.amount), x.account.currency, x.kind]); }
+  accounts.forEach(function(a) {
+    if (a.linked && round2(a.startingBalance)) push({ id: "OPENING", date: "", account: a, amount: a.startingBalance, kind: "opening" });
   });
+  sheetToRows(getSheet(SHEET.TRANSFERS), transferFromRow).forEach(function(r){ linkedFlowsOf(r, byName).forEach(push); });
+  linkedOtherFlows(byName, sheetToRows(getSheet(SHEET.INCOME), incomeCashRow), sheetToRows(getSheet(SHEET.EXPENSES), expenseCashRow),
+    loadReceivables()).forEach(push);
+  return rows;
+}
+function writeLinkedFlows() {
+  var rows = linkedFlowRows();
+  if (!rows) return -1;
   var sh = getSheet(SHEET.LINKED_FLOWS);
   sh.clearContents();
   sh.getRange(1, 2, rows.length, 1).setNumberFormat("@");   // dates stay plain text
-  sh.getRange(1, 1, rows.length, 5).setValues(rows);
-  sh.getRange(1, 1, 1, 5).setFontWeight("bold");
+  sh.getRange(1, 1, rows.length, 6).setValues(rows);
+  sh.getRange(1, 1, 1, 6).setFontWeight("bold");
   return rows.length - 1;
 }
 

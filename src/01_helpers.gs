@@ -75,7 +75,7 @@ function getSheet(name) {
         sh.hideSheet();
         break;
       case SHEET.LINKED_FLOWS:
-        sh.appendRow(["Id","Date","Account","Amount","Currency"]);
+        sh.appendRow(["Id","Date","Account","Amount","Currency","Kind"]);
         sh.hideSheet();
         break;
       case SHEET.RECURRING:

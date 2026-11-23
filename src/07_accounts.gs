@@ -18,6 +18,9 @@ function accountFromRow(d, ri) {
 function transferFromRow(d) {
   return { date: formatDate(d[0]), amount: toFloat(d[1]), from: String(d[2]||'').trim(), to: String(d[3]||'').trim(), received: toFloat(d[5]), id: String(d[6] || "") };
 }
+// The parts of an Expense / Income row that move an account
+function expenseCashRow(d) { return { date: formatDate(d[0]), amount: toFloat(d[1]), account: String(d[4]||'').trim(), orig: toFloat(d[8]), cur: String(d[9]||'').trim().toUpperCase(), id: String(d[10] || "") }; }
+function incomeCashRow(d)  { return { date: formatDate(d[0]), amount: toFloat(d[1]), account: String(d[4]||'').trim(), orig: toFloat(d[5]), cur: String(d[6]||'').trim().toUpperCase(), id: String(d[7] || "") }; }
 // What a transfer adds to the To account, in the To account's currency
 function transferReceived(r, f, t) {
   if (r.received) return r.received;
@@ -26,10 +29,11 @@ function transferReceived(r, f, t) {
 
 // Account balances, optionally "as of" a date (yyyy-MM-dd, inclusive) for net worth history.
 // Uses today's exchange rates for foreign-currency accounts.
-// Linked investment accounts (docs/stage-4-plan.md section 3) only move by transfers here: now, their
-// balance is the Wealth Planner value (25_linked_accounts.gs); on past dates, what was transferred in.
-// Their own income (dividends already inside that value), spending, holdings, trades and
-// receivables are not added on top.
+// Linked investment accounts (docs/stage-4-plan.md section 3): now, their balance is the Wealth Planner
+// value (25_linked_accounts.gs); on past dates (and when no value is known), what went in at cost: the
+// starting balance + every flow in _Export_LinkedFlows (transfers, and C9: Income/Expense rows on the
+// account, receivables lent from / repaid into it). Holdings, trades and WD dividends (already inside
+// the Wealth Planner value) are not added on top.
 function accountBalances(asOf) {
   function on(d) { return !asOf || (d && d <= asOf); }
   function own(a) { return a && !a.linked; }
@@ -37,8 +41,8 @@ function accountBalances(asOf) {
   var accounts = sheetToRows(sh, accountFromRow);
   var byName = {};
   accounts.forEach(function(a){ byName[String(a.name||'').trim()] = a; });
-  var expRows  = sheetToRows(getSheet(SHEET.EXPENSES), function(d){ return { date: formatDate(d[0]), amount: toFloat(d[1]), account: String(d[4]||'').trim(), orig: toFloat(d[8]), cur: String(d[9]||'').trim().toUpperCase() }; });
-  var incRows  = sheetToRows(getSheet(SHEET.INCOME),   function(d){ return { date: formatDate(d[0]), amount: toFloat(d[1]), account: String(d[4]||'').trim(), orig: toFloat(d[5]), cur: String(d[6]||'').trim().toUpperCase() }; });
+  var expRows  = sheetToRows(getSheet(SHEET.EXPENSES), expenseCashRow);
+  var incRows  = sheetToRows(getSheet(SHEET.INCOME),   incomeCashRow);
   var trfRows  = sheetToRows(getSheet(SHEET.TRANSFERS), transferFromRow);
   incRows.forEach(function(r){ if (!on(r.date)) return; var a = byName[r.account]; if (own(a)) a.balance += amtForAccount(a, r.amount, r.orig, r.cur); });
   expRows.forEach(function(r){ if (!on(r.date)) return; var a = byName[r.account]; if (own(a)) a.balance -= amtForAccount(a, r.amount, r.orig, r.cur); });
@@ -64,7 +68,8 @@ function accountBalances(asOf) {
   });
   // Receivables: money lent out leaves the account; each repayment goes back into the account it landed in.
   // (Old settled receivables without a repayment log count as fully returned, so they net to zero.)
-  loadReceivables().forEach(function(r) {
+  var receivables = loadReceivables();
+  receivables.forEach(function(r) {
     if ((r.status === 'pending' || r.repayments.length) && on(r.date)) {
       var a = byName[r.account]; if (own(a)) a.balance -= (a.currency === 'THB' ? r.amount : r.amount / a.rate);
     }
@@ -73,7 +78,12 @@ function accountBalances(asOf) {
       var a = byName[rp.account || r.account]; if (own(a)) a.balance += (a.currency === 'THB' ? rp.amount : rp.amount / a.rate);
     });
   });
-  if (!asOf && accounts.some(function(a){ return a.linked; })) applyLinkedValues(accounts, byName, trfRows);
+  var other = [];
+  if (accounts.some(function(a){ return a.linked; })) {
+    other = linkedOtherFlows(byName, incRows, expRows, receivables);   // C9
+    other.forEach(function(x){ if (on(x.date)) x.account.balance += x.amount; });
+    if (!asOf) applyLinkedValues(accounts, byName, trfRows, other);
+  }
   return { accounts: accounts, expRows: expRows, trfRows: trfRows };
 }
 

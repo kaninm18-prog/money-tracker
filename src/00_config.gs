@@ -22,8 +22,10 @@
 //                       (OrigAmount/Currency: the exact amount in a foreign-currency account, e.g. USD paid/received)
 //    NetWorthHistory  → Month (yyyy-MM) | Date | Accounts | Investments | Assets | NetWorth | Receivables  (one snapshot per month, latest wins)
 //    _Prices          → scratch sheet (hidden) where GOOGLEFINANCE formulas are evaluated
-//    _Export_LinkedFlows → Id | Date | Account | Amount | Currency  (hidden; rebuilt whole, read by the Wealth Planner)
-//                       one row per transfer into (+) or out of (−) a linked account; Account = its LinkedTo name
+//    _Export_LinkedFlows → Id | Date | Account | Amount | Currency | Kind  (hidden; rebuilt whole, read by the Wealth Planner)
+//                       one row per transfer into (+) or out of (−) a linked account; Account = its LinkedTo name.
+//                       C9: also its opening balance (Id OPENING), Income/Expense rows and receivables. Kind = transfer,
+//                       opening, income, expense, receivable or repayment (the Wealth Planner reads columns 1–5 only)
 //  Wealth Planner tabs read (spreadsheet id in Script Property WEALTH_SHEET_ID, see 25_linked_accounts.gs):
 //    _Export_Values    → Account | Currency | Value | ValueTHB | AsOf
 //    _Export_Dividends → Id | Date | Holding | Amount (THB) | OrigAmount | Currency | Tax | Account

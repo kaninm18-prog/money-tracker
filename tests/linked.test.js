@@ -156,21 +156,21 @@ test('never read and no cache: valued at what was transferred in, marked unknown
 });
 
 // ── History (D5) ────────────────────────────────────────────
-test('history: estimated months value a linked account at net transfers in', () => {
+test('history: estimated months value a linked account at what went in (transfers, and C9 rows)', () => {
   const b = setup();
   b.values([['Kasikorn Securities', 'THB', 99000, 99000, '2026-11-21']]);
   b.api({ action: 'addTransfer', date: '2026-08-05', amount: 30000, fromAccount: 'Bank', toAccount: 'KS' });
   b.api({ action: 'addTransfer', date: '2026-09-20', amount: 4000, fromAccount: 'KS', toAccount: 'Bank' });
-  b.api({ action: 'addIncome', date: '2026-09-25', amount: 700, category: 'Investment Returns', account: 'KS' });  // in the value already
+  b.api({ action: 'addIncome', date: '2026-09-25', amount: 700, category: 'Other Income', account: 'KS' });   // typed here: exported (C9)
   b.api({ action: 'addHoldingTxn', type: 'buy', holding: { name: 'Gold', kind: 'gold' }, quantity: 1, price: 40000, account: 'Bank', date: '2026-08-01' });
   const months = b.api({ action: 'getNetWorthHistory' }).months, m = ym => months.find(x => x.month === ym);
   assert.equal(months[0].month, '2026-08');
   assert.ok(m('2026-08').estimated);
   near(m('2026-08').accounts, 100000 - 40000, 'bank −30000, KS +30000 at cost: the transfer moves nothing');
   near(m('2026-08').investments, 0, 'Money Tracker holdings are not added once accounts are linked');
-  near(m('2026-09').accounts, 100000 - 40000);
+  near(m('2026-09').accounts, 100000 - 40000 + 700);
   const ac = b.context.accountBalances('2026-09-30').accounts.find(a => a.name === 'KS');
-  near(ac.balance, 26000, '30000 in − 4000 out; the dividend income is skipped');
+  near(ac.balance, 26700, '30000 in − 4000 out + the typed income, which _Export_LinkedFlows also sends (C9)');
   near(b.context.accountBalances('2026-07-31').accounts.find(a => a.name === 'KS').balance, 0);
 });
 
@@ -186,17 +186,54 @@ test('_Export_LinkedFlows: one row per transfer into (+) or out of (−) a linke
   const sh = b.sheets._Export_LinkedFlows;
   assert.ok(sh.hidden);
   assert.deepEqual(plain(sh.rows), [
-    ['Id', 'Date', 'Account', 'Amount', 'Currency'],
-    ['T1', '2026-11-01', 'Kasikorn Securities', 20000, 'THB'],
-    ['T2', '2026-11-02', 'IBKR', 99.5, 'USD'],        // the amount actually received
-    ['T3', '2026-11-03', 'IBKR', 20, 'USD'],          // no received amount: 700 THB ÷ 35
-    ['T4', '2026-11-04', 'IBKR', -10, 'USD'],
+    ['Id', 'Date', 'Account', 'Amount', 'Currency', 'Kind'],
+    ['T1', '2026-11-01', 'Kasikorn Securities', 20000, 'THB', 'transfer'],
+    ['T2', '2026-11-02', 'IBKR', 99.5, 'USD', 'transfer'],        // the amount actually received
+    ['T3', '2026-11-03', 'IBKR', 20, 'USD', 'transfer'],          // no received amount: 700 THB ÷ 35
+    ['T4', '2026-11-04', 'IBKR', -10, 'USD', 'transfer'],
   ]);
   // rebuilt whole: a deleted transfer disappears
   const t1 = b.api({ action: 'getTransfers' }).transfers.find(t => t.id === 'T1');
   b.api({ action: 'deleteTransfer', rowIndex: t1.rowIndex, id: 'T1' });
   b.run('dailyRefresh');
   assert.deepEqual(sh.rows.map(r => r[0]), ['Id', 'T2', 'T3', 'T4']);
+});
+
+test('C9: _Export_LinkedFlows also carries the opening balance, Income/Expense rows and receivables of a linked account', () => {
+  const b = setup();
+  b.api({ action: 'addAccount', name: 'MTS', type: 'investment', startingBalance: 500, currency: 'USD', rate: 35, linkedTo: 'MTS Gold' });
+  b.api({ action: 'addIncome', date: '2026-11-03', amount: 70, category: 'Other Income', account: 'MTS', origAmount: 2, currency: 'USD', id: 'I1' });
+  b.api({ action: 'addExpense', date: '2026-11-04', amount: 35, category: 'Other', account: 'MTS', id: 'E1' });     // THB amount ÷ rate
+  b.api({ action: 'addIncome', date: '2026-11-04', amount: 100, category: 'Salary', account: 'Bank', id: 'I2' });  // not linked: not exported
+  b.dividends([['WD1', '2026-11-05', 'GLD', 350, 10, 'USD', 0, 'MTS Gold']]);    // a Wealth Planner dividend: in its value already
+  b.api({ action: 'addReceivable', date: '2026-11-06', amount: 700, counterparty: 'Ben', account: 'MTS' });
+  const r = b.api({ action: 'getReceivables' }).receivables[0];
+  b.api({ action: 'addRepayment', receivableId: r.id, date: '2026-11-07', amount: 350, account: 'MTS' });
+  b.api({ action: 'addRepayment', receivableId: r.id, date: '2026-11-08', amount: 350, account: 'Bank' });
+  b.api({ action: 'bootstrap', month: 11, year: 2026 });
+  const rows = plain(b.sheets._Export_LinkedFlows.rows);
+  const rep = b.api({ action: 'getReceivables' }).receivables[0].repayments;
+  assert.deepEqual(rows, [
+    ['Id', 'Date', 'Account', 'Amount', 'Currency', 'Kind'],
+    ['OPENING', '', 'MTS Gold', 500, 'USD', 'opening'],
+    ['I1', '2026-11-03', 'MTS Gold', 2, 'USD', 'income'],
+    ['E1', '2026-11-04', 'MTS Gold', -1, 'USD', 'expense'],
+    [r.id, '2026-11-06', 'MTS Gold', -20, 'USD', 'receivable'],
+    [rep[0].id, '2026-11-07', 'MTS Gold', 10, 'USD', 'repayment'],
+  ]);
+  // the at-cost balance (no value known yet) is the same sum: never 0, never the WD dividend twice
+  near(b.acc('MTS').balance, 500 + 2 - 1 - 20 + 10);
+  near(b.acc('Bank').balance, 100000 + 100 + 350, 'the bank keeps its own repayment');
+});
+
+test('C9: a row dated after the export AsOf is added on top until the Wealth Planner has seen it', () => {
+  const b = setup();
+  b.values([['Kasikorn Securities', 'THB', 52000, 52000, '2026-11-20']]);
+  b.api({ action: 'addIncome', date: '2026-11-19', amount: 500, category: 'Other Income', account: 'KS' });   // inside the value
+  b.api({ action: 'addExpense', date: '2026-11-21', amount: 50, category: 'Other', account: 'KS' });         // not yet
+  near(b.acc('KS').balance, 52000 - 50);
+  b.values([['Kasikorn Securities', 'THB', 51950, 51950, '2026-11-21']]);
+  near(b.acc('KS').balance, 51950, 'not counted twice');
 });
 
 // ── Dividends (D3) ──────────────────────────────────────────
