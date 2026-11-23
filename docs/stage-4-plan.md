@@ -64,6 +64,13 @@ Money Tracker  ──reads───▶  one Income row per dividend ("Investment
 - In `accountBalances()`, Income rows on a **linked** account are skipped (the Wealth Planner value already includes them); on any other account they count as usual.
 - All export tabs are rebuilt whole on each write (no partial edits). Ids are reused so a re-read never duplicates a row.
 
+**Contract details agreed 2026-11-23** (questions raised by the step 3a and step 4 agents):
+- **C1. Transfer between two linked accounts:** it gives two `_Export_LinkedFlows` rows with the same `Id` (− on one, + on the other). The Wealth Planner matches flows on **`Id` + `Account`**, never on `Id` alone.
+- **C2. `_Export_Dividends.Account`:** a dividend paid to the broker carries the broker's **Wealth Planner name** (Money Tracker maps it through `LinkedTo`). One paid to a bank carries the bank's **Money Tracker account name**. Money Tracker accepts both.
+- **C3. USD fees:** `HoldingTxns` gets a new column at the end, **`FeeOrig`**: the fee in the trade's `Currency` when that isn't THB, added with `ensureHeaders`. The broker-cash ledger (3d) uses it for USD brokers.
+- **C4. `AsOf` is a date:** a transfer dated the same day as the export's `AsOf` counts as already inside the value. A same-day transfer after the morning export dips the total until the next daily export. Accepted for now.
+- **C5. Old dividends:** see step 5. Only dividends recorded in the Wealth Planner after the migration are exported with `WD` Ids.
+
 ---
 
 ## 4. Steps
@@ -84,12 +91,16 @@ Each step is one branch → one PR → `npm run check` green → Arm reviews and
 - Agent: scaffold the new repo with what Stages 1–3 built in Money Tracker: the `deploy-backend.yml` + `checks.yml` workflows, ESLint, `tests/harness.js`, `CLAUDE.md`, `CHANGELOG.md` + `APP_VERSION` test, `sw.js`, GitHub Pages. Copy `api()` and the offline queue from `js/core.js`. Copying is fine: the two apps should not share code at run time.
 
 ### Step 3 — Port the investment code into the Wealth Planner
+**3a done 2026-11-22** (Wealth-Planner#2): holdings, prices and portfolio backend, with tests. Next: 3b trades + import, 3c screens, 3d broker-cash ledger + export tabs (with C1–C3).
+
 - Move the files listed in section 1, and the step 1 tests with them. The tests must pass unchanged, apart from the cash leg, which now uses the broker-cash ledger (D2).
 - Add the broker-cash ledger, the reader for `_Export_LinkedFlows`, the writers for `_Export_Values` and `_Export_Dividends`, the per-broker "dividends paid to" setting (broker or a bank account), and the daily price refresh trigger. A dividend paid to a bank does **not** add to broker cash.
 - Port `importPack` holdings + trades and `fetchBenchmark`.
 - Front end: the holdings list, the holding/trade/portfolio modals, allocation & targets, returns vs index, dividends, the trading journal.
 
 ### Step 4 — Linked investment accounts in Money Tracker
+**Done 2026-11-22** (money-tracker#6). Nothing changes until an account is linked. **Don't link any account before step 5:** once one is linked, Money Tracker's holdings leave net worth while the old buys still sit on the bank.
+
 - `LinkedTo` column, the reader for `_Export_Values` with the cached fallback, the writer for `_Export_LinkedFlows`, and the dividend sync from `_Export_Dividends` into Income.
 - Account form: a "Linked investment account" type. The dashboard and net worth stop adding `holdingTotals`, because the value is now inside accounts.
 - Add the D5 rule to `netWorthHistory()`.
@@ -102,7 +113,7 @@ Each step is one branch → one PR → `npm run check` green → Arm reviews and
 - What it does:
   1. Create one linked account per place money went (each distinct `HoldingTxns.Account` used by a buy/sell, plus the trade accounts such as MTS Gold (USD)).
   2. Turn every buy into a transfer *bank → linked account* (same date, amount, `OrigAmount`/currency), and every sell into the reverse. Bank balances stay the same, to the cent.
-  3. Leave the historic fee/dividend rows in Expenses/Income where they are. Historic dividends are copied into the Wealth Planner's dividend history but keep their existing Money Tracker Income rows (not re-synced), so nothing is counted twice.
+  3. Leave the historic fee/dividend rows in Expenses/Income where they are. Historic dividends are copied into the Wealth Planner's dividend history but keep their existing Money Tracker Income rows (not re-synced), so nothing is counted twice. **C5:** copied historic dividends get ordinary Ids (never `WD…`) and are never written to `_Export_Dividends`.
 - **(A)** Before running: `backupNow`, copy the four tabs into the Wealth Planner sheet ("Copy to…" in Sheets), and copy the `BENCH*` Script Properties. Then run `migrateToLinked` from the editor and run `reconcile` again → **after.json**.
 
 ### Step 6 — Check to the cent
