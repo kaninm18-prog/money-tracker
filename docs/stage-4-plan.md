@@ -112,6 +112,8 @@ Each step is one branch → one PR → `npm run check` green → Arm reviews and
 - Steps 3 and 4 can run in parallel (two agents) once the contract in section 3 is agreed. A third agent reviews both PRs against the contract.
 
 ### Step 5 — Migration (rehearsed on the fake sheet, then run once for real)
+**Replaced 2026-11-23: start over instead.** Arm's live investment data turned out to be one gold bar and 29 MTS trades, so it is re-entered in the Wealth Planner instead of converted. Follow **[`docs/stage-4-start-over.md`](stage-4-start-over.md)**. The migration tools below (and contract change C9) were not built; money-tracker#9 was closed unmerged. The Wealth Planner got an `OpeningCash` column on its Brokers tab instead. Steps 6–7 still apply; step 6 uses the start-over runbook's compare.
+
 - Agent writes `migrateToLinked` (Money Tracker) and a test that runs it on a fake sheet built from the step 1 fixtures. Then it checks that every non-linked account balance and the total net worth come out identical.
 - What it does:
   1. Create one linked account per place money went (each distinct `HoldingTxns.Account` used by a buy/sell, plus the trade accounts such as MTS Gold (USD)).
