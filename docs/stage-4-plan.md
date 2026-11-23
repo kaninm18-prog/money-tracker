@@ -123,15 +123,16 @@ Each step is one branch → one PR → `npm run check` green → Arm reviews and
 {
   "accounts": {
     "MTS Gold (USD)": { "link": true },
-    "KBank": { "holdings": { "Gold 96.5%": "Gold shop" } }
+    "KBank": { "holdings": { "Gold 96.5%": "MTS Gold" } }
   },
   "brokers": {
     "MTS Gold (USD)": { "currency": "USD", "rate": 34.12, "dividendsTo": "" },
-    "Gold shop":      { "currency": "THB", "dividendsTo": "KBank" }
+    "MTS Gold":      { "currency": "THB", "dividendsTo": "KBank" }
   },
   "otherAssets": "Other assets"
 }
 ```
+- **Arm's names (2026-11-23):** gold bought straight from a bank goes to the broker **"MTS Gold"**, its own **THB** broker. It is separate from the USD account **"MTS Gold (USD)"**, which is linked in place. If both should be one broker, that is a new decision: the bank-paid gold is THB and the account is USD.
 - `accounts`: one entry per Money Tracker account that has holding entries or trades.
   - `{ "link": true }` = case (a), link in place: `LinkedTo` = the account's own name (`"link": "<name>"` for another Wealth Planner name). Its trades, entries, transfers, opening balance, Income/Expense rows and receivables all stay; C9 carries the cash.
   - `{ "holdings": { "<holding name or Id>": "<broker>" } }` = case (b), a bank that paid a shop directly. Every holding with entries on that bank must be listed (use the Id when two holdings share a name). Each buy becomes a transfer *bank → broker* and each sell *broker → bank* (same date; the bank side moves by exactly what the entry moved before; `ReceivedAmount` when the currencies differ); the entries' `Account` becomes the broker. Fee and dividend rows stay on the bank (C5, C9). A broker that isn't an account yet is created as a linked account with the same name.

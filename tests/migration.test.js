@@ -28,11 +28,11 @@ test('migrationPlan: every change listed, the prediction keeps every bank to the
   const p = plain(b.run('migrationPlan', MAP));
   assert.equal(p.ok, true, p.errors.join('; '));
   assert.deepEqual(p.links, [{ account: 'MTS Gold (USD)', linkTo: 'MTS Gold (USD)' }]);
-  assert.deepEqual(p.creates.map(c => [c.account, c.linkTo, c.currency]), [['Gold shop', 'Gold shop', 'THB'], ['SCB Fund', 'SCB Fund', 'THB'], ['Other assets', 'Other assets', 'THB']]);
+  assert.deepEqual(p.creates.map(c => [c.account, c.linkTo, c.currency]), [['MTS Gold', 'MTS Gold', 'THB'], ['SCB Fund', 'SCB Fund', 'THB'], ['Other assets', 'Other assets', 'THB']]);
   assert.deepEqual(p.transfers.map(x => [x.date, x.from, x.to, x.amount, x.received]), [
-    ['2026-02-10', 'KBank', 'Gold shop', 80000, ''], ['2026-06-15', 'Gold shop', 'KBank', 42000, ''], ['2026-03-20', 'KBank', 'SCB Fund', 10000, '']]);
+    ['2026-02-10', 'KBank', 'MTS Gold', 80000, ''], ['2026-06-15', 'MTS Gold', 'KBank', 42000, ''], ['2026-03-20', 'KBank', 'SCB Fund', 10000, '']]);
   assert.deepEqual(p.rewrites.map(r => [r.type, r.holding, r.from, r.to]), [
-    ['buy', 'Gold 96.5%', 'KBank', 'Gold shop'], ['sell', 'Gold 96.5%', 'KBank', 'Gold shop'],
+    ['buy', 'Gold 96.5%', 'KBank', 'MTS Gold'], ['sell', 'Gold 96.5%', 'KBank', 'MTS Gold'],
     ['buy', 'SCB Fund', 'KBank', 'SCB Fund'], ['dividend', 'SCB Fund', 'KBank', 'SCB Fund']]);
   assert.deepEqual(p.caseA.filter(f => f.id).map(f => [f.kind, f.amount]), [
     ['opening', 1000], ['income', 1.2], ['income', 2], ['expense', -1], ['receivable', -50], ['repayment', 25]]);
@@ -40,7 +40,7 @@ test('migrationPlan: every change listed, the prediction keeps every bank to the
   assert.equal(pr.netWorthDifference, 0); assert.equal(pr.marketDifference, 0);
   const acc = n => pr.accounts.find(a => a.name === n);
   near(acc('MTS Gold (USD)').balanceThb, 31125.3 + 21400, 'cash before + its gold and ETF');
-  near(acc('Gold shop').balanceThb, 43000); near(acc('SCB Fund').balanceThb, 12500);
+  near(acc('MTS Gold').balanceThb, 43000); near(acc('SCB Fund').balanceThb, 12500);
   near(acc('Other assets').balanceThb, 550000 + 14500, 'car + gold bar (C7)');
   assert.equal(acc('KBank').balance, bal(b, 'KBank').balance);
   assert.match(p.report, /READY/);
@@ -60,14 +60,14 @@ test('migrationPlan refuses, clearly, anything unmapped or ambiguous — and mig
   const cases = [
     [mapWith(m => { delete m.accounts.KBank; }), /Not in the mapping: 2 entries of KBank · Gold 96\.5%/],
     [mapWith(m => { delete m.accounts.KBank.holdings['SCB Fund']; }), /Not in the mapping: 2 entries of KBank · SCB Fund/],
-    [mapWith(m => { delete m.brokers['Gold shop']; }), /broker "Gold shop" is missing/],
+    [mapWith(m => { delete m.brokers['MTS Gold']; }), /broker "MTS Gold" is missing/],
     [mapWith(m => { delete m.otherAssets; }), /held with no broker.*otherAssets/],
     [mapWith(m => { m.brokers['MTS Gold (USD)'].rate = 35; }), /rate 35 differs from the account's rate 34/],
     [mapWith(m => { m.brokers['MTS Gold (USD)'].currency = 'THB'; }), /kept in USD but its broker .* is in THB/],
-    [mapWith(m => { m.accounts.KBank.holdings['Gold 99%'] = 'Gold shop'; }), /no holding called "Gold 99%"/],
+    [mapWith(m => { m.accounts.KBank.holdings['Gold 99%'] = 'MTS Gold'; }), /no holding called "Gold 99%"/],
     [mapWith(m => { m.accounts.Nowhere = { link: true }; }), /"Nowhere" is not an account/],
     [mapWith(m => { m.accounts.KBank.holdings['Gold 96.5%'] = 'Wallet'; m.brokers.Wallet = {}; }), /"Wallet" is already an account that isn't linked/],
-    [mapWith(m => { m.brokers['Gold shop'].dividendsTo = 'Bank X'; }), /dividendsTo "Bank X" is not an account/],
+    [mapWith(m => { m.brokers['MTS Gold'].dividendsTo = 'Bank X'; }), /dividendsTo "Bank X" is not an account/],
     [mapWith(m => { m.brokers.USDshop = { currency: 'USD' }; }), /needs "rate"/],
     ['{ not json', /not valid JSON/],
   ];
@@ -120,7 +120,7 @@ test('migrateToLinked: banks unchanged to the cent, every change logged; twice c
   const acc = plain(b.sheets.Accounts.rows);
   assert.equal(acc[0][8], 'LinkedTo');
   assert.equal(acc.find(a => a[0] === 'MTS Gold (USD)')[8], 'MTS Gold (USD)');
-  assert.deepEqual(acc.find(a => a[0] === 'Gold shop'), ['Gold shop', 'investment', 0, '', '', '', 'THB', 1, 'Gold shop']);
+  assert.deepEqual(acc.find(a => a[0] === 'MTS Gold'), ['MTS Gold', 'investment', 0, '', '', '', 'THB', 1, 'MTS Gold']);
   const tx = plain(b.sheets.HoldingTxns.rows).filter(t => t[8] === 'KBank');
   assert.equal(tx.length, 0, 'no holding entry left on the bank');
   const fees = plain(b.sheets.Expenses.rows).filter(e => e[2] === 'Investment Fees');
@@ -147,21 +147,21 @@ test('undoMigration restores the exact pre-migration sheet', () => {
 test('undoMigration changes nothing when something was added or edited since', () => {
   const b = built();
   b.run('migrationPlan', MAP); b.run('migrateToLinked', MAP);
-  b.api({ action: 'addTransfer', date: '2026-11-23', amount: 1000, fromAccount: 'KBank', toAccount: 'Gold shop', id: 'T-new' });
+  b.api({ action: 'addTransfer', date: '2026-11-23', amount: 1000, fromAccount: 'KBank', toAccount: 'MTS Gold', id: 'T-new' });
   let dump = sheetDump(b.sheets), u = plain(b.run('undoMigration'));
   assert.equal(u.ok, false);
-  assert.ok(u.problems.some(x => /"Gold shop" is used in Transfers by a row the migration didn't write \(T-new\)/.test(x)), u.problems.join('; '));
+  assert.ok(u.problems.some(x => /"MTS Gold" is used in Transfers by a row the migration didn't write \(T-new\)/.test(x)), u.problems.join('; '));
   assert.deepEqual(sheetDump(b.sheets), dump);
   const t = b.api({ action: 'getTransfers' }).transfers.find(x => x.id === 'T-new');
   b.api({ action: 'deleteTransfer', id: 'T-new', rowIndex: t.rowIndex });
   // a migrated entry moved by hand
-  const row = b.sheets.HoldingTxns.rows.findIndex(r => r[8] === 'Gold shop');
+  const row = b.sheets.HoldingTxns.rows.findIndex(r => r[8] === 'MTS Gold');
   b.sheets.HoldingTxns.rows[row][8] = 'Wallet';
   dump = sheetDump(b.sheets); u = plain(b.run('undoMigration'));
   assert.equal(u.ok, false);
   assert.ok(u.problems.some(x => /column 9 is now "Wallet"/.test(x)));
   assert.deepEqual(sheetDump(b.sheets), dump);
-  b.sheets.HoldingTxns.rows[row][8] = 'Gold shop';
+  b.sheets.HoldingTxns.rows[row][8] = 'MTS Gold';
   assert.equal(plain(b.run('undoMigration')).ok, true);
 });
 
@@ -211,7 +211,7 @@ test('REHEARSAL: the whole migration with both apps, banks to the cent, net wort
   assert.equal(mts.stale, false); assert.equal(mts.valueAsOf, '2026-11-23');
   near(mts.balanceThb, 31125.3 + 10 * 0 + 4 * 3600 + 5 * 1400, 'MTS cash 915.45 USD + 4 g gold + 5 ETF');
   near(mts.balance, 915.45 + (4 * 3600 + 5 * 1400) / 34);
-  near(after('Gold shop').balanceThb, 43000, '1 baht of gold left, no cash: the transfers net out the buy and sell');
+  near(after('MTS Gold').balanceThb, 43000, '1 baht of gold left, no cash: the transfers net out the buy and sell');
   near(after('SCB Fund').balanceThb, 12500, 'its dividend stayed on KBank (C5), not counted again');
   near(after('Other assets').balanceThb, 564500, 'car + gold bar');
   // net worth identical; the prediction was right
@@ -224,7 +224,7 @@ test('REHEARSAL: the whole migration with both apps, banks to the cent, net wort
   assert.deepEqual(r.afterAgain.accounts, r.after.accounts); assert.equal(r.afterAgain.netWorth, r.after.netWorth);
   // the Wealth Planner side: brokers from the mapping, entries at their brokers, ledger adds up
   const brokers = plain(r.wp.sheets.Brokers.rows).slice(1).map(x => [x[0], x[1], x[2]]);
-  assert.deepEqual(brokers.sort(), [['Gold shop', 'THB', ''], ['MTS Gold (USD)', 'USD', ''], ['SCB Fund', 'THB', 'KBank']]);
+  assert.deepEqual(brokers.sort(), [['MTS Gold', 'THB', ''], ['MTS Gold (USD)', 'USD', ''], ['SCB Fund', 'THB', 'KBank']].sort());
   assert.equal(r.exports.ledger.check.diff, 0);
   const flows = plain(r.mt.sheets._Export_LinkedFlows.rows);
   assert.ok(flows.some(f => f[0] === 'OPENING' && f[2] === 'MTS Gold (USD)' && f[3] === 1000), 'C9 opening row');

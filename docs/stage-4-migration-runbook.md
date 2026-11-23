@@ -18,7 +18,7 @@ A `before.json` from another day can't be compared: prices, rates and entries wi
    - **Check:** in each editor, the function list has `migrationPlan` (MT) and `applyBrokerMapping` (WP).
 2. Write the mapping (format in the plan, step 5). Decide:
    - which accounts are linked in place (MTS Gold (USD));
-   - for each bank that paid a shop directly, which **broker name** each holding goes to (e.g. "Gold shop");
+   - for each bank that paid a shop directly, which **broker name** each holding goes to (e.g. "MTS Gold");
    - each broker's currency, rate (non-THB brokers) and where its dividends go;
    - the name of the Other assets account.
    - Keep it in a text file on the laptop.

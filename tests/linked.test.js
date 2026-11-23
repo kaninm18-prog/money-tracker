@@ -201,11 +201,11 @@ test('_Export_LinkedFlows: one row per transfer into (+) or out of (−) a linke
 
 test('C9: _Export_LinkedFlows also carries the opening balance, Income/Expense rows and receivables of a linked account', () => {
   const b = setup();
-  b.api({ action: 'addAccount', name: 'MTS', type: 'investment', startingBalance: 500, currency: 'USD', rate: 35, linkedTo: 'MTS Gold' });
+  b.api({ action: 'addAccount', name: 'MTS', type: 'investment', startingBalance: 500, currency: 'USD', rate: 35, linkedTo: 'MTS Gold (USD)' });
   b.api({ action: 'addIncome', date: '2026-11-03', amount: 70, category: 'Other Income', account: 'MTS', origAmount: 2, currency: 'USD', id: 'I1' });
   b.api({ action: 'addExpense', date: '2026-11-04', amount: 35, category: 'Other', account: 'MTS', id: 'E1' });     // THB amount ÷ rate
   b.api({ action: 'addIncome', date: '2026-11-04', amount: 100, category: 'Salary', account: 'Bank', id: 'I2' });  // not linked: not exported
-  b.dividends([['WD1', '2026-11-05', 'GLD', 350, 10, 'USD', 0, 'MTS Gold']]);    // a Wealth Planner dividend: in its value already
+  b.dividends([['WD1', '2026-11-05', 'GLD', 350, 10, 'USD', 0, 'MTS Gold (USD)']]);    // a Wealth Planner dividend: in its value already
   b.api({ action: 'addReceivable', date: '2026-11-06', amount: 700, counterparty: 'Ben', account: 'MTS' });
   const r = b.api({ action: 'getReceivables' }).receivables[0];
   b.api({ action: 'addRepayment', receivableId: r.id, date: '2026-11-07', amount: 350, account: 'MTS' });
@@ -215,11 +215,11 @@ test('C9: _Export_LinkedFlows also carries the opening balance, Income/Expense r
   const rep = b.api({ action: 'getReceivables' }).receivables[0].repayments;
   assert.deepEqual(rows, [
     ['Id', 'Date', 'Account', 'Amount', 'Currency', 'Kind'],
-    ['OPENING', '', 'MTS Gold', 500, 'USD', 'opening'],
-    ['I1', '2026-11-03', 'MTS Gold', 2, 'USD', 'income'],
-    ['E1', '2026-11-04', 'MTS Gold', -1, 'USD', 'expense'],
-    [r.id, '2026-11-06', 'MTS Gold', -20, 'USD', 'receivable'],
-    [rep[0].id, '2026-11-07', 'MTS Gold', 10, 'USD', 'repayment'],
+    ['OPENING', '', 'MTS Gold (USD)', 500, 'USD', 'opening'],
+    ['I1', '2026-11-03', 'MTS Gold (USD)', 2, 'USD', 'income'],
+    ['E1', '2026-11-04', 'MTS Gold (USD)', -1, 'USD', 'expense'],
+    [r.id, '2026-11-06', 'MTS Gold (USD)', -20, 'USD', 'receivable'],
+    [rep[0].id, '2026-11-07', 'MTS Gold (USD)', 10, 'USD', 'repayment'],
   ]);
   // the at-cost balance (no value known yet) is the same sum: never 0, never the WD dividend twice
   near(b.acc('MTS').balance, 500 + 2 - 1 - 20 + 10);

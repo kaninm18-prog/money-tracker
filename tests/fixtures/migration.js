@@ -12,17 +12,17 @@ const NOW = '2026-11-23T05:00:00Z';                 // noon in Thailand
 const MAPPING = {
   accounts: {
     'MTS Gold (USD)': { link: true },
-    KBank: { holdings: { 'Gold 96.5%': 'Gold shop', 'SCB Fund': 'SCB Fund' } },
+    KBank: { holdings: { 'Gold 96.5%': 'MTS Gold', 'SCB Fund': 'SCB Fund' } },
   },
   brokers: {
     'MTS Gold (USD)': { currency: 'USD', rate: 34, dividendsTo: '' },
-    'Gold shop': { currency: 'THB' },
+    'MTS Gold': { currency: 'THB' },
     'SCB Fund': { currency: 'THB', dividendsTo: 'KBank' },
   },
   otherAssets: 'Other assets',
 };
 
-const PRICES = { 'Gold 96.5%': 43000, 'MTS Gold': 3600, 'GLD ETF': 1400, 'Gold bar': 14500, 'Car': 550000, 'SCB Fund': 12.5 };
+const PRICES = { 'Gold 96.5%': 43000, 'XAU (MTS)': 3600, 'GLD ETF': 1400, 'Gold bar': 14500, 'Car': 550000, 'SCB Fund': 12.5 };
 
 function build(b) {
   const api = b.api;
@@ -39,7 +39,7 @@ function build(b) {
   ok(api({ action: 'addTransfer', date: '2026-05-05', amount: 2000, fromAccount: 'KBank', toAccount: 'Wallet' }));
   ok(api({ action: 'addIncome', date: '2026-08-31', amount: 40.8, category: 'Other Income', note: 'Interest', account: 'MTS Gold (USD)', origAmount: 1.2, currency: 'USD' }));
 
-  // the gold shop, paid straight from KBank
+  // gold bought straight from KBank: goes to the THB broker "MTS Gold" (Arm, 2026-11-23)
   const g = ok(api({ action: 'addHoldingTxn', type: 'buy', holding: { name: 'Gold 96.5%', kind: 'gold', unit: 'baht' }, quantity: 2, price: 40000,
     fee: 500, account: 'KBank', date: '2026-02-10' }));
   ok(api({ action: 'addHoldingTxn', type: 'sell', holdingId: g.holdingId, quantity: 1, price: 42000, account: 'KBank', date: '2026-06-15' }));
@@ -48,7 +48,7 @@ function build(b) {
   ok(api({ action: 'addHoldingTxn', type: 'dividend', holdingId: f.holdingId, amount: 270, tax: 30, account: 'KBank', date: '2026-09-20' }));
 
   // MTS Gold (USD)
-  const m = ok(api({ action: 'addHoldingTxn', type: 'buy', holding: { name: 'MTS Gold', kind: 'gold', unit: 'g' }, quantity: 10, price: 3400,
+  const m = ok(api({ action: 'addHoldingTxn', type: 'buy', holding: { name: 'XAU (MTS)', kind: 'gold', unit: 'g' }, quantity: 10, price: 3400,
     origAmount: 1000, currency: 'USD', fee: 34, feeOrig: 1, account: 'MTS Gold (USD)', date: '2026-03-05' }));
   ok(api({ action: 'addHoldingTxn', type: 'sell', holdingId: m.holdingId, quantity: 2, price: 3740, origAmount: 220, currency: 'USD',
     account: 'MTS Gold (USD)', date: '2026-05-01' }));
