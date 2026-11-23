@@ -18,7 +18,13 @@ function doPost(e) {
   }
 }
 
+// After the Stage 4 migration the investments live in the Wealth Planner: entries typed here would no
+// longer reach it, and would move a bank's cash again. undoMigration() lifts this.
+var INVESTMENT_WRITES = { addHolding: 1, updateHolding: 1, deleteHolding: 1, addHoldingTxn: 1, deleteHoldingTxn: 1,
+  addTrade: 1, deleteTrade: 1, importTrades: 1, importPack: 1 };
 function route(p) {
+    if (INVESTMENT_WRITES[p.action] && migrationDone())
+      return jsonResponse({ ok: false, error: "Investments have moved to the Wealth Planner: add or change them there." });
     switch (p.action) {
       case "addExpense":             return addExpense(p);
       case "getExpenses":            return getExpenses(p);

@@ -65,6 +65,7 @@ function makeSpreadsheet(name, id) {
     sheets,
     getSheetByName: n => sheets[n] || null,
     insertSheet: n => (sheets[n] = makeSheet(n)),
+    deleteSheet: sh => { delete sheets[sh.getName()]; },
     getName: () => name,
     getId: () => id,
   };
@@ -134,7 +135,7 @@ function createBackend(opts) {
     vm.runInContext('_ss = null; _sheetMemo = {}; _fmtMemo = {}; _readCache = null; _idsDone = {}; _recvIds = false; _wealthSS = undefined; _wealthValues = undefined;', context);
   }
   // A time-based trigger (e.g. dailyRefresh) is its own execution too
-  function run(fn) { reset(); return context[fn](); }
+  function run(fn, ...args) { reset(); return context[fn](...args); }
   function api(payload) {
     reset();
     const body = JSON.stringify(Object.assign({ token: TOKEN }, payload));
