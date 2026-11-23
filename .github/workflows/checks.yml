@@ -16,7 +16,22 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # The Stage 4 migration rehearsal (tests/migration.test.js) runs both apps' real code: clone the
+      # wealth-planner next to this repo, on the branch with the same name if it has one, else main.
+      # Read only, without a token. If the clone fails the rehearsal is skipped, with a warning.
+      - name: Clone the other app for the migration rehearsal
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          URL="https://github.com/kaninm18-prog/wealth-planner.git"
+          git clone --depth 1 --branch "$BRANCH" "$URL" "../wealth-planner" 2>/dev/null \
+            || git clone --depth 1 "$URL" "../wealth-planner" \
+            || echo "::warning::Could not clone wealth-planner: the migration rehearsal will be skipped"
+          if [ -d "../wealth-planner" ]; then git -C "../wealth-planner" log -1 --format="wealth-planner at %h (%D)"; fi
       - name: Lint (errors fail, warnings are listed)
         run: npm run lint
       - name: Tests
-        run: npm test
+        run: set -o pipefail; npm test 2>&1 | tee test-output.txt
+      - name: Say if the migration rehearsal was skipped
+        if: always()
+        run: grep -E "# SKIP" test-output.txt | sed 's/^/::warning::/' || true

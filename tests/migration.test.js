@@ -15,7 +15,8 @@ const plain = x => JSON.parse(JSON.stringify(x));
 const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.006, (msg || '') + ` expected ${b}, got ${a}`);
 const MAP = JSON.stringify(fixture.MAPPING);
 const ROOT = path.join(__dirname, '..');
-const WP_DIR = findRepo(ROOT, 'wealth-planner', path.join('src', '15_brokers.gs'), 'WEALTH_PLANNER_DIR');
+// a Wealth Planner with applyBrokerMapping (step 5); an older checkout skips the rehearsal, saying so
+const WP_DIR = findRepo(ROOT, 'wealth-planner', path.join('src', '16_migration.gs'), 'WEALTH_PLANNER_DIR');
 
 function built() { const b = createBackend({ now: fixture.NOW }); fixture.build(b); return b; }
 const bal = (b, name) => plain(b.api({ action: 'getAccounts' })).accounts.find(a => a.name === name);
@@ -192,7 +193,7 @@ test('compare-reconcile: reads the editor log line, passes identical files, fail
 });
 
 // ── The rehearsal: both apps' real code, end to end ──────────
-const skip = WP_DIR ? false : 'no Wealth Planner checkout next to this repo (set WEALTH_PLANNER_DIR)';
+const skip = WP_DIR ? false : 'no Wealth Planner checkout with src/16_migration.gs next to this repo (set WEALTH_PLANNER_DIR)';
 
 test('REHEARSAL: the whole migration with both apps, banks to the cent, net worth unchanged, twice = once, undo = exact', { skip }, () => {
   const r = rehearse({ mtDir: ROOT, wpDir: WP_DIR, fixture, compare });
