@@ -151,7 +151,8 @@ function renderAccountsPage() {
               '<div class="acc-page-info"><div class="acc-page-name">'+a.name+'</div><div class="acc-page-type">'+typeLabel(a.type)+(a.currency && a.currency !== 'THB' ? ' · '+a.currency+' @ ฿'+a.rate : '')+'</div></div>' +
               '<div class="acc-page-balance'+neg+'">'+fmtCur(a.balance, a.currency)+(a.currency && a.currency !== 'THB' ? '<div style="font-size:0.7rem;font-weight:500;color:var(--text2)">≈ '+fmtMoney(a.balanceThb)+'</div>' : '')+'</div>' +
             '</div>' +
-            balCheckRow(a) +
+            linkedValueHtml(a) +
+            (a.linked ? '' : balCheckRow(a)) +     // a linked balance comes from the Wealth Planner: nothing to adjust here
             (accountsEditMode ? '<div class="acc-page-actions">' +
               '<button class="acc-edit-btn" onclick="openEditAccount('+a.rowIndex+')">✏️ Edit</button>' +
               '<button class="acc-del-btn"  onclick="deleteAccount('+a.rowIndex+',\''+escQ(a.name)+'\')">🗑️ Delete</button>' +
@@ -173,7 +174,26 @@ function toggleCreditFields() {
   var isCredit = document.getElementById('fa-type').value === 'credit';
   document.getElementById('credit-fields').style.display    = isCredit ? 'block' : 'none';
   document.getElementById('fa-balance-hint').style.display  = isCredit ? 'block' : 'none';
+  toggleLinkedFields();
   onAcctCurChange();
+}
+// Linked investment account: offered for investment accounts (or one that is already linked)
+function toggleLinkedFields() {
+  var box = document.getElementById('fa-linked');
+  var show = document.getElementById('fa-type').value === 'investment' || box.checked;
+  document.getElementById('fa-linked-group').style.display = show ? 'block' : 'none';
+  document.getElementById('fa-linked-fields').style.display = show && box.checked ? 'block' : 'none';
+}
+function setAcctLinked(name) {
+  document.getElementById('fa-linked').checked = !!name;
+  document.getElementById('fa-linkedto').value = name || '';
+}
+// "value from 21 Nov" under a linked account; a hint when the Wealth Planner couldn't be read
+function linkedValueHtml(a) {
+  if (!a.linked) return '';
+  var txt = a.valueUnknown ? '⚠️ No value from the Wealth Planner yet: showing what you transferred in'
+    : 'Value from ' + (a.valueAsOf ? fmtDate(a.valueAsOf) : 'the Wealth Planner') + (a.stale ? ' · ⚠️ Wealth Planner not reachable, last known value' : '');
+  return '<div class="hold-sub" style="margin-top:6px">🔗 ' + escAttr(a.linkedTo) + ' · ' + txt + '</div>';
 }
 var ACCT_CURS = [['THB','Thai baht'],['USD','US dollar'],['EUR','Euro'],['GBP','British pound'],['JPY','Japanese yen'],['SGD','Singapore dollar'],
   ['CNY','Chinese yuan'],['HKD','Hong Kong dollar'],['AUD','Australian dollar'],['NZD','New Zealand dollar'],['CAD','Canadian dollar'],['CHF','Swiss franc'],
@@ -218,6 +238,7 @@ function openAddAccount() {
   document.getElementById('fa-stmtday').value = '';
   setAcctCurrency('THB');
   document.getElementById('fa-rate').value = '';
+  setAcctLinked('');
   toggleCreditFields();
   openModal('account-modal');
 }
@@ -237,6 +258,7 @@ function openEditAccount(rowIndex) {
   document.getElementById('fa-stmtday').value = a.statementDay || '';
   setAcctCurrency(a.currency || 'THB');
   document.getElementById('fa-rate').value = (a.currency && a.currency !== 'THB') ? a.rate : '';
+  setAcctLinked(a.linkedTo || '');
   toggleCreditFields();
   openModal('account-modal');
 }
@@ -255,6 +277,9 @@ function saveAccount() {
     if (!rate || rate <= 0) { toast('Enter the exchange rate (฿ per 1 ' + cur + ')'); return; }
     payload.rate = rate;
   }
+  var linked = document.getElementById('fa-linked').checked && document.getElementById('fa-linked-group').style.display !== 'none';
+  payload.linkedTo = linked ? document.getElementById('fa-linkedto').value.trim() : '';
+  if (linked && !payload.linkedTo) { toast('Enter the account name used in the Wealth Planner'); return; }
   if (type === 'credit') {
     payload.creditLimit  = parseFloat(document.getElementById('fa-limit').value)  || 0;
     payload.dueDay       = parseInt(document.getElementById('fa-dueday').value)   || 0;
@@ -264,7 +289,8 @@ function saveAccount() {
   else { payload.action='addAccount'; }
   document.getElementById('save-account-btn').textContent = 'Saving…';
   api(payload).then(function(res) {
-    if (res.ok) { closeModal('account-modal'); toast(editingAccountRow?'Account updated!':'Account added!'); loadAll(); }
+    if (res.ok && payload.linkedTo && res.linkedTo === undefined) { closeModal('account-modal'); toast('Saved, but the link needs the new backend: redeploy Apps Script first', 5000); loadAll(); }
+    else if (res.ok) { closeModal('account-modal'); toast(editingAccountRow?'Account updated!':'Account added!'); loadAll(); }
     else { toast('Error: '+(res.error||'?')); }
     document.getElementById('save-account-btn').textContent = editingAccountRow?'Save Changes':'Add Account';
   });

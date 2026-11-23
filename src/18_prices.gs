@@ -111,8 +111,9 @@ function dailyRefresh() {
   if (!lock.tryLock(60000)) return;
   try {
     refreshPrices();
+    syncWealth();
     var acc = JSON.parse(getAccounts().getContent()), hld = holdingsData();
-    saveNetWorthSnapshot({ accounts: acc.totalBalance || 0, investments: hld.totals.investments, assets: hld.totals.assets, receivables: receivablesAt("") });
+    saveNetWorthSnapshot(liveNetWorth(acc, hld));
   } finally { lock.releaseLock(); }
 }
 

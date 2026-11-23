@@ -101,6 +101,7 @@ function renderAccountCards() {
         '<div class="account-card-name">' + a.name + '</div>' +
         '<div class="account-card-balance' + neg + '">' + fmtCur(a.balance, a.currency) + '</div>' +
         (a.currency && a.currency !== 'THB' ? '<div class="account-card-sub">≈ ' + fmtMoney(a.balanceThb) + '</div>' : '') +
+        (a.linked && a.stale ? '<div class="account-card-sub">⚠️ last known value</div>' : '') +
       '</div>';
     }
   });
@@ -124,8 +125,11 @@ function computeBalance() {
     return accounts.filter(function(a){return a.type==='cash'||a.type==='bank';}).reduce(function(s,a){return s+acctThb(a);},0);
   }
   if (mode === 'portfolio') return holdingTotals.investments || 0;
-  return totalBalance + (holdingTotals.value || 0) + receivablesOwed(); // net worth = accounts + holdings + owed to you
+  // net worth = accounts + holdings + owed to you. Once an account is linked to the Wealth Planner, the
+  // holdings are inside its value, so they aren't added again.
+  return totalBalance + (anyLinkedAccount() ? 0 : (holdingTotals.value || 0)) + receivablesOwed();
 }
+function anyLinkedAccount() { return accounts.some(function(a){ return a.linked; }); }
 // Money people still owe you (pending advances / reimbursements) — it's yours, so it counts in net worth
 function receivablesOwed() {
   return receivables.reduce(function(s, r){ return s + (r.status === 'pending' ? (r.left !== undefined ? r.left : r.amount) : 0); }, 0);

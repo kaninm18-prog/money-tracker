@@ -1,0 +1,529 @@
+{
+ "getAccounts": {
+  "ok": true,
+  "accounts": [
+   {
+    "rowIndex": 2,
+    "name": "Cash",
+    "type": "cash",
+    "startingBalance": 0,
+    "balance": 0,
+    "creditLimit": 0,
+    "dueDay": 0,
+    "statementDay": 0,
+    "currency": "THB",
+    "rate": 1,
+    "balanceThb": 0
+   },
+   {
+    "rowIndex": 3,
+    "name": "Investment",
+    "type": "investment",
+    "startingBalance": 0,
+    "balance": 0,
+    "creditLimit": 0,
+    "dueDay": 0,
+    "statementDay": 0,
+    "currency": "THB",
+    "rate": 1,
+    "balanceThb": 0
+   },
+   {
+    "rowIndex": 4,
+    "name": "Bank",
+    "type": "bank",
+    "startingBalance": 150000,
+    "balance": 220525,
+    "creditLimit": 0,
+    "dueDay": 0,
+    "statementDay": 0,
+    "currency": "THB",
+    "rate": 1,
+    "balanceThb": 220525
+   },
+   {
+    "rowIndex": 5,
+    "name": "Wallet",
+    "type": "wallet",
+    "startingBalance": 2000,
+    "balance": 6580,
+    "creditLimit": 0,
+    "dueDay": 0,
+    "statementDay": 0,
+    "currency": "THB",
+    "rate": 1,
+    "balanceThb": 6580
+   },
+   {
+    "rowIndex": 6,
+    "name": "USD Broker",
+    "type": "investment",
+    "startingBalance": 1000,
+    "balance": 1827,
+    "creditLimit": 0,
+    "dueDay": 0,
+    "statementDay": 0,
+    "currency": "USD",
+    "rate": 35,
+    "balanceThb": 63945
+   },
+   {
+    "rowIndex": 7,
+    "name": "Card",
+    "type": "credit",
+    "startingBalance": -1200,
+    "balance": -3700,
+    "creditLimit": 50000,
+    "dueDay": 5,
+    "statementDay": 25,
+    "currency": "THB",
+    "rate": 1,
+    "statement": {
+     "lastStart": "2026-09-26",
+     "lastEnd": "2026-10-25",
+     "lastSpend": 0,
+     "paidSince": 1800,
+     "leftToPay": 0,
+     "dueDate": "2026-11-05",
+     "curStart": "2026-10-26",
+     "curEnd": "2026-11-25",
+     "curSpend": 2500
+    },
+    "balanceThb": -3700
+   }
+  ],
+  "totalBalance": 287350
+ },
+ "netWorthHistory": {
+  "ok": true,
+  "months": [
+   {
+    "accounts": 242365,
+    "investments": 3000,
+    "assets": 500000,
+    "receivables": 0,
+    "estimated": true,
+    "month": "2026-06",
+    "netWorth": 745365
+   },
+   {
+    "accounts": 233215,
+    "investments": 10000,
+    "assets": 500000,
+    "receivables": 0,
+    "estimated": true,
+    "month": "2026-07",
+    "netWorth": 743215
+   },
+   {
+    "accounts": 180000,
+    "investments": 9000,
+    "assets": 500000,
+    "receivables": 5000,
+    "estimated": false,
+    "month": "2026-08",
+    "netWorth": 694000
+   },
+   {
+    "accounts": 230460,
+    "investments": 12250,
+    "assets": 500000,
+    "receivables": 3000,
+    "estimated": true,
+    "month": "2026-09",
+    "netWorth": 745710
+   },
+   {
+    "accounts": 288050,
+    "investments": 12250,
+    "assets": 500000,
+    "receivables": 3000,
+    "estimated": true,
+    "month": "2026-10",
+    "netWorth": 803300
+   },
+   {
+    "accounts": 287350,
+    "investments": 13750,
+    "assets": 500000,
+    "receivables": 3000,
+    "estimated": false,
+    "month": "2026-11",
+    "netWorth": 804100
+   }
+  ]
+ },
+ "bootstrap": {
+  "accounts": {
+   "ok": true,
+   "accounts": [
+    {
+     "rowIndex": 2,
+     "name": "Cash",
+     "type": "cash",
+     "startingBalance": 0,
+     "balance": 0,
+     "creditLimit": 0,
+     "dueDay": 0,
+     "statementDay": 0,
+     "currency": "THB",
+     "rate": 1,
+     "balanceThb": 0
+    },
+    {
+     "rowIndex": 3,
+     "name": "Investment",
+     "type": "investment",
+     "startingBalance": 0,
+     "balance": 0,
+     "creditLimit": 0,
+     "dueDay": 0,
+     "statementDay": 0,
+     "currency": "THB",
+     "rate": 1,
+     "balanceThb": 0
+    },
+    {
+     "rowIndex": 4,
+     "name": "Bank",
+     "type": "bank",
+     "startingBalance": 150000,
+     "balance": 220525,
+     "creditLimit": 0,
+     "dueDay": 0,
+     "statementDay": 0,
+     "currency": "THB",
+     "rate": 1,
+     "balanceThb": 220525
+    },
+    {
+     "rowIndex": 5,
+     "name": "Wallet",
+     "type": "wallet",
+     "startingBalance": 2000,
+     "balance": 6580,
+     "creditLimit": 0,
+     "dueDay": 0,
+     "statementDay": 0,
+     "currency": "THB",
+     "rate": 1,
+     "balanceThb": 6580
+    },
+    {
+     "rowIndex": 6,
+     "name": "USD Broker",
+     "type": "investment",
+     "startingBalance": 1000,
+     "balance": 1827,
+     "creditLimit": 0,
+     "dueDay": 0,
+     "statementDay": 0,
+     "currency": "USD",
+     "rate": 35,
+     "balanceThb": 63945
+    },
+    {
+     "rowIndex": 7,
+     "name": "Card",
+     "type": "credit",
+     "startingBalance": -1200,
+     "balance": -3700,
+     "creditLimit": 50000,
+     "dueDay": 5,
+     "statementDay": 25,
+     "currency": "THB",
+     "rate": 1,
+     "statement": {
+      "lastStart": "2026-09-26",
+      "lastEnd": "2026-10-25",
+      "lastSpend": 0,
+      "paidSince": 1800,
+      "leftToPay": 0,
+      "dueDate": "2026-11-05",
+      "curStart": "2026-10-26",
+      "curEnd": "2026-11-25",
+      "curSpend": 2500
+     },
+     "balanceThb": -3700
+    }
+   ],
+   "totalBalance": 287350
+  },
+  "netWorth": {
+   "ok": true,
+   "months": [
+    {
+     "accounts": 242365,
+     "investments": 3000,
+     "assets": 500000,
+     "receivables": 0,
+     "estimated": true,
+     "month": "2026-06",
+     "netWorth": 745365
+    },
+    {
+     "accounts": 233215,
+     "investments": 10000,
+     "assets": 500000,
+     "receivables": 0,
+     "estimated": true,
+     "month": "2026-07",
+     "netWorth": 743215
+    },
+    {
+     "accounts": 180000,
+     "investments": 9000,
+     "assets": 500000,
+     "receivables": 5000,
+     "estimated": false,
+     "month": "2026-08",
+     "netWorth": 694000
+    },
+    {
+     "accounts": 230460,
+     "investments": 12250,
+     "assets": 500000,
+     "receivables": 3000,
+     "estimated": true,
+     "month": "2026-09",
+     "netWorth": 745710
+    },
+    {
+     "accounts": 288050,
+     "investments": 12250,
+     "assets": 500000,
+     "receivables": 3000,
+     "estimated": true,
+     "month": "2026-10",
+     "netWorth": 803300
+    },
+    {
+     "accounts": 287350,
+     "investments": 13750,
+     "assets": 500000,
+     "receivables": 3000,
+     "estimated": false,
+     "live": true,
+     "month": "2026-11",
+     "netWorth": 804100
+    }
+   ]
+  },
+  "holdingsTotals": {
+   "value": 513750,
+   "cost": 512250,
+   "unrealized": 1500,
+   "realized": 500,
+   "dividends": 90,
+   "investments": 13750,
+   "assets": 500000
+  }
+ },
+ "reconcile": {
+  "ok": true,
+  "asOf": "2026-11-22",
+  "accounts": [
+   {
+    "name": "Cash",
+    "type": "cash",
+    "currency": "THB",
+    "rate": 1,
+    "balance": 0,
+    "balanceThb": 0
+   },
+   {
+    "name": "Investment",
+    "type": "investment",
+    "currency": "THB",
+    "rate": 1,
+    "balance": 0,
+    "balanceThb": 0
+   },
+   {
+    "name": "Bank",
+    "type": "bank",
+    "currency": "THB",
+    "rate": 1,
+    "balance": 220525,
+    "balanceThb": 220525
+   },
+   {
+    "name": "Wallet",
+    "type": "wallet",
+    "currency": "THB",
+    "rate": 1,
+    "balance": 6580,
+    "balanceThb": 6580
+   },
+   {
+    "name": "USD Broker",
+    "type": "investment",
+    "currency": "USD",
+    "rate": 35,
+    "balance": 1827,
+    "balanceThb": 63945
+   },
+   {
+    "name": "Card",
+    "type": "credit",
+    "currency": "THB",
+    "rate": 1,
+    "balance": -3700,
+    "balanceThb": -3700
+   }
+  ],
+  "totalBalance": 287350,
+  "holdings": [
+   {
+    "id": "H00000013aa",
+    "name": "PTT",
+    "kind": "stock",
+    "group": "investment",
+    "quantity": 150,
+    "cost": 5250,
+    "value": 6750,
+    "realized": 500,
+    "dividends": 90
+   },
+   {
+    "id": "H00000020aa",
+    "name": "AAPL",
+    "kind": "stock",
+    "group": "investment",
+    "quantity": 1,
+    "cost": 7000,
+    "value": 7000,
+    "realized": 0,
+    "dividends": 0
+   },
+   {
+    "id": "H00000022aa",
+    "name": "Car",
+    "kind": "vehicle",
+    "group": "asset",
+    "quantity": 1,
+    "cost": 500000,
+    "value": 500000,
+    "realized": 0,
+    "dividends": 0
+   }
+  ],
+  "holdingTotals": {
+   "investments": 13750,
+   "assets": 500000,
+   "value": 513750,
+   "cost": 512250
+  },
+  "trades": [
+   {
+    "id": "K00000024aa",
+    "ticket": "1",
+    "account": "USD Broker",
+    "closeTime": "2026-09-01 12:00",
+    "net": 47
+   }
+  ],
+  "receivables": 3000,
+  "netWorth": 804100
+ },
+ "sheetNames": [
+  "Accounts",
+  "AllocationTargets",
+  "Categories",
+  "CategoryBudgets",
+  "Expenses",
+  "HoldingTxns",
+  "Holdings",
+  "Income",
+  "IncomeCategories",
+  "InstallmentPlans",
+  "NetWorthHistory",
+  "Projects",
+  "ReceivableRepayments",
+  "Receivables",
+  "RecurringExpenses",
+  "Trades",
+  "Transfers"
+ ],
+ "savedSnapshots": [
+  [
+   "Month",
+   "Date",
+   "Accounts",
+   "Investments",
+   "Assets",
+   "NetWorth",
+   "Receivables"
+  ],
+  [
+   "2026-08",
+   "2026-08-31",
+   180000,
+   9000,
+   500000,
+   689000,
+   5000
+  ],
+  [
+   "2026-11",
+   "2026-11-22",
+   287350,
+   13750,
+   500000,
+   804100,
+   3000
+  ]
+ ],
+ "income": [
+  [
+   "Date",
+   "Amount",
+   "Category",
+   "Note",
+   "Account",
+   "OrigAmount",
+   "Currency",
+   "Id"
+  ],
+  [
+   "2026-06-25",
+   60000,
+   "Salary",
+   "",
+   "Bank",
+   "",
+   "",
+   "I00000005aa"
+  ],
+  [
+   "2026-10-25",
+   60000,
+   "Salary",
+   "",
+   "Bank",
+   "",
+   "",
+   "I00000006aa"
+  ],
+  [
+   "2026-09-01",
+   350,
+   "Other Income",
+   "",
+   "USD Broker",
+   10,
+   "USD",
+   "I00000007aa"
+  ],
+  [
+   "2026-10-20",
+   90,
+   "Investment Returns",
+   "Dividend · PTT",
+   "Bank",
+   "",
+   "",
+   "I00000018aa"
+  ]
+ ]
+}

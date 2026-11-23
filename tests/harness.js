@@ -26,6 +26,7 @@ function makeSheet(name) {
     getLastColumn: () => Math.max(1, ...rows.map(r => r.length)),
     getDataRange: () => sheet.getRange(1, 1, Math.max(1, rows.length), sheet.getLastColumn()),
     deleteRow(n) { rows.splice(n - 1, 1); },
+    clearContents() { rows.length = 0; return sheet; },
     hideSheet() { sheet.hidden = true; },
     getRange(r, c, nr, nc) {
       nr = nr || 1; nc = nc || 1;
@@ -58,20 +59,49 @@ function makeSheet(name) {
   return sheet;
 }
 
-// Returns a fresh backend with an empty spreadsheet.
-function createBackend() {
+function makeSpreadsheet(name, id) {
   const sheets = {};
-  const props = { API_TOKEN: TOKEN };
-  let uuid = 0;
-  const ss = {
+  return {
+    sheets,
     getSheetByName: n => sheets[n] || null,
     insertSheet: n => (sheets[n] = makeSheet(n)),
-    getName: () => 'Money Tracker (test)',
-    getId: () => 'test-sheet-id',
+    getName: () => name,
+    getId: () => id,
   };
+}
+
+// The Wealth Planner's spreadsheet, as SpreadsheetApp.openById() sees it from Money Tracker.
+// A test fills its export tabs with setTab(); `broken = true` makes openById throw.
+const WEALTH_ID = 'wealth-test-id';
+function makeWealth() {
+  const ss = makeSpreadsheet('Wealth Planner (test)', WEALTH_ID);
+  const wealth = {
+    ss, sheets: ss.sheets, broken: false, opened: 0,
+    setTab(name, header, rows) { const sh = makeSheet(name); sh.appendRow(header); rows.forEach(r => sh.appendRow(r)); ss.sheets[name] = sh; },
+    removeTab(name) { delete ss.sheets[name]; },
+  };
+  return wealth;
+}
+
+// Returns a fresh backend with an empty spreadsheet.
+// opts.now: a fixed clock (ISO string) so results don't depend on today; opts.src: another folder of .gs files.
+function createBackend(opts) {
+  opts = opts || {};
+  const ss = makeSpreadsheet('Money Tracker (test)', 'test-sheet-id');
+  const sheets = ss.sheets;
+  const props = { API_TOKEN: TOKEN };
+  const wealth = makeWealth();
+  let uuid = 0;
   const context = {
     console,
-    SpreadsheetApp: { getActiveSpreadsheet: () => ss, flush() {} },
+    SpreadsheetApp: {
+      getActiveSpreadsheet: () => ss, flush() {},
+      openById(id) {
+        wealth.opened++;
+        if (wealth.broken || id !== WEALTH_ID) throw new Error('Spreadsheet not found');
+        return wealth.ss;
+      },
+    },
     ContentService: { createTextOutput: t => ({ setMimeType() { return this; }, getContent: () => t }), MimeType: { JSON: 'json' } },
     Utilities: {
       getUuid: () => pad(++uuid, 8) + '-aaaa-bbbb-cccc-dddddddddddd',
@@ -90,16 +120,27 @@ function createBackend() {
     UrlFetchApp: { fetch() { throw new Error('network not available in tests'); } },
   };
   vm.createContext(context);
-  const files = fs.readdirSync(SRC).filter(f => f.endsWith('.gs')).sort();
-  for (const f of files) vm.runInContext(fs.readFileSync(path.join(SRC, f), 'utf8'), context, { filename: f });
+  if (opts.now) {
+    context.__NOW = Date.parse(opts.now);
+    vm.runInContext('(function(R){ function D(){ return arguments.length ? new (Function.prototype.bind.apply(R, [null].concat([].slice.call(arguments))))() : new R(__NOW); }' +
+      ' D.prototype = R.prototype; D.UTC = R.UTC; D.parse = R.parse; D.now = function(){ return __NOW; }; Date = D; })(Date);', context);
+  }
+  const src = opts.src || SRC;
+  const files = fs.readdirSync(src).filter(f => f.endsWith('.gs')).sort();
+  for (const f of files) vm.runInContext(fs.readFileSync(path.join(src, f), 'utf8'), context, { filename: f });
 
   // Like the app: one POST per call. Memo/caches are per request in Apps Script, so reset them.
+  function reset() {
+    vm.runInContext('_ss = null; _sheetMemo = {}; _fmtMemo = {}; _readCache = null; _idsDone = {}; _recvIds = false; _wealthSS = undefined; _wealthValues = undefined;', context);
+  }
+  // A time-based trigger (e.g. dailyRefresh) is its own execution too
+  function run(fn) { reset(); return context[fn](); }
   function api(payload) {
-    vm.runInContext('_ss = null; _sheetMemo = {}; _fmtMemo = {}; _readCache = null; _idsDone = {}; _recvIds = false;', context);
+    reset();
     const body = JSON.stringify(Object.assign({ token: TOKEN }, payload));
     return JSON.parse(context.doPost({ postData: { contents: body } }).getContent());
   }
-  return { api, sheets, context, makeSheet };
+  return { api, run, sheets, context, makeSheet, props, wealth };
 }
 
-module.exports = { createBackend, TOKEN };
+module.exports = { createBackend, TOKEN, WEALTH_ID };

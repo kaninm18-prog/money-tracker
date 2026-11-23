@@ -30,6 +30,13 @@ function receivablesAt(asOf) {
   });
   return round2(tot);
 }
+// Today's net worth parts. Once an account is linked, Money Tracker's own holdings are not added:
+// they are being moved to the Wealth Planner and are counted inside the linked accounts' values.
+function liveNetWorth(acc, hld) {
+  var linked = (acc.accounts || []).some(function(a){ return a.linked; });
+  return { accounts: acc.totalBalance || 0, investments: linked ? 0 : hld.totals.investments,
+           assets: linked ? 0 : hld.totals.assets, receivables: receivablesAt("") };
+}
 function netWorthHistory(live) {
   var thisMonth = todayStr().substring(0, 7);
   var saved = {};
@@ -48,12 +55,13 @@ function netWorthHistory(live) {
     months.unshift(ym);
     m--; if (m < 1) { m = 12; y--; }
   }
+  var linked = anyLinkedAccount();                 // D5: linked accounts already hold the investments, at cost
   var out = months.map(function(ym) {
     var row;
     if (ym === thisMonth && live) row = { accounts: live.accounts, investments: live.investments, assets: live.assets, receivables: live.receivables || 0, estimated: false, live: true };
     else if (saved[ym]) row = { accounts: saved[ym].accounts, investments: saved[ym].investments, assets: saved[ym].assets, receivables: saved[ym].receivables || 0, estimated: false };
     else {
-      var end = monthEnd(ym), ab = accountBalances(end).accounts, h = holdingsAt(end);
+      var end = monthEnd(ym), ab = accountBalances(end).accounts, h = linked ? { investments: 0, assets: 0 } : holdingsAt(end);
       var tot = ab.reduce(function(s, a){ return s + a.balance * a.rate; }, 0);
       row = { accounts: tot, investments: h.investments, assets: h.assets, receivables: receivablesAt(end), estimated: true };
     }

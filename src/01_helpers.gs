@@ -74,6 +74,10 @@ function getSheet(name) {
         sh.appendRow(["Symbol","Price","Currency"]);
         sh.hideSheet();
         break;
+      case SHEET.LINKED_FLOWS:
+        sh.appendRow(["Id","Date","Account","Amount","Currency"]);
+        sh.hideSheet();
+        break;
       case SHEET.RECURRING:
         sh.appendRow(["Description","Amount","Category","Account","DayOfMonth","StartDate","Status","LastGenerated","ProjectId","Frequency","MonthOfYear"]);
         sh.getRange(2, 6, 998, 1).setNumberFormat("@");   // StartDate stays plain text

@@ -3,6 +3,7 @@
 One line per change the user would notice. Newest first.
 
 ## 2026-11-22
+- Accounts can be linked to the Wealth Planner: a linked investment account shows the value the Wealth Planner reports (with its date, and a warning when it can't be reached), and its dividends appear in Income. Nothing changes until you link an account.
 - Updating Money Tracker no longer wipes the Wealth Planner's offline copy (both apps share one web address).
 - Settings shows the app version at the bottom, so you can check the phone has the latest update.
 - Lint (ESLint) and tests run on every push; an error stops the backend deploy.

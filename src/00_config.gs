@@ -5,7 +5,8 @@
 //    Expenses         → Date | Amount(THB) | Category | Note | Account | IsRecurring | RecurrencePeriod | ProjectId | OrigAmount | Currency | Id | CreatedAt (ms)
 //    Income           → Date | Amount(THB) | Category | Note | Account | OrigAmount | Currency | Id
 //    Transfers        → Date | Amount (in From currency) | FromAccount | ToAccount | Note | ReceivedAmount (in To currency, optional) | Id
-//    Accounts         → Name | Type | StartingBalance | CreditLimit | DueDay | StatementDay | Currency | Rate (THB per 1 unit)
+//    Accounts         → Name | Type | StartingBalance | CreditLimit | DueDay | StatementDay | Currency | Rate (THB per 1 unit) | LinkedTo
+//                       (LinkedTo: the account's name in the Wealth Planner; non-empty = a linked investment account)
 //    Categories       → Name | Icon
 //    IncomeCategories → Name | Icon
 //    Projects         → Name | Budget | StartDate | EndDate
@@ -21,6 +22,11 @@
 //                       (OrigAmount/Currency: the exact amount in a foreign-currency account, e.g. USD paid/received)
 //    NetWorthHistory  → Month (yyyy-MM) | Date | Accounts | Investments | Assets | NetWorth | Receivables  (one snapshot per month, latest wins)
 //    _Prices          → scratch sheet (hidden) where GOOGLEFINANCE formulas are evaluated
+//    _Export_LinkedFlows → Id | Date | Account | Amount | Currency  (hidden; rebuilt whole, read by the Wealth Planner)
+//                       one row per transfer into (+) or out of (−) a linked account; Account = its LinkedTo name
+//  Wealth Planner tabs read (spreadsheet id in Script Property WEALTH_SHEET_ID, see 25_linked_accounts.gs):
+//    _Export_Values    → Account | Currency | Value | ValueTHB | AsOf
+//    _Export_Dividends → Id | Date | Holding | Amount (THB) | OrigAmount | Currency | Tax | Account
 // ============================================================
 
 var SHEET = {
@@ -41,6 +47,7 @@ var SHEET = {
   NETWORTH:     "NetWorthHistory",
   TRADES:       "Trades",
   TARGETS:      "AllocationTargets",
-  PRICES:       "_Prices"
+  PRICES:       "_Prices",
+  LINKED_FLOWS: "_Export_LinkedFlows"
 };
 
