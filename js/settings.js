@@ -92,10 +92,9 @@ function saveCategoryIcon(useDefault) {
   api({ action: 'setCategoryIcon', type: iconPick.type, key: c.name, rowIndex: c.rowIndex, icon: icon }).then(function(res) {
     if (res.ok) {
       toast(useDefault ? 'Icon reset' : 'Icon saved');
-      try {                                        // keep the offline copy in step
-        var cc = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-        if (cc && cc.d) { cc.d.categories = { ok:true, categories:expCategories }; cc.d.incomeCategories = { ok:true, categories:incCategories }; localStorage.setItem(CACHE_KEY, JSON.stringify(cc)); }
-      } catch(e) {}
+      updateCache(function(d) {                    // keep the offline copy in step
+        d.categories = { ok:true, categories:expCategories }; d.incomeCategories = { ok:true, categories:incCategories };
+      });
     }
     else { c.icon = old; renderAll(); toast(/Unknown action/.test(res.error||'') ? 'Update Code.gs in Apps Script and redeploy first' : 'Error: ' + (res.error || '?')); }
   }).catch(function(){ c.icon = old; renderAll(); toast('Changing icons needs a connection'); });

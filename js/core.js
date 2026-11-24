@@ -8,8 +8,7 @@
 // Bump with every release: the date of the newest CHANGELOG.md heading (add .2, .3 for more the same day).
 var APP_VERSION = '2026.11.22.3';
 var SCRIPT_URL = localStorage.getItem('moneyScriptUrl') || '';
-var API_TOKEN  = '';
-try { API_TOKEN = localStorage.getItem('moneyToken') || ''; } catch(e) {}
+var API_TOKEN  = '';             // only in memory, and only while unlocked (it is stored encrypted — see js/lock.js)
 var viewMonth  = new Date().getMonth() + 1;
 var viewYear   = new Date().getFullYear();
 
@@ -198,20 +197,20 @@ function runLaunchAction() {
   }, 150);
 }
 
-window.addEventListener('DOMContentLoaded', function() {
-  if (!SCRIPT_URL) {
-    show('setup-screen');
-  } else {
-    hide('setup-screen');
-    show('app');
-    document.getElementById('settings-url').value = SCRIPT_URL;
-    document.getElementById('settings-token').value = API_TOKEN;
-    updateMonthLabel();
-    loadAll();
-  }
+// Nothing is shown and no request is made until the PIN is entered (startLock is in js/lockscreen.js)
+window.addEventListener('DOMContentLoaded', function() { startLock(); });
+// Called once the PIN is right (or a new one was set): show the app and load the data
+function openApp() {
+  hide('setup-screen');
+  show('app');
+  document.getElementById('settings-url').value = SCRIPT_URL;
+  document.getElementById('settings-token').value = API_TOKEN;
+  updateMonthLabel();
+  firstLoad = true;
+  loadAll();
   updateSyncBadge();
-});
-window.addEventListener('online',  function(){ updateSyncBadge(); if (SCRIPT_URL) loadAll(); });
+}
+window.addEventListener('online',  function(){ updateSyncBadge(); if (SCRIPT_URL && isUnlocked()) loadAll(); });
 window.addEventListener('offline', updateSyncBadge);
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   window.addEventListener('load', function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); });
@@ -225,25 +224,21 @@ function saveScriptUrl() {
   if (!url.startsWith('http')) { toast('Please enter a valid URL'); return; }
   var tok = document.getElementById('script-token-input').value.trim();
   if (!tok) { toast('Paste the access token from setupToken()'); return; }
-  localStorage.setItem('moneyScriptUrl', url);
-  localStorage.setItem('moneyToken', tok);
-  SCRIPT_URL = url; API_TOKEN = tok;
-  hide('setup-screen'); show('app');
-  document.getElementById('settings-url').value = url;
-  document.getElementById('settings-token').value = tok;
-  updateMonthLabel();
-  loadAll();
+  // The token is only kept once a PIN is set to encrypt it
+  beginPinSetup(url, tok);
 }
 function updateScriptUrl() {
   var url = document.getElementById('settings-url').value.trim();
   if (!url.startsWith('http')) { toast('Please enter a valid URL'); return; }
   var tok = document.getElementById('settings-token').value.trim();
-  localStorage.setItem('moneyScriptUrl', url);
-  localStorage.setItem('moneyToken', tok);
-  SCRIPT_URL = url; API_TOKEN = tok;
-  toast('Connection saved');
-  closeModal('settings-modal');
-  loadAll();
+  if (!tok) { toast('Paste the access token from setupToken()'); return; }
+  saveSecret({ token: tok }).then(function() {
+    localStorage.setItem('moneyScriptUrl', url);
+    SCRIPT_URL = url; API_TOKEN = tok;
+    toast('Connection saved');
+    closeModal('settings-modal');
+    loadAll();
+  }).catch(function(){ toast('Could not save — unlock and try again'); });
 }
 
 // ════════════════════════════════════════════
@@ -267,13 +262,21 @@ function rawApi(payload, retries) {
   });
 }
 
+// While locked nothing is sent, and answers to requests made before the lock are never handed on:
+// the promise just never settles, so no screen is drawn and no toast shown. Writes that fail after the
+// lock are still kept for the queue (see enqueue).
+function hold() { return new Promise(function(){}); }
+
 var authWarned = false;
 function api(payload, retries) {
+  if (!isUnlocked()) return hold();
+  var epoch = lockEpoch;
   var queueable = QUEUEABLE[payload.action];
   if (queueable && /^add/.test(payload.action) && !payload.id) payload.id = newClientId(queueable);
   if (queueable && !payload.id) queueable = null;          // edits/deletes need the row id to be safe
   if (queueable && navigator.onLine === false) return Promise.resolve(enqueue(payload));
   return rawApi(payload, retries).then(function(res) {
+    if (epoch !== lockEpoch) return hold();
     if (res && res.auth) {
       if (!authWarned) { authWarned = true; setTimeout(function(){ authWarned = false; }, 4000);
         setTimeout(function(){ toast(res.error === 'unauthorized' ? 'Access token is wrong or missing — check Settings' : res.error); }, 50); }
@@ -282,7 +285,8 @@ function api(payload, retries) {
     }
     return res;
   }).catch(function(err) {
-    if (queueable) return enqueue(payload);     // network down: keep it and send later
+    if (queueable) { var r = enqueue(payload); return epoch !== lockEpoch ? hold() : r; }   // network down: keep it and send later
+    if (epoch !== lockEpoch) return hold();
     throw err;
   });
 }
@@ -299,11 +303,20 @@ var QUEUEABLE = { addExpense: 'E', addIncome: 'I', addTransfer: 'T',
 var ACTION_TYPE = { Expense: 'expense', Income: 'income', Transfer: 'transfer' };
 function opType(action) { return ACTION_TYPE[action.replace(/^(add|update|delete)/, '')]; }
 var QUEUE_KEY = 'moneyQueue_v1';
-function getQueue() { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); } catch(e) { return []; } }
-function setQueue(q) { try { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); } catch(e) {} updateSyncBadge(); }
+// The queue is kept in memory while unlocked and saved encrypted (saveSealed) on every change.
+// Entries that fail to send after the app locked wait in lockedQueue until the next unlock.
+var queueMem = [], lockedQueue = [];
+function getQueue() { return JSON.parse(JSON.stringify(queueMem)); }
+function setQueue(q) {
+  queueMem = JSON.parse(JSON.stringify(q));
+  saveSealed(QUEUE_KEY, queueMem, { n: queueMem.length });
+  updateSyncBadge();
+}
 function enqueue(payload) {
-  var q = getQueue(), item = Object.assign({}, payload);
+  var item = Object.assign({}, payload);
   delete item.checkDup;                                   // asked already, on this device
+  if (!isUnlocked()) { item.qid = newClientId('Q'); lockedQueue.push(item); return { ok: true, queued: true, id: item.id }; }
+  var q = getQueue();
   if (/^add/.test(item.action) && q.some(function(x){ return x.action === item.action && x.id === item.id; })) return { ok: true, queued: true, id: item.id };
   item.qid = newClientId('Q');
   q.push(item);
@@ -315,12 +328,15 @@ var flushing = null;
 function flushQueue() {
   if (flushing) return flushing;
   var q = getQueue();
-  if (!q.length || !SCRIPT_URL) return Promise.resolve(0);
-  var sent = 0, stale = 0;
+  if (!q.length || !SCRIPT_URL || !isUnlocked()) return Promise.resolve(0);
+  var sent = 0, stale = 0, epoch = lockEpoch;
   flushing = q.reduce(function(chain, item) {
     return chain.then(function(stop) {
-      if (stop) return true;
+      if (stop || epoch !== lockEpoch) return true;   // locked meanwhile: the rest waits for the next unlock
       return rawApi(sendable(item), 1).then(function(res) {
+        // Locked while this one was on its way: it stays in the stored queue and is sent again after
+        // unlocking (adds carry their id, so the server never makes a second row)
+        if (epoch !== lockEpoch) return true;
         var drop = function(){ setQueue(getQueue().filter(function(x){ return x.qid ? x.qid !== item.qid : x.id !== item.id; })); };
         if (res && res.ok) { sent++; drop(); return false; }
         if (res && res.stale) { drop(); stale++; return false; }   // row was changed/deleted on another device
@@ -328,6 +344,7 @@ function flushQueue() {
       }).catch(function(){ return true; }); // still offline
     });
   }, Promise.resolve(false)).then(function() {
+    if (epoch !== lockEpoch) return 0;     // (the lock already cleared `flushing`)
     flushing = null;
     if (sent) toast(sent + ' offline ' + (sent === 1 ? 'change' : 'changes') + ' synced' + (stale ? ' · ' + stale + ' skipped (changed on another device)' : ''));
     else if (stale) toast(stale + ' offline change(s) skipped — the item was changed on another device');
@@ -407,6 +424,7 @@ function updateSyncBadge() {
 var OFFLINE_SAVED = 'Saved on this device — will sync when online';
 
 var CACHE_KEY = 'moneyCache_v1';
+var cacheMem = null;        // the decrypted offline copy, while unlocked
 
 function applyData(d) {
   if (d.accounts && d.accounts.ok)         { accounts=d.accounts.accounts; totalBalance=d.accounts.totalBalance; }
@@ -431,14 +449,19 @@ function applyData(d) {
 }
 
 function saveCache(d) {
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify({m:viewMonth, y:viewYear, d:d})); } catch(e) {}
+  cacheMem = {m:viewMonth, y:viewYear, d:d};
+  saveSealed(CACHE_KEY, cacheMem);
+}
+// Change the saved offline copy in place (e.g. a category icon), if there is one
+function updateCache(fn) {
+  if (!cacheMem || !cacheMem.d) return;
+  fn(cacheMem.d);
+  saveSealed(CACHE_KEY, cacheMem);
 }
 
 function loadCache() {
-  try {
-    var c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-    if (c && c.m === viewMonth && c.y === viewYear && c.d) { applyData(c.d); return true; }
-  } catch(e) {}
+  var c = cacheMem;
+  if (c && c.m === viewMonth && c.y === viewYear && c.d) { applyData(c.d); return true; }
   return false;
 }
 
@@ -457,6 +480,7 @@ function fetchLegacy() {
 
 var firstLoad = true;
 function loadAll() {
+  if (!isUnlocked()) return Promise.resolve();
   // Show last-known data instantly on the first open, then refresh in the background
   var hadCache = firstLoad ? loadCache() : false;
   firstLoad = false;

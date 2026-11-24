@@ -26,11 +26,35 @@
 </head>
 <body>
 
+<!-- ══ PIN lock (unlock / set / change) — on top of everything; see js/lockscreen.js ══ -->
+<div id="lock-screen" style="display:none">
+  <div class="lock-icon" aria-hidden="true">🔒</div>
+  <h1 id="lock-title">Enter your PIN</h1>
+  <p id="lock-sub"></p>
+  <div class="pin-dots" id="pin-dots" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+  <div class="pin-msg" id="pin-msg" role="status" aria-live="polite"></div>
+  <div class="pin-pad" id="pin-pad">
+    <button type="button" onclick="pinKey('1')">1</button><button type="button" onclick="pinKey('2')">2</button><button type="button" onclick="pinKey('3')">3</button><button type="button" onclick="pinKey('4')">4</button><button type="button" onclick="pinKey('5')">5</button><button type="button" onclick="pinKey('6')">6</button><button type="button" onclick="pinKey('7')">7</button><button type="button" onclick="pinKey('8')">8</button><button type="button" onclick="pinKey('9')">9</button>
+    <span></span><button type="button" onclick="pinKey('0')">0</button><button type="button" onclick="pinBack()" aria-label="Delete">⌫</button>
+  </div>
+  <button type="button" class="pin-link" id="pin-forgot" onclick="forgotPin()">Forgot PIN?</button>
+  <button type="button" class="pin-link" id="pin-cancel" onclick="cancelPinFlow()" style="display:none">Cancel</button>
+</div>
+
+<!-- ══ No WebCrypto: refuse to open rather than leave the data unprotected ══ -->
+<div id="nocrypto-screen" style="display:none">
+  <div class="lock-icon" aria-hidden="true">⚠️</div>
+  <h1>Can't lock on this browser</h1>
+  <p>Money Tracker protects your data with a PIN, which needs a browser that supports encryption (WebCrypto) and a secure https:// address. This browser or address doesn't, so the app won't open here.</p>
+  <p>Open <strong>https://kaninm18-prog.github.io/money-tracker/</strong> in an up-to-date Safari, Chrome, Edge or Firefox.</p>
+</div>
+
 <!-- ══ Setup Screen ══ -->
-<div id="setup-screen">
+<div id="setup-screen" style="display:none">
   <div style="font-size:3.2rem;margin-bottom:10px">💰</div>
   <h1>Money Tracker</h1>
   <p>Track income, expenses & accounts — powered by Google Sheets</p>
+  <div class="setup-note" id="setup-note" style="display:none"></div>
   <div class="setup-card">
     <ol class="setup-steps">
       <li>Open <strong>script.google.com</strong> → New project</li>
@@ -42,7 +66,7 @@
     <input type="url" id="script-url-input" placeholder="https://script.google.com/macros/s/...">
     <label style="margin-top:10px">Access token</label>
     <input type="password" id="script-token-input" placeholder="Token from setupToken()" autocomplete="off">
-    <button class="setup-btn" onclick="saveScriptUrl()">Connect & Start →</button>
+    <button class="setup-btn" onclick="saveScriptUrl()">Next: set a PIN →</button>
   </div>
 </div>
 
@@ -832,6 +856,14 @@
       <button class="btn btn-primary btn-sm" onclick="updateScriptUrl()">Save Connection</button>
     </div>
     <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Security</div>
+      <div class="balance-mode-desc" style="margin-bottom:8px">The app locks after 5 minutes in the background and every time it opens. Your access token and the data saved on this device are encrypted with your PIN.</div>
+      <div class="btn-row">
+        <button class="btn btn-ghost btn-sm" onclick="startChangePin()">🔑 Change PIN</button>
+        <button class="btn btn-ghost btn-sm" onclick="lockFromSettings()">🔒 Lock now</button>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
       <div class="card-title">Expense Categories</div>
       <div class="balance-mode-desc" style="margin-bottom:6px">Tap an icon to change it.</div>
       <div id="settings-exp-cats"></div>
@@ -973,7 +1005,9 @@
 
 <div id="toast"></div>
 
+<script src="js/lock.js"></script>
 <script src="js/core.js"></script>
+<script src="js/lockscreen.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/transactions.js"></script>
 <script src="js/accounts.js"></script>
