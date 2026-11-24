@@ -8,6 +8,7 @@ Read this before changing anything. `ROADMAP.md` has the plan; `project-progress
 | Part | Where | Notes |
 |---|---|---|
 | Front end | `index.html` + `css/app.css` + `js/*.js` | Plain browser scripts, **no build step, no modules, no frameworks**. `index.html` loads `js/*.js` with `<script>` tags; all functions are global so `onclick="…"` works. |
+| PIN lock | `js/lock.js` (crypto + vault, pure) + `js/lockscreen.js` (screens, auto-lock) | The access token, the offline cache and the queue are stored **encrypted** (AES-GCM, key from the PIN via PBKDF2, only in memory while unlocked). Never store them, or any other data, in plain `localStorage`. Nothing is requested or drawn while locked. |
 | Offline shell | `sw.js` | Network-first for the app's own files. Bump `CACHE` when you add/rename a cached file. Apps Script calls are never cached. |
 | Back end | `src/*.gs` (Google Apps Script) | One web app, `doPost` → `route(p)` in `src/02_api.gs` dispatches on `p.action`. Files are numbered: Apps Script loads them in name order and they share **one global scope**. |
 | Database | Google Sheet "Money Tracker" | One tab per data type. Column layout is documented at the top of `src/00_config.gs`. |
@@ -31,6 +32,7 @@ Writes made offline are queued and replayed (`QUEUEABLE` in `js/core.js`); adds 
   - `npm test` — back-end tests: the real `src/*.gs` against a fake Google Sheet (`tests/harness.js`). No network, no real data.
   - `npm run lint` — ESLint, bug-focused. Errors fail CI; warnings don't.
   - `npm run check` — both. **Run it before every commit.**
+  - `npm run check:browser` — the PIN lock in real Chromium (needs a pre-installed Playwright; not in CI). Backend answered by the fake sheet via `page.route`.
 - Style: match the surrounding code — `var`, `function(){}` callbacks, small helpers, short comments that explain *why*. Keep the front end working on older phones (no syntax newer than what's already used).
 - New back-end action: add a `case` in `route()` (`src/02_api.gs`) + the function in the right feature file + a test. The front end should handle `Unknown action` (old backend) with a toast telling the user to redeploy.
 - New sheet column: append at the end and add the header with `ensureHeaders(sh, col, [...])` so existing sheets keep working. Never reorder or remove columns.

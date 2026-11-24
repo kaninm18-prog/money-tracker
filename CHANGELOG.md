@@ -2,6 +2,9 @@
 
 One line per change the user would notice. Newest first.
 
+## 2026-11-24
+- PIN lock: the app now asks for a 6-digit PIN every time it opens and after 5 minutes in the background. The first time after this update you set the PIN. Your access token and the data saved on this device (offline copy, unsent entries) are encrypted with it. Settings → Security has Change PIN and Lock now. After 5 wrong PINs there is a growing wait; after 10, or with "Forgot PIN?", this device's saved data is erased and you connect again (your Google Sheet is not touched).
+
 ## 2026-11-22
 - Accounts can be linked to the Wealth Planner: a linked investment account shows the value the Wealth Planner reports (with its date, and a warning when it can't be reached), and its dividends appear in Income. Nothing changes until you link an account.
 - Updating Money Tracker no longer wipes the Wealth Planner's offline copy (both apps share one web address).
