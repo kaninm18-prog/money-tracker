@@ -13,6 +13,7 @@
     "statementDay": 0,
     "currency": "THB",
     "rate": 1,
+    "group": "Cash & wallets",
     "balanceThb": 0
    },
    {
@@ -26,6 +27,7 @@
     "statementDay": 0,
     "currency": "THB",
     "rate": 1,
+    "group": "Investments",
     "balanceThb": 0
    },
    {
@@ -39,6 +41,7 @@
     "statementDay": 0,
     "currency": "THB",
     "rate": 1,
+    "group": "Bank accounts",
     "balanceThb": 220525
    },
    {
@@ -52,6 +55,7 @@
     "statementDay": 0,
     "currency": "THB",
     "rate": 1,
+    "group": "Cash & wallets",
     "balanceThb": 6580
    },
    {
@@ -65,6 +69,7 @@
     "statementDay": 0,
     "currency": "USD",
     "rate": 35,
+    "group": "Investments",
     "balanceThb": 63945
    },
    {
@@ -78,6 +83,7 @@
     "statementDay": 25,
     "currency": "THB",
     "rate": 1,
+    "group": "Credit cards",
     "statement": {
      "lastStart": "2026-09-26",
      "lastEnd": "2026-10-25",
@@ -168,6 +174,7 @@
      "statementDay": 0,
      "currency": "THB",
      "rate": 1,
+     "group": "Cash & wallets",
      "balanceThb": 0
     },
     {
@@ -181,6 +188,7 @@
      "statementDay": 0,
      "currency": "THB",
      "rate": 1,
+     "group": "Investments",
      "balanceThb": 0
     },
     {
@@ -194,6 +202,7 @@
      "statementDay": 0,
      "currency": "THB",
      "rate": 1,
+     "group": "Bank accounts",
      "balanceThb": 220525
     },
     {
@@ -207,6 +216,7 @@
      "statementDay": 0,
      "currency": "THB",
      "rate": 1,
+     "group": "Cash & wallets",
      "balanceThb": 6580
     },
     {
@@ -220,6 +230,7 @@
      "statementDay": 0,
      "currency": "USD",
      "rate": 35,
+     "group": "Investments",
      "balanceThb": 63945
     },
     {
@@ -233,6 +244,7 @@
      "statementDay": 25,
      "currency": "THB",
      "rate": 1,
+     "group": "Credit cards",
      "statement": {
       "lastStart": "2026-09-26",
       "lastEnd": "2026-10-25",

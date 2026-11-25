@@ -36,6 +36,7 @@ function route(p) {
       case "addAccount":             return addAccount(p);
       case "updateAccount":          return updateAccount(p);
       case "deleteAccount":          return deleteAccount(p);
+      case "renameAccountGroup":     return renameAccountGroup(p);
       case "getCategories":          return getCategories();
       case "addCategory":            return addCategory(p);
       case "deleteCategory":         return deleteCategory(p);
