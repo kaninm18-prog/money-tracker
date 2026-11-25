@@ -112,7 +112,7 @@ Each step is one branch → one PR → `npm run check` green → Arm reviews and
 - Steps 3 and 4 can run in parallel (two agents) once the contract in section 3 is agreed. A third agent reviews both PRs against the contract.
 
 ### Step 5 — Migration (rehearsed on the fake sheet, then run once for real)
-**Replaced 2026-11-23: start over instead.** Arm's live investment data turned out to be one gold bar and 29 MTS trades, so it is re-entered in the Wealth Planner instead of converted. Follow **[`docs/stage-4-start-over.md`](stage-4-start-over.md)**. The migration tools below (and contract change C9) were not built; money-tracker#9 was closed unmerged. The Wealth Planner got an `OpeningCash` column on its Brokers tab instead. Steps 6–7 still apply; step 6 uses the start-over runbook's compare.
+**Done 2026-11-24 (started over).** **Replaced 2026-11-23: start over instead.** Arm's live investment data turned out to be one gold bar and 29 MTS trades, so it is re-entered in the Wealth Planner instead of converted. Follow **[`docs/stage-4-start-over.md`](stage-4-start-over.md)**. The migration tools below (and contract change C9) were not built; money-tracker#9 was closed unmerged. The Wealth Planner got an `OpeningCash` column on its Brokers tab instead. Steps 6–7 still apply; step 6 uses the start-over runbook's compare.
 
 - Agent writes `migrateToLinked` (Money Tracker) and a test that runs it on a fake sheet built from the step 1 fixtures. Then it checks that every non-linked account balance and the total net worth come out identical.
 - What it does:
@@ -122,10 +122,14 @@ Each step is one branch → one PR → `npm run check` green → Arm reviews and
 - **(A)** Before running: `backupNow`, copy the four tabs into the Wealth Planner sheet ("Copy to…" in Sheets), and copy the `BENCH*` Script Properties. Then run `migrateToLinked` from the editor and run `reconcile` again → **after.json**.
 
 ### Step 6 — Check to the cent
+**Done 2026-11-24.** Arm ran the start-over runbook to step 10, and the results matched what was expected: USD Acc linked to "MTS Gold (USD)" shows $5,904.53 (the 29 trades counted for the first time), "Other assets" carries the gold bar, and every other account is unchanged. Both apps now run side by side.
+
 - A script in `scripts/` diffs `before.json` against `after.json`. Every non-linked account balance must match exactly. Net worth must match, except for the market-value difference between "linked account at Wealth Planner value" and "holdings at market value", which should be 0 on the same day.
 - **(A)** Arm reads the diff. Any mismatch → stop and fix. Don't go to step 7.
 
 ### Step 7 — Remove investment code from Money Tracker
+**Next, after about a week of side-by-side use (from 2026-11-24).** First check how the gold bar's old buy entry in Money Tracker was recorded: if it has an Account, turn it into a transfer before removing the investment code, so that account's balance doesn't change.
+
 - Only after step 6 is clean and both apps have run side by side for about a week.
 - Delete the files listed in section 1, the `route()` cases, the `type: "holding"` rows in the transaction list, and `holdingTotals`.
 - **(A)** Hide the old tabs; don't delete them. Bump the `sw.js` `CACHE`.
