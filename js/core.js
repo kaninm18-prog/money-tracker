@@ -155,6 +155,25 @@ function sortedAccounts() {
     return ai !== bi ? ai - bi : a.name.localeCompare(b.name);
   });
 }
+// Account groups: the user's own headings on the Accounts page (display only, never in any total).
+// An empty group is the type's default; the backend does the same, this covers an older backend.
+var ACCT_GROUP_DEFAULTS = { bank: 'Bank accounts', credit: 'Credit cards', cash: 'Cash & wallets', wallet: 'Cash & wallets', investment: 'Investments' };
+var ACCT_GROUP_ORDER = ['Bank accounts', 'Credit cards', 'Cash & wallets', 'Investments', 'Other'];
+function defaultAcctGroup(type) { return ACCT_GROUP_DEFAULTS[type] || 'Other'; }
+function acctGroup(a) { return String(a.group || '').trim() || defaultAcctGroup(a.type); }
+// [{ name, accounts }] — groups with a custom name in the order they first appear in `list`,
+// then the default groups in ACCT_GROUP_ORDER. Accounts keep their order from `list`.
+function acctGroups(list) {
+  var byName = {}, custom = [];
+  list.forEach(function(a) {
+    var g = acctGroup(a);
+    if (!byName[g]) { byName[g] = { name: g, accounts: [] }; if (ACCT_GROUP_ORDER.indexOf(g) < 0) custom.push(g); }
+    byName[g].accounts.push(a);
+  });
+  return custom.concat(ACCT_GROUP_ORDER).filter(function(g){ return byName[g]; }).map(function(g){ return byName[g]; });
+}
+// Which groups are collapsed on the Accounts page: in memory only (resets on reload, emptied on lock)
+var collapsedGroups = {};
 // Privacy mode: every amount drawn through these helpers shows as dots (remembered on this device)
 var privacyOn = false;
 try { privacyOn = localStorage.getItem('privacyOn') === '1'; } catch(e) {}

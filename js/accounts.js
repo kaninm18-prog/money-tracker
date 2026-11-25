@@ -95,74 +95,95 @@ function renderAccountsPage() {
   if (!accounts.length) {
     html = '<div class="empty"><div class="empty-icon">💳</div><p>No accounts yet. Add your first account below.</p></div>';
   } else {
-    // Group by type in a defined order
-    var TYPE_ORDER = [
-      { key: 'bank',       label: '🏦 Bank Accounts' },
-      { key: 'credit',     label: '💳 Credit Cards' },
-      { key: 'cash',       label: '💵 Cash' },
-      { key: 'wallet',     label: '📱 Digital Wallets' },
-      { key: 'investment', label: '📈 Investments & Savings' }
-    ];
-    // Collect any types not in the predefined list
-    var knownTypes = TYPE_ORDER.map(function(g){ return g.key; });
-    var otherTypes = accounts
-      .map(function(a){ return a.type; })
-      .filter(function(t, i, arr){ return !knownTypes.includes(t) && arr.indexOf(t) === i; });
-    otherTypes.forEach(function(t){ TYPE_ORDER.push({ key: t, label: '🏛 ' + typeLabel(t) }); });
-
-    TYPE_ORDER.forEach(function(group) {
-      var groupAccts = accounts.filter(function(a){ return a.type === group.key; });
-      if (!groupAccts.length) return;
-      html += '<div class="acc-page-section-header">' + group.label + '</div>';
-      groupAccts.forEach(function(a) {
-        if (a.type === 'credit') {
-          var owed = ccOwed(a);
-          var pct  = ccUsedPct(a);
-          var nextDue = a.dueDay ? nextDueDate(a.dueDay) : null;
-          var daysLeft = nextDue ? daysUntil(nextDue) : null;
-          if (a.statement && a.statement.dueDate && a.statement.leftToPay > 0) { nextDue = new Date(a.statement.dueDate+'T00:00:00'); daysLeft = daysUntil(nextDue); }
-          // local date (toISOString() converted to UTC and showed the day before in Thailand)
-          var dueTxt = nextDue ? fmtDate(nextDue.getFullYear()+'-'+pad(nextDue.getMonth()+1)+'-'+pad(nextDue.getDate())) + (daysLeft<=3?' ⚠️':'') : '—';
-          html += '<div class="acc-page-card is-credit">' +
-            '<div class="acc-page-row">' +
-              '<div class="acc-page-icon">💳</div>' +
-              '<div class="acc-page-info"><div class="acc-page-name">'+a.name+'</div><div class="acc-page-type">Credit Card</div></div>' +
-              '<div class="acc-page-balance neg">Owed<br>'+fmtMoney(owed)+'</div>' +
-            '</div>' +
-            '<div class="acc-page-credit-detail">' +
-              (a.creditLimit ? '<div class="acc-page-credit-row"><span>Credit Limit</span><span>'+fmtMoney(a.creditLimit)+'</span></div>' +
-                '<div class="acc-page-credit-row"><span>Available</span><span>'+fmtMoney(Math.max(0, a.creditLimit - owed))+'</span></div>' +
-                '<div class="acc-page-limit-bar-wrap"><div class="acc-page-limit-bar" style="width:'+pct+'%"></div></div>' : '') +
-              (a.dueDay ? '<div class="acc-page-credit-row" style="margin-top:8px"><span>Next Due Date</span><span>'+dueTxt+'</span></div>' : '') +
-              (a.statementDay ? '<div class="acc-page-credit-row"><span>Statement Date</span><span>'+a.statementDay+(a.statementDay===1?'st':a.statementDay===2?'nd':a.statementDay===3?'rd':'th')+' of each month</span></div>' : '') +
-              statementHtml(a) +
-            '</div>' +
-            balCheckRow(a) +
-            (accountsEditMode ? '<div class="acc-page-actions">' +
-              '<button class="acc-edit-btn" onclick="openEditAccount('+a.rowIndex+')">✏️ Edit</button>' +
-              '<button class="acc-del-btn"  onclick="deleteAccount('+a.rowIndex+',\''+escQ(a.name)+'\')">🗑️ Delete</button>' +
-            '</div>' : '') +
-          '</div>';
-        } else {
-          var neg = a.balance < 0 ? ' neg' : '';
-          html += '<div class="acc-page-card">' +
-            '<div class="acc-page-row">' +
-              '<div class="acc-page-icon">'+acctIcon(a.type)+'</div>' +
-              '<div class="acc-page-info"><div class="acc-page-name">'+a.name+'</div><div class="acc-page-type">'+typeLabel(a.type)+(a.currency && a.currency !== 'THB' ? ' · '+a.currency+' @ ฿'+a.rate : '')+'</div></div>' +
-              '<div class="acc-page-balance'+neg+'">'+fmtCur(a.balance, a.currency)+(a.currency && a.currency !== 'THB' ? '<div style="font-size:0.7rem;font-weight:500;color:var(--text2)">≈ '+fmtMoney(a.balanceThb)+'</div>' : '')+'</div>' +
-            '</div>' +
-            linkedValueHtml(a) +
-            (a.linked ? '' : balCheckRow(a)) +     // a linked balance comes from the Wealth Planner: nothing to adjust here
-            (accountsEditMode ? '<div class="acc-page-actions">' +
-              '<button class="acc-edit-btn" onclick="openEditAccount('+a.rowIndex+')">✏️ Edit</button>' +
-              '<button class="acc-del-btn"  onclick="deleteAccount('+a.rowIndex+',\''+escQ(a.name)+'\')">🗑️ Delete</button>' +
-            '</div>' : '') +
-          '</div>';
-        }
-      });
+    // Under the user's own groups (see acctGroups in core.js). Tapping a heading collapses/expands it.
+    acctGroupList = acctGroups(accounts);
+    acctGroupList.forEach(function(g, gi) {
+      var open = !collapsedGroups[g.name];
+      var sub = g.accounts.reduce(function(s, a){ return s + acctThb(a); }, 0);
+      html += '<div class="acc-group' + (open ? '' : ' collapsed') + '">' +
+        '<div class="acc-group-head">' +
+          '<button type="button" class="acc-group-toggle" aria-expanded="' + open + '" onclick="toggleAcctGroup(' + gi + ')">' +
+            '<span class="acc-group-chev">▾</span>' +
+            '<span class="acc-group-name">' + escAttr(g.name) + '</span>' +
+            '<span class="acc-group-count">' + g.accounts.length + '</span>' +
+            '<span class="acc-group-total' + (sub < 0 ? ' neg' : '') + '">' + fmtMoney(round2(sub)) + '</span>' +
+          '</button>' +
+          (accountsEditMode ? '<button type="button" class="acc-group-rename" onclick="renameAcctGroup(' + gi + ')" aria-label="Rename group ' + escAttr(g.name) + '">✏️</button>' : '') +
+        '</div>' +
+        (open ? '<div class="acc-group-body">' + g.accounts.map(accountPageCard).join('') + '</div>' : '') +
+      '</div>';
     });
   }
   document.getElementById('accounts-page-list').innerHTML = html;
+}
+
+// One account on the Accounts page
+function accountPageCard(a) {
+  var actions = accountsEditMode ? '<div class="acc-page-actions">' +
+      '<button class="acc-edit-btn" onclick="openEditAccount('+a.rowIndex+')">✏️ Edit</button>' +
+      '<button class="acc-del-btn"  onclick="deleteAccount('+a.rowIndex+',\''+escQ(a.name)+'\')">🗑️ Delete</button>' +
+    '</div>' : '';
+  if (a.type === 'credit') {
+    var owed = ccOwed(a);
+    var pct  = ccUsedPct(a);
+    var nextDue = a.dueDay ? nextDueDate(a.dueDay) : null;
+    var daysLeft = nextDue ? daysUntil(nextDue) : null;
+    if (a.statement && a.statement.dueDate && a.statement.leftToPay > 0) { nextDue = new Date(a.statement.dueDate+'T00:00:00'); daysLeft = daysUntil(nextDue); }
+    // local date (toISOString() converted to UTC and showed the day before in Thailand)
+    var dueTxt = nextDue ? fmtDate(nextDue.getFullYear()+'-'+pad(nextDue.getMonth()+1)+'-'+pad(nextDue.getDate())) + (daysLeft<=3?' ⚠️':'') : '—';
+    return '<div class="acc-page-card is-credit">' +
+      '<div class="acc-page-row">' +
+        '<div class="acc-page-icon">💳</div>' +
+        '<div class="acc-page-info"><div class="acc-page-name">'+a.name+'</div><div class="acc-page-type">Credit Card</div></div>' +
+        '<div class="acc-page-balance neg">Owed<br>'+fmtMoney(owed)+'</div>' +
+      '</div>' +
+      '<div class="acc-page-credit-detail">' +
+        (a.creditLimit ? '<div class="acc-page-credit-row"><span>Credit Limit</span><span>'+fmtMoney(a.creditLimit)+'</span></div>' +
+          '<div class="acc-page-credit-row"><span>Available</span><span>'+fmtMoney(Math.max(0, a.creditLimit - owed))+'</span></div>' +
+          '<div class="acc-page-limit-bar-wrap"><div class="acc-page-limit-bar" style="width:'+pct+'%"></div></div>' : '') +
+        (a.dueDay ? '<div class="acc-page-credit-row" style="margin-top:8px"><span>Next Due Date</span><span>'+dueTxt+'</span></div>' : '') +
+        (a.statementDay ? '<div class="acc-page-credit-row"><span>Statement Date</span><span>'+a.statementDay+(a.statementDay===1?'st':a.statementDay===2?'nd':a.statementDay===3?'rd':'th')+' of each month</span></div>' : '') +
+        statementHtml(a) +
+      '</div>' +
+      balCheckRow(a) +
+      actions +
+    '</div>';
+  }
+  var neg = a.balance < 0 ? ' neg' : '';
+  return '<div class="acc-page-card">' +
+    '<div class="acc-page-row">' +
+      '<div class="acc-page-icon">'+acctIcon(a.type)+'</div>' +
+      '<div class="acc-page-info"><div class="acc-page-name">'+a.name+'</div><div class="acc-page-type">'+typeLabel(a.type)+(a.currency && a.currency !== 'THB' ? ' · '+a.currency+' @ ฿'+a.rate : '')+'</div></div>' +
+      '<div class="acc-page-balance'+neg+'">'+fmtCur(a.balance, a.currency)+(a.currency && a.currency !== 'THB' ? '<div style="font-size:0.7rem;font-weight:500;color:var(--text2)">≈ '+fmtMoney(a.balanceThb)+'</div>' : '')+'</div>' +
+    '</div>' +
+    linkedValueHtml(a) +
+    (a.linked ? '' : balCheckRow(a)) +     // a linked balance comes from the Wealth Planner: nothing to adjust here
+    actions +
+  '</div>';
+}
+
+// The groups as last drawn (headings refer to them by position, so names never go into onclick="…")
+var acctGroupList = [];
+function toggleAcctGroup(i) {
+  var g = acctGroupList[i]; if (!g) return;
+  if (collapsedGroups[g.name]) delete collapsedGroups[g.name]; else collapsedGroups[g.name] = true;
+  renderAccountsPage();
+}
+// Rename a group on every account in it (one backend call: renameAccountGroup)
+function renameAcctGroup(i) {
+  var g = acctGroupList[i]; if (!g) return;
+  var to = prompt('Rename group "' + g.name + '" (' + g.accounts.length + ' account' + (g.accounts.length === 1 ? '' : 's') + ') to:', g.name);
+  if (to === null) return;
+  to = to.replace(/\s+/g, ' ').trim();
+  if (!to) { toast('Enter a group name'); return; }
+  if (to === g.name) return;
+  api({ action: 'renameAccountGroup', from: g.name, to: to }).then(function(res) {
+    if (res.ok) {
+      if (collapsedGroups[g.name]) { delete collapsedGroups[g.name]; collapsedGroups[to] = true; }
+      toast('Group renamed'); loadAll();
+    }
+    else toast(/Unknown action/.test(res.error || '') ? 'Renaming groups needs the new backend: redeploy Apps Script first' : 'Error: ' + (res.error || '?'));
+  }).catch(function(){ toast('Connection error'); });
 }
 
 function typeLabel(t) { return {cash:'Cash',bank:'Bank Account',investment:'Investment / Savings',wallet:'Digital Wallet',credit:'Credit Card'}[t] || t; }
@@ -171,6 +192,7 @@ function typeLabel(t) { return {cash:'Cash',bank:'Bank Account',investment:'Inve
 //  ACCOUNTS CRUD
 // ════════════════════════════════════════════
 function toggleCreditFields() {
+  updateGroupDefault();
   var isCredit = document.getElementById('fa-type').value === 'credit';
   document.getElementById('credit-fields').style.display    = isCredit ? 'block' : 'none';
   document.getElementById('fa-balance-hint').style.display  = isCredit ? 'block' : 'none';
@@ -183,6 +205,22 @@ function toggleLinkedFields() {
   var show = document.getElementById('fa-type').value === 'investment' || box.checked;
   document.getElementById('fa-linked-group').style.display = show ? 'block' : 'none';
   document.getElementById('fa-linked-fields').style.display = show && box.checked ? 'block' : 'none';
+}
+// Group field: a suggestion list of the groups in use plus the defaults. While it still holds the
+// previous type's default (or nothing), changing the type changes it to the new type's default.
+function setAcctGroup(group, type) {
+  var seen = {}, names = [];
+  accounts.map(acctGroup).concat(ACCT_GROUP_ORDER).forEach(function(g){ if (!seen[g]) { seen[g] = 1; names.push(g); } });
+  document.getElementById('fa-group-list').innerHTML = names.map(function(g){ return '<option value="' + escAttr(g) + '">'; }).join('');
+  var box = document.getElementById('fa-group');
+  box.value = group;
+  box.setAttribute('data-type', type);
+}
+function updateGroupDefault() {
+  var box = document.getElementById('fa-group'), type = document.getElementById('fa-type').value;
+  var prev = box.getAttribute('data-type') || '';
+  if (!box.value.trim() || (prev && box.value.trim() === defaultAcctGroup(prev))) box.value = defaultAcctGroup(type);
+  box.setAttribute('data-type', type);
 }
 function setAcctLinked(name) {
   document.getElementById('fa-linked').checked = !!name;
@@ -239,6 +277,7 @@ function openAddAccount() {
   setAcctCurrency('THB');
   document.getElementById('fa-rate').value = '';
   setAcctLinked('');
+  setAcctGroup(defaultAcctGroup('bank'), 'bank');
   toggleCreditFields();
   openModal('account-modal');
 }
@@ -259,6 +298,7 @@ function openEditAccount(rowIndex) {
   setAcctCurrency(a.currency || 'THB');
   document.getElementById('fa-rate').value = (a.currency && a.currency !== 'THB') ? a.rate : '';
   setAcctLinked(a.linkedTo || '');
+  setAcctGroup(acctGroup(a), a.type);
   toggleCreditFields();
   openModal('account-modal');
 }
@@ -280,6 +320,7 @@ function saveAccount() {
   var linked = document.getElementById('fa-linked').checked && document.getElementById('fa-linked-group').style.display !== 'none';
   payload.linkedTo = linked ? document.getElementById('fa-linkedto').value.trim() : '';
   if (linked && !payload.linkedTo) { toast('Enter the account name used in the Wealth Planner'); return; }
+  payload.group = document.getElementById('fa-group').value.replace(/\s+/g, ' ').trim();   // empty = the type's default
   if (type === 'credit') {
     payload.creditLimit  = parseFloat(document.getElementById('fa-limit').value)  || 0;
     payload.dueDay       = parseInt(document.getElementById('fa-dueday').value)   || 0;
@@ -290,6 +331,7 @@ function saveAccount() {
   document.getElementById('save-account-btn').textContent = 'Saving…';
   api(payload).then(function(res) {
     if (res.ok && payload.linkedTo && res.linkedTo === undefined) { closeModal('account-modal'); toast('Saved, but the link needs the new backend: redeploy Apps Script first', 5000); loadAll(); }
+    else if (res.ok && res.group === undefined && payload.group && payload.group !== defaultAcctGroup(type)) { closeModal('account-modal'); toast('Saved, but the group needs the new backend: redeploy Apps Script first', 5000); loadAll(); }
     else if (res.ok) { closeModal('account-modal'); toast(editingAccountRow?'Account updated!':'Account added!'); loadAll(); }
     else { toast('Error: '+(res.error||'?')); }
     document.getElementById('save-account-btn').textContent = editingAccountRow?'Save Changes':'Add Account';

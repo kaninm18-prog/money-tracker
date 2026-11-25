@@ -83,7 +83,10 @@ function renderAccountCards() {
   document.getElementById('header-networth-sub').textContent = modeInfo.sub;
 
   var html = '';
-  sortedAccounts().forEach(function(a) {
+  // Same order as the Accounts page groups (within a group: by type, then name)
+  var ordered = [];
+  acctGroups(sortedAccounts()).forEach(function(g){ ordered = ordered.concat(g.accounts); });
+  ordered.forEach(function(a) {
     if (a.type === 'credit') {
       var owed = ccOwed(a);
       var pct  = ccUsedPct(a);
