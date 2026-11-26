@@ -54,6 +54,7 @@ function route(p) {
       case "addIncomeCategory":      return addIncomeCategory(p);
       case "deleteIncomeCategory":   return deleteIncomeCategory(p);
       case "getProjects":            return getProjects();
+      case "getProjectDetail":       return getProjectDetail(p);
       case "addProject":             return addProject(p);
       case "updateProject":          return updateProject(p);
       case "deleteProject":          return deleteProject(p);

@@ -6,7 +6,7 @@
     "test": "node --test tests/*.test.js",
     "lint": "node scripts/lint.js",
     "check": "npm run lint && npm test",
-    "check:browser": "node tests/browser/lock-check.js && node tests/browser/groups-check.js"
+    "check:browser": "node tests/browser/lock-check.js && node tests/browser/groups-check.js && node tests/browser/project-check.js"
   },
   "devDependencies": {
     "eslint": "9.39.5",

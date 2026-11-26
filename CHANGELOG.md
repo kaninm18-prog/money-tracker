@@ -3,6 +3,7 @@
 One line per change the user would notice. Newest first.
 
 ## 2026-11-26
+- Projects: tap a project to see everything spent on it, across all months: the total against the budget, a breakdown by category and by month, and every expense (tap one to edit it). Needs the backend redeployed (it deploys from `main` automatically).
 - Account groups: a group of only credit cards now shows its subtotal like the cards do ("Owed ฿3,700"). A mixed group in debt keeps the minus sign.
 - Group names match without regard to capitals or extra spaces: "Travel", "travel " and "TRAVEL" are one group, shown with the spelling used first. Renaming a group renames every spelling of it. Needs the backend redeployed (it deploys from `main` automatically).
 

@@ -22,7 +22,7 @@ function renderProjectsPage() {
       var over = p.budget > 0 && p.spent > p.budget;
       var dateRange = (p.startDate ? fmtDate(p.startDate) : '') + (p.endDate ? ' – '+fmtDate(p.endDate) : '');
       html += '<div class="project-card">' +
-        '<div class="project-card-header">' +
+        '<div class="project-card-header" style="cursor:pointer" onclick="openProjectDetail(\''+escQ(p.name)+'\')">' +
           '<div><div class="project-card-name">📁 '+p.name+'</div><div class="project-card-dates">'+dateRange+'</div></div>' +
           '<div class="project-card-amount"><div class="project-card-spent">'+fmtMoney(p.spent)+'</div>' +
             (p.budget ? '<div class="project-card-budget">of '+fmtMoney(p.budget)+'</div>' : '') +
@@ -37,6 +37,64 @@ function renderProjectsPage() {
     });
   }
   document.getElementById('projects-list').innerHTML = html;
+}
+
+// ── Project detail: every expense of one project across all months, with breakdowns ──
+var projectDetail = null;        // last getProjectDetail answer (cleared on lock, like the other data)
+function openProjectDetail(name) {
+  projectDetail = null;
+  document.getElementById('pd-title').textContent = '📁 ' + name;
+  document.getElementById('pd-body').innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  openModal('project-detail-modal');
+  api({ action: 'getProjectDetail', name: name }).then(function(res) {
+    if (!res || !res.ok) {
+      document.getElementById('pd-body').innerHTML = '';
+      toast(res && /Unknown action/.test(res.error || '') ? 'Redeploy Apps Script to see project details' : 'Error: ' + ((res && res.error) || '?'));
+      return;
+    }
+    projectDetail = res;
+    renderProjectDetail();
+  }).catch(function() { document.getElementById('pd-body').innerHTML = ''; toast('Project details need a connection'); });
+}
+function renderProjectDetail() {
+  var d = projectDetail, el = document.getElementById('pd-body');
+  if (!d || !el) return;
+  var p = d.project, pct = p.budget > 0 ? Math.round(p.spent / p.budget * 100) : 0, over = p.budget > 0 && p.spent > p.budget;
+  var dates = (p.startDate ? fmtDateY(p.startDate) : '') + (p.endDate ? ' – ' + fmtDateY(p.endDate) : '');
+  var html = '<div class="project-card" style="box-shadow:none;padding:0 0 6px">' +
+    '<div class="project-card-header"><div><div class="project-card-dates">' + (dates || 'No dates') + ' · ' + p.count + ' expense' + (p.count === 1 ? '' : 's') + '</div></div>' +
+    '<div class="project-card-amount"><div class="project-card-spent">' + fmtMoney(p.spent) + '</div>' +
+    (p.budget ? '<div class="project-card-budget">of ' + fmtMoney(p.budget) + ' · ' + (over ? fmtMoney(p.spent - p.budget) + ' over' : fmtMoney(p.budget - p.spent) + ' left') + '</div>' : '') + '</div></div>' +
+    (p.budget ? '<div class="project-progress-wrap"><div class="project-progress-bar' + (over ? ' over' : '') + '" style="width:' + Math.min(100, pct) + '%"></div></div>' : '') + '</div>';
+  if (!d.expenses.length) { el.innerHTML = html + '<div class="empty"><div class="empty-icon">📁</div><p>No expenses in this project yet.<br>Pick the project when you add an expense.</p></div>'; return; }
+  // by category: share of the project's spending
+  html += '<div class="card-title" style="margin-top:10px">By category</div>';
+  d.categories.forEach(function(c) {
+    var share = p.spent > 0 ? Math.round(c.amount / p.spent * 100) : 0;
+    html += '<div class="pd-row"><span>' + catIcon(c.category) + ' ' + recEsc(c.category) + '</span><span><b>' + fmtMoney(c.amount) + '</b> · ' + share + '%</span></div>' +
+      '<div class="project-progress-wrap" style="margin:2px 0 8px"><div class="project-progress-bar" style="width:' + share + '%;background:' + catColor(c.category, d.categories.map(function(x){ return { name: x.category }; })) + '"></div></div>';
+  });
+  if (d.months.length > 1) {
+    html += '<div class="card-title" style="margin-top:10px">By month</div>';
+    d.months.forEach(function(m) {
+      var parts = m.month.split('-');
+      html += '<div class="pd-row"><span>' + MONTH_NAMES[parseInt(parts[1], 10) - 1] + ' ' + parts[0] + '</span><span><b>' + fmtMoney(m.amount) + '</b></span></div>';
+    });
+  }
+  // expenses, newest first, grouped by month; tapping one opens it for editing
+  html += '<div class="card-title" style="margin-top:14px">Expenses</div>';
+  var cur = '';
+  d.expenses.forEach(function(t) {
+    var ym = t.date.substring(0, 7);
+    if (ym !== cur) {
+      cur = ym;
+      var tot = d.months.filter(function(m){ return m.month === ym; })[0];
+      html += '<div class="txn-date-header"><span>' + MONTH_NAMES[parseInt(ym.substring(5, 7), 10) - 1] + ' ' + ym.substring(0, 4) + '</span><span>' + fmtMoney(tot ? tot.amount : 0) + '</span></div>';
+    }
+    html += txnHtml(t).replace('onclick="openEditExpense(', 'onclick="closeModal(\'project-detail-modal\');openEditExpense(')
+      .replace('<span class="project-badge">📁 ' + t.projectId + '</span>', '<span class="project-badge">' + fmtDate(t.date) + '</span>');
+  });
+  el.innerHTML = html;
 }
 
 function openAddProject() {
