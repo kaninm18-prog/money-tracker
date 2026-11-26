@@ -3,6 +3,7 @@
 One line per change the user would notice. Newest first.
 
 ## 2026-11-26
+- Settings → Backup & automation has a **Refresh exchange rates** button again (it was in the Holdings section, which moved to the Wealth Planner). Rates still update by themselves every morning.
 - Investments moved out: Money Tracker no longer has its own Holdings, trading journal or portfolio screens, the "Asset / Investment" button, or the Investments dashboard view. They live in the Wealth Planner; link a broker to an account to see its value here. Net worth is now accounts + what people owe you. Old investment rows stay in the hidden tabs of your Sheet, unused. Needs the backend redeployed (it deploys from `main` automatically).
 - Projects: tap a project to see everything spent on it, across all months: the total against the budget, a breakdown by category and by month, and every expense (tap one to edit it). Needs the backend redeployed (it deploys from `main` automatically).
 - Account groups: a group of only credit cards now shows its subtotal like the cards do ("Owed ฿3,700"). A mixed group in debt keeps the minus sign.

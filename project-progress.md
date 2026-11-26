@@ -379,9 +379,9 @@ git push
 expense_app/
 ├── index.html                        ← Page markup
 ├── css/app.css                       ← Styles (light + dark)
-├── js/                               ← App scripts: core, dashboard, transactions, accounts,
-│                                        holdings, settings, projects, reports, portfolio, suggest (load order)
-├── Code.gs                           ← Google Apps Script backend
+├── js/                               ← App scripts: lock, core, lockscreen, dashboard, transactions, accounts,
+│                                        settings, projects, reports, suggest (load order)
+├── src/*.gs                          ← Google Apps Script backend (numbered feature files, one global scope)
 ├── manifest.json                     ← PWA manifest
 ├── sw.js                             ← Service worker (offline support)
 ├── icon-192.png / icon-512.png / icon-maskable-512.png / apple-touch-icon.png  ← App icons
@@ -395,3 +395,9 @@ expense_app/
 - Closed positions: fully sold holdings listed with put-in, got-back, date range and realised profit (+dividends) and %; total realised on top. holdingsData adds proceeds, firstDate, lastDate.
 - Account currency: dropdown of 24 common currencies + "Other…" (3-letter box); picking a currency reuses a known rate from another account.
 - Tests: test_s17.js (backend), ui11.js (UI). sw cache v10.
+
+## Stage 4 — Wealth Planner split (2026-11-22 → 2026-11-26)
+- Investments moved to the separate Wealth Planner app (`docs/stage-4-plan.md`). Brokers are linked investment accounts here (`LinkedTo`): their value is read from the Wealth Planner's export tab, dividends sync in as Income (`WD…` Ids).
+- Started over instead of migrating (`docs/stage-4-start-over.md`); checked to the cent on 2026-11-24.
+- Step 7 (2026-11-26): the holdings, portfolio and trading-journal code, screens and tests were removed. `reconcile` before and after matched to the cent (every account, the total and net worth). Old tabs hidden in the Sheet, not deleted.
+- Settings got a "Refresh exchange rates" button (the old one was in the Holdings section).
