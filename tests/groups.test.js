@@ -117,3 +117,35 @@ test('groups never change balances or totals', () => {
   });
   assert.deepEqual(plain(b.api({ action: 'getNetWorthHistory' })), nwBefore);
 });
+
+test('group names match without regard to case or extra spaces; the first spelling (sheet order) is shown', () => {
+  const b = setup();
+  b.api({ action: 'addAccount', name: 'A', type: 'bank', startingBalance: 0, group: 'Travel' });
+  b.api({ action: 'addAccount', name: 'B', type: 'wallet', startingBalance: 0, group: 'travel ' });
+  b.api({ action: 'addAccount', name: 'C', type: 'cash', startingBalance: 0, group: '  TRAVEL' });
+  b.api({ action: 'addAccount', name: 'D', type: 'bank', startingBalance: 0, group: 'bank ACCOUNTS' });     // the default, in another case
+  b.api({ action: 'addAccount', name: 'E', type: 'wallet', startingBalance: 0, group: 'investments' });    // a default name on another type
+  assert.deepEqual(b.groups(), { A: 'Travel', B: 'Travel', C: 'Travel', D: 'Bank accounts', E: 'Investments' });
+  assert.ok(!b.row('D')[9], "the type's default in any case is stored empty");
+  assert.deepEqual([b.row('B')[9], b.row('C')[9]], ['travel', 'TRAVEL'], 'cells keep what was typed (spaces tidied)');
+});
+
+test('renameAccountGroup matches the group in any case and with extra spaces', () => {
+  const b = setup();
+  b.api({ action: 'addAccount', name: 'A', type: 'bank', startingBalance: 0, group: 'Travel' });
+  b.api({ action: 'addAccount', name: 'B', type: 'wallet', startingBalance: 0, group: 'travel ' });
+  b.api({ action: 'addAccount', name: 'C', type: 'cash', startingBalance: 0, group: 'TRAVEL' });
+  b.api({ action: 'addAccount', name: 'D', type: 'cash', startingBalance: 0, group: 'Travels' });
+  assert.equal(b.api({ action: 'renameAccountGroup', from: ' tRaVeL  ', to: '  Trips   abroad ' }).renamed, 3);
+  assert.deepEqual(b.groups(), { A: 'Trips abroad', B: 'Trips abroad', C: 'Trips abroad', D: 'Travels' });
+  // A case-only rename works too
+  assert.equal(b.api({ action: 'renameAccountGroup', from: 'Trips abroad', to: 'TRIPS ABROAD' }).renamed, 3);
+  assert.equal(b.acc('B').group, 'TRIPS ABROAD');
+  // A default group by another spelling
+  b.api({ action: 'addAccount', name: 'K', type: 'credit', startingBalance: 0 });
+  assert.equal(b.api({ action: 'renameAccountGroup', from: 'CREDIT CARDS', to: 'Cards' }).renamed, 1);
+  assert.equal(b.acc('K').group, 'Cards');
+  // Renaming into an existing group's name in another case merges them under one spelling
+  b.api({ action: 'renameAccountGroup', from: 'travels', to: 'trips ABROAD' });
+  assert.deepEqual(new Set(Object.values(b.groups())), new Set(['TRIPS ABROAD', 'Cards']));
+});

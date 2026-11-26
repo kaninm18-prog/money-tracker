@@ -98,15 +98,17 @@ function renderAccountsPage() {
     // Under the user's own groups (see acctGroups in core.js). Tapping a heading collapses/expands it.
     acctGroupList = acctGroups(accounts);
     acctGroupList.forEach(function(g, gi) {
-      var open = !collapsedGroups[g.name];
-      var sub = g.accounts.reduce(function(s, a){ return s + acctThb(a); }, 0);
+      var open = !collapsedGroups[g.key];
+      var sub = round2(g.accounts.reduce(function(s, a){ return s + acctThb(a); }, 0));
+      // Only credit cards and in debt: read like the cards ("Owed ฿3,700"); any other group keeps the sign
+      var owed = sub < 0 && g.accounts.every(function(a){ return a.type === 'credit'; });
       html += '<div class="acc-group' + (open ? '' : ' collapsed') + '">' +
         '<div class="acc-group-head">' +
           '<button type="button" class="acc-group-toggle" aria-expanded="' + open + '" onclick="toggleAcctGroup(' + gi + ')">' +
             '<span class="acc-group-chev">▾</span>' +
             '<span class="acc-group-name">' + escAttr(g.name) + '</span>' +
             '<span class="acc-group-count">' + g.accounts.length + '</span>' +
-            '<span class="acc-group-total' + (sub < 0 ? ' neg' : '') + '">' + fmtMoney(round2(sub)) + '</span>' +
+            '<span class="acc-group-total' + (sub < 0 ? ' neg' : '') + '">' + (owed ? 'Owed ' + fmtMoney(-sub) : fmtMoney(sub)) + '</span>' +
           '</button>' +
           (accountsEditMode ? '<button type="button" class="acc-group-rename" onclick="renameAcctGroup(' + gi + ')" aria-label="Rename group ' + escAttr(g.name) + '">✏️</button>' : '') +
         '</div>' +
@@ -166,7 +168,7 @@ function accountPageCard(a) {
 var acctGroupList = [];
 function toggleAcctGroup(i) {
   var g = acctGroupList[i]; if (!g) return;
-  if (collapsedGroups[g.name]) delete collapsedGroups[g.name]; else collapsedGroups[g.name] = true;
+  if (collapsedGroups[g.key]) delete collapsedGroups[g.key]; else collapsedGroups[g.key] = true;
   renderAccountsPage();
 }
 // Rename a group on every account in it (one backend call: renameAccountGroup)
@@ -174,12 +176,12 @@ function renameAcctGroup(i) {
   var g = acctGroupList[i]; if (!g) return;
   var to = prompt('Rename group "' + g.name + '" (' + g.accounts.length + ' account' + (g.accounts.length === 1 ? '' : 's') + ') to:', g.name);
   if (to === null) return;
-  to = to.replace(/\s+/g, ' ').trim();
+  to = cleanGroupName(to);
   if (!to) { toast('Enter a group name'); return; }
-  if (to === g.name) return;
+  if (to === g.name) return;      // (a change of case only is a real rename)
   api({ action: 'renameAccountGroup', from: g.name, to: to }).then(function(res) {
     if (res.ok) {
-      if (collapsedGroups[g.name]) { delete collapsedGroups[g.name]; collapsedGroups[to] = true; }
+      if (collapsedGroups[g.key]) { delete collapsedGroups[g.key]; collapsedGroups[groupKey(to)] = true; }
       toast('Group renamed'); loadAll();
     }
     else toast(/Unknown action/.test(res.error || '') ? 'Renaming groups needs the new backend: redeploy Apps Script first' : 'Error: ' + (res.error || '?'));
@@ -210,7 +212,8 @@ function toggleLinkedFields() {
 // previous type's default (or nothing), changing the type changes it to the new type's default.
 function setAcctGroup(group, type) {
   var seen = {}, names = [];
-  accounts.map(acctGroup).concat(ACCT_GROUP_ORDER).forEach(function(g){ if (!seen[g]) { seen[g] = 1; names.push(g); } });
+  acctGroups(accounts).map(function(g){ return g.name; }).concat(ACCT_GROUP_ORDER)
+    .forEach(function(g){ var k = groupKey(g); if (!seen[k]) { seen[k] = 1; names.push(g); } });   // one spelling per group
   document.getElementById('fa-group-list').innerHTML = names.map(function(g){ return '<option value="' + escAttr(g) + '">'; }).join('');
   var box = document.getElementById('fa-group');
   box.value = group;
@@ -219,7 +222,7 @@ function setAcctGroup(group, type) {
 function updateGroupDefault() {
   var box = document.getElementById('fa-group'), type = document.getElementById('fa-type').value;
   var prev = box.getAttribute('data-type') || '';
-  if (!box.value.trim() || (prev && box.value.trim() === defaultAcctGroup(prev))) box.value = defaultAcctGroup(type);
+  if (!box.value.trim() || (prev && groupKey(box.value) === groupKey(defaultAcctGroup(prev)))) box.value = defaultAcctGroup(type);
   box.setAttribute('data-type', type);
 }
 function setAcctLinked(name) {
@@ -320,7 +323,7 @@ function saveAccount() {
   var linked = document.getElementById('fa-linked').checked && document.getElementById('fa-linked-group').style.display !== 'none';
   payload.linkedTo = linked ? document.getElementById('fa-linkedto').value.trim() : '';
   if (linked && !payload.linkedTo) { toast('Enter the account name used in the Wealth Planner'); return; }
-  payload.group = document.getElementById('fa-group').value.replace(/\s+/g, ' ').trim();   // empty = the type's default
+  payload.group = cleanGroupName(document.getElementById('fa-group').value);   // empty = the type's default
   if (type === 'credit') {
     payload.creditLimit  = parseFloat(document.getElementById('fa-limit').value)  || 0;
     payload.dueDay       = parseInt(document.getElementById('fa-dueday').value)   || 0;
@@ -331,7 +334,7 @@ function saveAccount() {
   document.getElementById('save-account-btn').textContent = 'Saving…';
   api(payload).then(function(res) {
     if (res.ok && payload.linkedTo && res.linkedTo === undefined) { closeModal('account-modal'); toast('Saved, but the link needs the new backend: redeploy Apps Script first', 5000); loadAll(); }
-    else if (res.ok && res.group === undefined && payload.group && payload.group !== defaultAcctGroup(type)) { closeModal('account-modal'); toast('Saved, but the group needs the new backend: redeploy Apps Script first', 5000); loadAll(); }
+    else if (res.ok && res.group === undefined && payload.group && groupKey(payload.group) !== groupKey(defaultAcctGroup(type))) { closeModal('account-modal'); toast('Saved, but the group needs the new backend: redeploy Apps Script first', 5000); loadAll(); }
     else if (res.ok) { closeModal('account-modal'); toast(editingAccountRow?'Account updated!':'Account added!'); loadAll(); }
     else { toast('Error: '+(res.error||'?')); }
     document.getElementById('save-account-btn').textContent = editingAccountRow?'Save Changes':'Add Account';
