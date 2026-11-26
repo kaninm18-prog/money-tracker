@@ -76,7 +76,7 @@ async function assertNoDataInPage(page, what) {
   const html = await page.evaluate(() => document.documentElement.outerHTML +
     Array.from(document.querySelectorAll('input,textarea')).map(e => e.value).join('|'));
   for (const s of SECRETS) assert.ok(!html.includes(s), what + ': "' + s + '" still in the page');
-  const mem = await page.evaluate(() => JSON.stringify([API_TOKEN, accounts, transactions, serverTxns, queueMem, cacheMem, holdings, expHistory, !!unlockKey]));
+  const mem = await page.evaluate(() => JSON.stringify([API_TOKEN, accounts, transactions, serverTxns, queueMem, cacheMem, expHistory, !!unlockKey]));
   for (const s of SECRETS) assert.ok(!mem.includes(s), what + ': "' + s + '" still in memory');
   assert.ok(mem.endsWith('false]'), what + ': key still in memory');
 }
@@ -198,9 +198,7 @@ function step(name) { console.log('✓ ' + name); }
     await page.evaluate(() => { openExpenseForm(); });
     await page.fill('#fe-note', 'PrivateNoteQQQ typed');
     await page.evaluate(() => { closeModal('expense-modal'); openTransferForm(); });
-    await page.evaluate(() => { closeModal('transfer-modal'); openPortfolio('allocation'); });
-    await page.waitForTimeout(300);
-    await page.evaluate(() => { closePortfolio(); showAnnualSummary(2026); });
+    await page.evaluate(() => { closeModal('transfer-modal'); showAnnualSummary(2026); });
     await page.waitForTimeout(500);
     await page.evaluate(() => { closeAnnualSummary(); openSettings(); });
     assert.equal(await page.inputValue('#settings-token'), TOKEN, 'token shown in Settings while unlocked');
@@ -209,7 +207,7 @@ function step(name) { console.log('✓ ' + name); }
     await typePin(page, PIN); await waitUnlocked(page);
     assert.ok(await page.textContent('#app').then(t => t.includes('SecretBankXYZ')), 'drawn again after unlock');
     assert.equal(await page.inputValue('#settings-token'), TOKEN, 'token back in Settings after unlock');
-    step('pages, search, forms, portfolio, year review and Settings opened → lock clears them all; unlock draws again');
+    step('pages, search, forms, year review and Settings opened → lock clears them all; unlock draws again');
 
     // ── 6. Offline entries survive lock → reload → unlock, then are sent ──
     await ctx.setOffline(true);

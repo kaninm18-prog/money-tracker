@@ -122,12 +122,6 @@ function txnHtml(t) {
     sublabel = who + (t.note ? ' · '+t.note : '') + (t.account ? ' · '+t.account : '') +
       (t.returned > 0 ? ' · returned '+fmtMoney(t.returned)+', left '+fmtMoney(t.left) : '');
     amountStr = '−'+fmtMoney(t.amount); amountClass = 'receivable';
-  } else if (t.type === 'holding') {
-    var sell = t.holdingTxnType === 'sell';
-    icon = sell ? '💹' : '📈'; label = (sell ? 'Sold ' : 'Bought ') + recEsc(t.holdingName);
-    sublabel = (t.quantity ? fmtQty(t.quantity) + (t.unit ? ' ' + recEsc(t.unit) : '') + (t.price ? ' @ ' + fmtMoney(t.price) : '') : '') +
-      (t.account ? ' · ' + recEsc(t.account) : ' · already owned') + (t.note ? ' · ' + recEsc(t.note) : '');
-    amountStr = (sell ? '+' : '−') + fmtMoney(t.amount); amountClass = 'transfer';
   } else if (t.type === 'repayment') {
     icon = '🤝'; label = 'Repayment received';
     sublabel = (t.counterparty || '—') + (t.note ? ' · '+t.note : '') + (t.account ? ' · '+t.account : '');
@@ -149,7 +143,6 @@ function txnHtml(t) {
   if (t.type==='expense')    onclickAttr = 'onclick="openEditExpense('+t.rowIndex+')"';
   else if (t.type==='income')     onclickAttr = 'onclick="openEditIncome('+t.rowIndex+')"';
   else if (t.type==='transfer')   onclickAttr = 'onclick="openEditTransfer('+t.rowIndex+')"';
-  else if (t.type==='holding')    onclickAttr = 'onclick="openHolding(\''+escQ(t.holdingId)+'\')"';
   else if (t.type==='receivable') onclickAttr = 'onclick="openEditReceivable('+t.rowIndex+')"';
   else if (t.type==='repayment')  onclickAttr = 'onclick="showPage(\'projects\');setProjectsTab(\'receivables\')"';
   return '<div class="txn-item" '+onclickAttr+'>' +

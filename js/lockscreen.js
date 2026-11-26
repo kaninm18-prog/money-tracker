@@ -258,10 +258,8 @@ function dropUnlocked() {
   accounts = []; totalBalance = 0; expCategories = []; incCategories = []; transactions = [];
   projects = []; receivables = []; installmentPlans = []; budgets = []; recurringExpenses = [];
   trends = []; backupInfo = null; netWorthHist = []; priceInfo = null;
-  holdings = []; holdingTotals = { value: 0, investments: 0, assets: 0, cost: 0, unrealized: 0 };
-  searchResults = null; searchAll = false; projectDetail = null; collapsedGroups = {}; acctGroupList = []; accountsEditMode = false; expHistory = []; habitCache = null; trades = null;
-  pendingBudgetAlert = null; packPending = null; tjPending = null;
-  portfolioMeta = { targets: {}, benchmarkSymbol: 'INDEXBKK:SET', benchmark: null, tradeCount: 0 };
+  searchResults = null; searchAll = false; projectDetail = null; collapsedGroups = {}; acctGroupList = []; accountsEditMode = false; expHistory = []; habitCache = null;
+  pendingBudgetAlert = null; packPending = null;
   clearScreen();
 }
 // The app and every modal exactly as index.html has them, before any data is drawn (taken at start-up).

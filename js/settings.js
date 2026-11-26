@@ -224,9 +224,7 @@ function onPackFile(input) {
     var p; try { p = JSON.parse(txt); } catch(e) { toast('That file is not a valid import file'); return; }
     if (!p || p.format !== 'money-tracker-import') { toast('That file is not a Money Tracker import file'); return; }
     packPending = p;
-    var tr = p.trades || [], hx = p.holdingTxns || [], ac = p.accounts || [];
-    var closed = tr.filter(function(t){ return t.closeTime; }).map(function(t){ return t.closeTime.substring(0, 10); }).sort();
-    var net = tr.reduce(function(s, t){ return s + (+t.profit || 0) + (+t.commission || 0) + (+t.swap || 0); }, 0);
+    var ac = p.accounts || [];
     var lines = [];
     if (p.source) lines.push('<span class="hold-sub">From ' + recEsc(p.source) + '</span>');
     ac.forEach(function(a) {
@@ -235,26 +233,7 @@ function onPackFile(input) {
         (exists ? (a.setStartingBalance ? ' — opening balance will be set to ' + fmtCur(a.startingBalance || 0, a.currency || 'THB') : ' — already exists, will be kept as is')
                 : ', opening balance ' + fmtCur(a.startingBalance || 0, a.currency || 'THB')));
     });
-    if (tr.length) lines.push('📈 <b>' + tr.length + ' trades</b>' + (closed.length ? ' · ' + fmtDateY(closed[0]) + ' – ' + fmtDateY(closed[closed.length - 1]) : '') +
-      ' · net ' + (tr[0].currency === 'USD' || !tr[0].currency ? fmtUsd(net) : net.toFixed(2)) + (p.tradeAccount ? ' · linked to ' + recEsc(p.tradeAccount) : ' · journal only (no account)'));
-    // investments: one line per holding (buys / sells, dates, money in/out)
-    var byH = {};
-    hx.forEach(function(t) {
-      var h = t.holding || {}, k = h.name || 'Holding';
-      var g = byH[k] || (byH[k] = { unit: h.unit || '', buys: 0, sells: 0, from: t.date, to: t.date, cur: t.currency || 'THB', acct: t.account || '' , noCash: 0 });
-      if (t.type === 'buy') g.buys++; else if (t.type === 'sell') g.sells++;
-      if (!t.account) g.noCash++;
-      if (t.date < g.from) g.from = t.date; if (t.date > g.to) g.to = t.date;
-      if (t.account) g.acct = t.account;
-    });
-    Object.keys(byH).forEach(function(k) {
-      var g = byH[k];
-      lines.push('🥇 <b>' + recEsc(k) + '</b>: ' + (g.buys ? g.buys + ' buy' + (g.buys > 1 ? 's' : '') : '') + (g.buys && g.sells ? ', ' : '') + (g.sells ? g.sells + ' sell' + (g.sells > 1 ? 's' : '') : '') +
-        (g.from !== g.to ? ' · ' + fmtDateY(g.from) + ' – ' + fmtDateY(g.to) : ' · ' + fmtDateY(g.from)) +
-        (g.acct ? ' · money moves with ' + recEsc(g.acct) : '') + (g.noCash ? ' · ' + (g.noCash === g.buys + g.sells ? 'already owned, no money moves' : g.noCash + ' without money moving') : '') +
-        (g.cur !== 'THB' ? ' · ' + g.cur + ' converted at each day\'s rate' : ''));
-    });
-    lines.push('<span class="hold-sub">Anything already in the app (same account name, trade or entry) is skipped.</span>');
+    lines.push('<span class="hold-sub">Anything already in the app (same account name) is skipped.</span>');
     document.getElementById('pack-summary').innerHTML = lines.join('<br>');
     document.getElementById('pack-go').textContent = 'Import';
     closeModal('settings-modal');
@@ -271,13 +250,8 @@ function confirmPackImport() {
     var parts = [];
     if (res.accounts.added.length) parts.push(res.accounts.added.length + ' account' + (res.accounts.added.length > 1 ? 's' : '') + ' added');
     if ((res.accounts.updated || []).length) parts.push('updated ' + res.accounts.updated.join(', '));
-    if (res.trades && res.trades.relinked) parts.push(res.trades.relinked + ' trades moved to journal-only');
-    if (res.trades && res.trades.added) parts.push(res.trades.added + ' trades added');
-    if (res.holdings.added) parts.push(res.holdings.added + ' investment entr' + (res.holdings.added > 1 ? 'ies' : 'y') + ' added');
-    var skipped = (res.accounts.skipped.length) + (res.trades ? res.trades.skipped : 0) + res.holdings.skipped;
+    var skipped = res.accounts.skipped.length;
     toast((parts.length ? 'Done: ' + parts.join(' · ') : 'Nothing new to import') + (skipped ? ' · ' + skipped + ' already there' : ''), 6000);
-    if (res.holdings.fx.length) setTimeout(function(){ toast(res.holdings.fx.join(' · '), 7000); }, 6200);
-    trades = null;
     loadAll();
   }).catch(function(){ btn.disabled = false; btn.textContent = 'Import'; toast('Importing needs a connection'); });
 }

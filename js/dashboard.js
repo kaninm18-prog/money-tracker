@@ -127,10 +127,8 @@ function computeBalance() {
   if (mode === 'available_cash') {
     return accounts.filter(function(a){return a.type==='cash'||a.type==='bank';}).reduce(function(s,a){return s+acctThb(a);},0);
   }
-  if (mode === 'portfolio') return holdingTotals.investments || 0;
-  // net worth = accounts + holdings + owed to you. Once an account is linked to the Wealth Planner, the
-  // holdings are inside its value, so they aren't added again.
-  return totalBalance + (anyLinkedAccount() ? 0 : (holdingTotals.value || 0)) + receivablesOwed();
+  // net worth = accounts + owed to you. Investments are inside their linked accounts (Wealth Planner value).
+  return totalBalance + receivablesOwed();
 }
 function anyLinkedAccount() { return accounts.some(function(a){ return a.linked; }); }
 // Money people still owe you (pending advances / reimbursements) — it's yours, so it counts in net worth
@@ -139,7 +137,7 @@ function receivablesOwed() {
 }
 
 function cycleBalanceMode() {
-  var modes = ['net_worth','monthly_balance','available_cash','portfolio'];
+  var modes = ['net_worth','monthly_balance','available_cash'];
   var idx = modes.indexOf(balanceMode);
   balanceMode = modes[(idx+1) % modes.length];
   localStorage.setItem('balanceMode', balanceMode);
