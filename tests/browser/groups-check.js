@@ -41,6 +41,12 @@ function makeBackend() {
   b.api({ action: 'addAccount', name: 'Grab', type: 'wallet', startingBalance: 300, group: 'Travel money' });
   b.api({ action: 'addAccount', name: 'Euro cash', type: 'cash', startingBalance: 100, currency: 'EUR', rate: 38, group: SECRET_GROUP });
   b.api({ action: 'addAccount', name: 'Broker', type: 'investment', startingBalance: 0, linkedTo: 'Kasikorn Securities' });
+  b.api({ action: 'addAccount', name: 'Coins', type: 'cash', startingBalance: 0, group: '  ' + SECRET_GROUP.toLowerCase() + '  ' });   // same group, other case
+  // A mixed group in debt: keeps the normal sign (only all-credit groups read "Owed")
+  b.api({ action: 'addAccount', name: 'Shared card', type: 'credit', startingBalance: -5000, creditLimit: 20000 });
+  b.api({ action: 'addAccount', name: 'Shared wallet', type: 'wallet', startingBalance: 1000 });
+  b.api({ action: 'updateAccount', key: 'Shared card', name: 'Shared card', type: 'credit', startingBalance: -5000, creditLimit: 20000, group: 'Shared' });
+  b.api({ action: 'updateAccount', key: 'Shared wallet', name: 'Shared wallet', type: 'wallet', startingBalance: 1000, group: 'SHARED' });
   return b;
 }
 let backend = makeBackend();
@@ -101,7 +107,9 @@ async function expected(page) {
   const out = [];
   for (const g of names) {
     const sum = byName[g].reduce((s, a) => s + a.balanceThb, 0);
-    out.push({ name: g, count: byName[g].length, total: await page.evaluate(n => fmtMoney(round2(n)), sum), sum });
+    const owed = sum < 0 && byName[g].every(a => a.type === 'credit');      // all credit cards: "Owed ฿…"
+    const total = await page.evaluate(n => fmtMoney(round2(n)), owed ? -sum : sum);
+    out.push({ name: g, count: byName[g].length, total: (owed ? 'Owed ' : '') + total, sum });
   }
   return { groups: out, totalBalance: acc.totalBalance };
 }
@@ -122,35 +130,43 @@ function step(name) { console.log('✓ ' + name); }
     // ── 1. Headings, order, counts and ฿ subtotals ──
     const exp = await expected(page);
     const got = await headings(page);
-    assert.deepEqual(got.map(g => g.name), [SECRET_GROUP, 'Travel money', 'Bank accounts', 'Credit cards', 'Cash & wallets', 'Investments'],
+    assert.deepEqual(got.map(g => g.name), [SECRET_GROUP, 'Travel money', 'Shared', 'Bank accounts', 'Credit cards', 'Cash & wallets', 'Investments'],
       'custom groups first (in sheet order), then the defaults');
     assert.deepEqual(got.map(g => ({ name: g.name, count: g.count, total: g.total })), exp.groups.map(g => ({ name: g.name, count: g.count, total: g.total })));
     got.forEach(g => { assert.equal(g.open, true); assert.equal(g.cards, g.count); });
     const sumOfGroups = exp.groups.reduce((s, g) => s + g.sum, 0);
     assert.ok(Math.abs(sumOfGroups - exp.totalBalance) < 0.01, 'the subtotals add up to the total');
     assert.equal(exp.groups.find(g => g.name === SECRET_GROUP).total, '฿53,800', 'PiggyBankPPP 50,000 + €100 × 38');
+    // "Travel"/"travel "/"TRAVEL" are one group, shown with the first spelling
+    assert.equal(got.find(g => g.name === SECRET_GROUP).count, 3, 'the lower-case spelling joined the group');
+    assert.ok(!got.some(g => g.name !== SECRET_GROUP && g.name.toLowerCase() === SECRET_GROUP.toLowerCase()));
+    assert.deepEqual(got.find(g => g.name === 'Shared'), { name: 'Shared', count: 2, total: '฿-4,000', open: true, cards: 2 }, 'mixed group in debt: normal sign');
+    assert.equal(got.find(g => g.name === 'Credit cards').total, 'Owed ฿3,700', 'credit cards only: reads like the card');
+    assert.match(await page.locator('.acc-group:has-text("Credit cards") .acc-group-total').getAttribute('class'), /neg/);
     // The linked line and balance check still show inside their groups
     const inv = page.locator('.acc-group', { hasText: 'Investments' });
     assert.match(await inv.textContent(), /🔗 Kasikorn Securities/);
     assert.equal(await page.locator('.acc-group', { hasText: 'Bank accounts' }).locator('.bal-check-row button').count(), 1);
     await shot(page, 'groups-light');
-    step('groups drawn in the chosen order with the right counts and ฿ subtotals (they add up to the total); linked line + balance check inside groups');
+    step('groups drawn in the chosen order with the right counts and ฿ subtotals (they add up to the total); names match in any case; "Owed ฿3,700" for credit cards only, normal sign for a mixed group; linked line + balance check inside groups');
 
     // ── 2. Collapse and expand ──
     await page.click('.acc-group:has-text("Travel money") .acc-group-toggle');
     let h = await headings(page);
-    assert.deepEqual(h.map(g => g.open), [true, false, true, true, true, true]);
+    const isOpen = hs => Object.fromEntries(hs.map(g => [g.name, g.open]));
+    const ALL_OPEN = Object.fromEntries(exp.groups.map(g => [g.name, true]));
+    assert.deepEqual(isOpen(h), Object.assign({}, ALL_OPEN, { 'Travel money': false }));
     assert.equal(h[1].cards, 0, 'collapsed: no cards');
     assert.equal(h[1].total, exp.groups[1].total, 'collapsed: subtotal still shown');
     await page.click('.acc-group:has-text("Credit cards") .acc-group-toggle');
     await page.evaluate(() => renderAll());                              // a redraw keeps what's collapsed
     h = await headings(page);
-    assert.deepEqual(h.map(g => g.open), [true, false, true, false, true, true]);
+    assert.deepEqual(isOpen(h), Object.assign({}, ALL_OPEN, { 'Travel money': false, 'Credit cards': false }));
     await shot(page, 'groups-collapsed-light');
     await page.click('.acc-group:has-text("Credit cards") .acc-group-toggle');
     h = await headings(page);
-    assert.deepEqual(h.map(g => g.open), [true, false, true, true, true, true]);
-    assert.equal(h[3].cards, 1);
+    assert.deepEqual(isOpen(h), Object.assign({}, ALL_OPEN, { 'Travel money': false }));
+    assert.equal(h.find(g => g.name === 'Credit cards').cards, 1);
     const stored = await page.evaluate(() => JSON.stringify(Object.assign({}, localStorage)));
     assert.ok(!stored.includes('Travel money') && !stored.includes(SECRET_GROUP), 'no group names in plain localStorage');
     step('tapping a heading collapses / expands it; a redraw keeps the state; nothing about groups in localStorage');
@@ -159,11 +175,12 @@ function step(name) { console.log('✓ ' + name); }
     await page.click('#acct-edit-toggle-btn');
     const n = (await expected(page)).groups.reduce((s, g) => s + g.count, 0);
     assert.equal(await page.locator('.acc-edit-btn').count(), n - 1, 'Edit on every account in an open group');   // Grab is collapsed
-    assert.equal(await page.locator('.acc-group-rename').count(), 6, '✏️ on every heading');
+    assert.equal(await page.locator('.acc-group-rename').count(), exp.groups.length, '✏️ on every heading');
     await page.click('.acc-group:has-text("Bank accounts") .acc-edit-btn');
     assert.equal(await page.inputValue('#fa-group'), 'Bank accounts', 'prefilled with the current group');
     const opts = await page.$$eval('#fa-group-list option', os => os.map(o => o.value));
     for (const g of [SECRET_GROUP, 'Travel money', 'Bank accounts', 'Credit cards', 'Cash & wallets', 'Investments']) assert.ok(opts.includes(g), 'suggests ' + g);
+    assert.equal(opts.filter(o => o.toLowerCase() === SECRET_GROUP.toLowerCase()).length, 1, 'one spelling per group in the suggestions');
     await page.fill('#fa-group', 'Everyday');
     calls.length = 0;
     await page.click('#save-account-btn');
