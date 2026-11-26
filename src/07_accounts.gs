@@ -15,17 +15,28 @@ function accountFromRow(d, ri) {
   if (linkedTo) { a.linked = true; a.linkedTo = linkedTo; }
   // Group (column 10): the user's own heading on the Accounts page. Empty = the default for the type,
   // worked out here and never written back, so changing the type moves the account with it.
-  a.group = String(d[9] || "").trim() || defaultAccountGroup(a.type);
+  a.group = cleanGroupName(d[9]) || defaultAccountGroup(a.type);
   return a;
 }
 var ACCOUNT_GROUP_DEFAULTS = { bank: "Bank accounts", credit: "Credit cards", cash: "Cash & wallets",
                                wallet: "Cash & wallets", investment: "Investments" };
 function defaultAccountGroup(type) { return ACCOUNT_GROUP_DEFAULTS[type] || "Other"; }
-// What goes in the Group cell: empty when it is just the type's default
+function cleanGroupName(g) { return String(g == null ? "" : g).replace(/\s+/g, " ").trim(); }
+// Group names match without regard to case or extra spaces: "Travel", "travel " and "TRAVEL" are one group
+function groupKey(g) { return cleanGroupName(g).toLowerCase(); }
+// What goes in the Group cell: empty when it is just the type's default (in any case)
 function groupToStore(type, group) {
-  var g = String(group || "").replace(/\s+/g, " ").trim();
-  return g === defaultAccountGroup(type) ? "" : g;
+  var g = cleanGroupName(group);
+  return groupKey(g) === groupKey(defaultAccountGroup(type)) ? "" : g;
 }
+// One spelling per group: a default group keeps its standard name; any other group the spelling of its
+// first account in sheet order
+function canonicalGroups(accounts) {
+  var spell = {};
+  ACCOUNT_GROUP_ORDER_NAMES.forEach(function(n){ spell[groupKey(n)] = n; });
+  accounts.forEach(function(a){ var k = groupKey(a.group); if (!spell[k]) spell[k] = a.group; a.group = spell[k]; });
+}
+var ACCOUNT_GROUP_ORDER_NAMES = ["Bank accounts", "Credit cards", "Cash & wallets", "Investments", "Other"];
 function transferFromRow(d) {
   return { date: formatDate(d[0]), amount: toFloat(d[1]), from: String(d[2]||'').trim(), to: String(d[3]||'').trim(), received: toFloat(d[5]), id: String(d[6] || "") };
 }
@@ -94,6 +105,7 @@ function getAccounts() {
   accounts.forEach(function(a) {
     if (a.type === "credit" && a.statementDay) a.statement = cardStatement(a, today, expRows, trfRows);
   });
+  canonicalGroups(accounts);
   var total = 0;
   accounts.forEach(function(a) {
     var thb = a.linkedThb !== undefined ? a.linkedThb : a.balance * a.rate;   // linked: the Wealth Planner's own THB value
@@ -158,7 +170,7 @@ function updateAccount(p) {
 // Rename a group on every account in it (including accounts that only had it as their type's default).
 // One call, so a rename can't stop half-way.
 function renameAccountGroup(p) {
-  var from = String(p.from || "").replace(/\s+/g, " ").trim(), to = String(p.to || "").replace(/\s+/g, " ").trim();
+  var from = groupKey(p.from), to = cleanGroupName(p.to);
   if (!from || !to) return jsonResponse({ ok: false, error: "Enter a group name" });
   var sh = getSheet(SHEET.ACCOUNTS), last = sh.getLastRow(), n = 0;
   if (last < 2) return jsonResponse({ ok: true, renamed: 0 });
@@ -167,8 +179,8 @@ function renameAccountGroup(p) {
   rows.forEach(function(d, i) {
     if (!d[0] && !d[1]) return;
     var type = d[1];
-    var g = String(d[9] || "").trim() || defaultAccountGroup(type);
-    if (g !== from) return;
+    var g = cleanGroupName(d[9]) || defaultAccountGroup(type);
+    if (groupKey(g) !== from) return;
     sh.getRange(i + 2, 10).setValue(groupToStore(type, to));
     n++;
   });
