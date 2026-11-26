@@ -6,7 +6,7 @@
 // ════════════════════════════════════════════
 // Shown in Settings so you can tell whether the phone has the latest update.
 // Bump with every release: the date of the newest CHANGELOG.md heading (add .2, .3 for more the same day).
-var APP_VERSION = '2026.11.26.3';
+var APP_VERSION = '2026.11.26.4';
 var SCRIPT_URL = localStorage.getItem('moneyScriptUrl') || '';
 var API_TOKEN  = '';             // only in memory, and only while unlocked (it is stored encrypted — see js/lock.js)
 var viewMonth  = new Date().getMonth() + 1;

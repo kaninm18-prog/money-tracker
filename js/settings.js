@@ -11,7 +11,21 @@ function renderBackupStatus() {
   el.textContent = (backupInfo.last ? 'Last backup: ' + fmtDateY(backupInfo.last) + '. ' : 'No backup yet. ') +
     (backupInfo.weekly ? 'A copy is saved to "Money Tracker Backups" in your Google Drive every Sunday (newest 12 kept).'
                        : 'Weekly backup is off — in Apps Script, run setupAutomation() once to turn it on.') +
-    (priceInfo ? (priceInfo.daily ? ' Prices and exchange rates update every day at 7am.' : ' Daily price updates are off — setupAutomation() turns them on too.') : '');
+    (priceInfo ? (priceInfo.daily ? ' Exchange rates of foreign-currency accounts update every day at 7am.' : ' Daily exchange-rate updates are off — setupAutomation() turns them on too.') : '');
+}
+// Exchange rates of foreign-currency accounts: refreshed every morning, or now with this button
+// (it used to live in the Holdings section, which moved to the Wealth Planner).
+function refreshRatesNow() {
+  var btn = document.getElementById('rates-btn'), label = '↻ Refresh exchange rates';
+  btn.textContent = 'Updating…'; btn.disabled = true;
+  api({ action: 'refreshPrices' }).then(function(res) {
+    btn.textContent = label; btn.disabled = false;
+    if (!res.ok) { toast('Error: ' + (res.error || '?')); return; }
+    var curs = Object.keys(res.rates || {});
+    toast(curs.length ? 'Updated: ' + curs.map(function(c){ return '1 ' + c + ' = ฿' + (Math.round(res.rates[c] * 100) / 100); }).join(' · ')
+                      : 'No foreign-currency accounts to update');
+    loadAll();
+  }).catch(function(){ btn.textContent = label; btn.disabled = false; toast('Updating exchange rates needs a connection'); });
 }
 function backupNow() {
   var btn = document.getElementById('backup-btn'); btn.textContent = 'Backing up…'; btn.disabled = true;
