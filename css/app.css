@@ -233,6 +233,19 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 /* ── Accounts Page ── */
 .acc-page-section-header { font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text2); padding:4px 2px 6px; margin-top:14px; border-bottom:1px solid var(--border); margin-bottom:8px; }
 .acc-page-section-header:first-child { margin-top:0; }
+/* Account groups (Accounts page): a tappable heading with count + ฿ subtotal; ✏️ renames in edit mode */
+.acc-group { margin-top:14px; }
+.acc-group:first-child { margin-top:0; }
+.acc-group-head { display:flex; align-items:center; gap:6px; border-bottom:1px solid var(--border); margin-bottom:8px; }
+.acc-group-toggle { flex:1; min-width:0; display:flex; align-items:center; gap:8px; background:none; border:none; padding:8px 2px; color:var(--text2); font:inherit; cursor:pointer; text-align:left; }
+.acc-group-chev { font-size:0.75rem; transition:transform .15s; }
+.acc-group.collapsed .acc-group-chev { transform:rotate(-90deg); }
+.acc-group-name { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.acc-group-count { font-size:0.68rem; font-weight:700; background:var(--surface2); color:var(--text2); border-radius:10px; padding:1px 7px; flex-shrink:0; }
+.acc-group-total { margin-left:auto; font-size:0.85rem; font-weight:700; color:var(--text); flex-shrink:0; }
+.acc-group-total.neg { color:var(--expense-color); }
+.acc-group.collapsed .acc-group-head { margin-bottom:0; }
+.acc-group-rename { background:none; border:1px solid var(--border); border-radius:8px; padding:4px 8px; font-size:0.85rem; cursor:pointer; flex-shrink:0; }
 .acc-page-card { background:var(--surface); border-radius:var(--radius); padding:15px; margin-bottom:10px; box-shadow:var(--shadow-sm); }
 .acc-page-card.is-credit { border-left:4px solid var(--expense-color); }
 .acc-page-row { display:flex; align-items:center; gap:12px; }

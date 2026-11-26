@@ -13,7 +13,18 @@ function accountFromRow(d, ri) {
   // accounts that aren't linked come back exactly as before.
   var linkedTo = String(d[8] || "").trim();
   if (linkedTo) { a.linked = true; a.linkedTo = linkedTo; }
+  // Group (column 10): the user's own heading on the Accounts page. Empty = the default for the type,
+  // worked out here and never written back, so changing the type moves the account with it.
+  a.group = String(d[9] || "").trim() || defaultAccountGroup(a.type);
   return a;
+}
+var ACCOUNT_GROUP_DEFAULTS = { bank: "Bank accounts", credit: "Credit cards", cash: "Cash & wallets",
+                               wallet: "Cash & wallets", investment: "Investments" };
+function defaultAccountGroup(type) { return ACCOUNT_GROUP_DEFAULTS[type] || "Other"; }
+// What goes in the Group cell: empty when it is just the type's default
+function groupToStore(type, group) {
+  var g = String(group || "").replace(/\s+/g, " ").trim();
+  return g === defaultAccountGroup(type) ? "" : g;
 }
 function transferFromRow(d) {
   return { date: formatDate(d[0]), amount: toFloat(d[1]), from: String(d[2]||'').trim(), to: String(d[3]||'').trim(), received: toFloat(d[5]), id: String(d[6] || "") };
@@ -98,16 +109,21 @@ function addAccount(p) {
   var sh = getSheet(SHEET.ACCOUNTS);
   var cur = String(p.currency || "THB").trim().toUpperCase() || "THB";
   var linkedTo = String(p.linkedTo || "").trim();
+  var group = groupToStore(p.type || "bank", p.group);
   ensureHeaders(sh, 7, ["Currency", "Rate"]);
-  sh.appendRow([
+  var row = [
     p.name || "", p.type || "bank", toFloat(p.startingBalance),
     p.type === "credit" ? toFloat(p.creditLimit) : "",
     p.type === "credit" ? (parseInt(p.dueDay) || "") : "",
     p.type === "credit" ? (parseInt(p.statementDay) || "") : "",
     cur, cur === "THB" ? 1 : (toFloat(p.rate) || 1)
-  ].concat(linkedTo ? [linkedTo] : []));
+  ];
+  if (linkedTo || group) row.push(linkedTo);
+  if (group) row.push(group);
+  sh.appendRow(row);
   if (linkedTo) ensureHeaders(sh, 9, ["LinkedTo"]);
-  return jsonResponse({ ok: true, rowIndex: sh.getLastRow(), linkedTo: linkedTo });
+  if (group) ensureHeaders(sh, 10, ["Group"]);
+  return jsonResponse({ ok: true, rowIndex: sh.getLastRow(), linkedTo: linkedTo, group: group || defaultAccountGroup(p.type || "bank") });
 }
 
 function updateAccount(p) {
@@ -130,7 +146,33 @@ function updateAccount(p) {
     if (linkedTo) ensureHeaders(sh, 9, ["LinkedTo"]);
     if (linkedTo || sh.getRange(row, 9).getValue()) sh.getRange(row, 9).setValue(linkedTo);
   }
-  return jsonResponse({ ok: true, linkedTo: linkedTo });
+  // Same for the group: no `group` sent (older app) keeps the saved one
+  var group = String(sh.getRange(row, 10).getValue() || "").trim();
+  if (p.group !== undefined && p.group !== null) group = groupToStore(p.type || "bank", p.group);
+  else group = groupToStore(p.type || "bank", group);    // the type may have changed to the one it matches
+  if (group) ensureHeaders(sh, 10, ["Group"]);
+  if (group || sh.getRange(row, 10).getValue()) sh.getRange(row, 10).setValue(group);
+  return jsonResponse({ ok: true, linkedTo: linkedTo, group: group || defaultAccountGroup(p.type || "bank") });
+}
+
+// Rename a group on every account in it (including accounts that only had it as their type's default).
+// One call, so a rename can't stop half-way.
+function renameAccountGroup(p) {
+  var from = String(p.from || "").replace(/\s+/g, " ").trim(), to = String(p.to || "").replace(/\s+/g, " ").trim();
+  if (!from || !to) return jsonResponse({ ok: false, error: "Enter a group name" });
+  var sh = getSheet(SHEET.ACCOUNTS), last = sh.getLastRow(), n = 0;
+  if (last < 2) return jsonResponse({ ok: true, renamed: 0 });
+  var rows = sh.getRange(2, 1, last - 1, Math.max(10, sh.getLastColumn())).getValues();
+  ensureHeaders(sh, 10, ["Group"]);
+  rows.forEach(function(d, i) {
+    if (!d[0] && !d[1]) return;
+    var type = d[1];
+    var g = String(d[9] || "").trim() || defaultAccountGroup(type);
+    if (g !== from) return;
+    sh.getRange(i + 2, 10).setValue(groupToStore(type, to));
+    n++;
+  });
+  return jsonResponse({ ok: true, renamed: n });
 }
 
 function deleteAccount(p) {

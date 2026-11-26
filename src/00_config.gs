@@ -6,7 +6,9 @@
 //    Income           → Date | Amount(THB) | Category | Note | Account | OrigAmount | Currency | Id
 //    Transfers        → Date | Amount (in From currency) | FromAccount | ToAccount | Note | ReceivedAmount (in To currency, optional) | Id
 //    Accounts         → Name | Type | StartingBalance | CreditLimit | DueDay | StatementDay | Currency | Rate (THB per 1 unit) | LinkedTo
+//                       | Group
 //                       (LinkedTo: the account's name in the Wealth Planner; non-empty = a linked investment account)
+//                       (Group: heading on the Accounts page; empty = the type's default, see defaultAccountGroup)
 //    Categories       → Name | Icon
 //    IncomeCategories → Name | Icon
 //    Projects         → Name | Budget | StartDate | EndDate

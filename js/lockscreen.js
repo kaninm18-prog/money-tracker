@@ -259,7 +259,7 @@ function dropUnlocked() {
   projects = []; receivables = []; installmentPlans = []; budgets = []; recurringExpenses = [];
   trends = []; backupInfo = null; netWorthHist = []; priceInfo = null;
   holdings = []; holdingTotals = { value: 0, investments: 0, assets: 0, cost: 0, unrealized: 0 };
-  searchResults = null; searchAll = false; expHistory = []; habitCache = null; trades = null;
+  searchResults = null; searchAll = false; collapsedGroups = {}; acctGroupList = []; accountsEditMode = false; expHistory = []; habitCache = null; trades = null;
   pendingBudgetAlert = null; packPending = null; tjPending = null;
   portfolioMeta = { targets: {}, benchmarkSymbol: 'INDEXBKK:SET', benchmark: null, tradeCount: 0 };
   clearScreen();
