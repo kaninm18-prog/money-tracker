@@ -2,6 +2,10 @@
 
 One line per change the user would notice. Newest first.
 
+## 2026-11-26
+- Account groups: a group of only credit cards now shows its subtotal like the cards do ("Owed ฿3,700"). A mixed group in debt keeps the minus sign.
+- Group names match without regard to capitals or extra spaces: "Travel", "travel " and "TRAVEL" are one group, shown with the spelling used first. Renaming a group renames every spelling of it. Needs the backend redeployed (it deploys from `main` automatically).
+
 ## 2026-11-25
 - Account groups: the Accounts page shows your accounts under group headings, each with a ฿ subtotal and a count; tap a heading to collapse or expand it. Set an account's group in its form (it starts as Bank accounts, Credit cards, Cash & wallets or Investments, from the type), and rename a group with ✏️ in Edit mode. Grouping is display only: no total changes. Dashboard account cards follow the same order. Needs the backend redeployed (it deploys from `main` automatically).
 
