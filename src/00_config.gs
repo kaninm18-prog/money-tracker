@@ -17,11 +17,7 @@
 //    InstallmentPlans → Description | PurchaseDate | Merchant | TotalAmount | InstallmentCount | InstallmentAmount | FirstInstallmentDate | Account | Category | ProjectId | Status | InstallmentsPaid
 //    CategoryBudgets  → Category | MonthlyLimit | AlertThreshold | IsActive | AppliesToProjects
 //    RecurringExpenses→ Description | Amount | Category | Account | DayOfMonth | StartDate | Status | LastGenerated | ProjectId | Frequency | MonthOfYear
-//    Holdings         → Id | Name | Kind | Symbol | Unit | CurrentPrice (THB/unit) | PriceDate | Note | Status | QuoteCurrency | NextXD | NextDividend (per unit)
-//    Trades           → Id | Ticket | Symbol | Side | Volume | OpenTime | OpenPrice | CloseTime | ClosePrice | Commission | Swap | Profit | Account | Note | Currency
 //    AllocationTargets→ Class | TargetPct
-//    HoldingTxns      → Id | HoldingId | Date | Type (buy/sell/dividend) | Quantity | Price | Amount (THB) | Fee (dividends: tax withheld) | Account | Note | LinkedId | OrigAmount | Currency
-//                       (OrigAmount/Currency: the exact amount in a foreign-currency account, e.g. USD paid/received)
 //    NetWorthHistory  → Month (yyyy-MM) | Date | Accounts | Investments | Assets | NetWorth | Receivables  (one snapshot per month, latest wins)
 //    _Prices          → scratch sheet (hidden) where GOOGLEFINANCE formulas are evaluated
 //    _Export_LinkedFlows → Id | Date | Account | Amount | Currency  (hidden; rebuilt whole, read by the Wealth Planner)
@@ -44,11 +40,7 @@ var SHEET = {
   BUDGETS:      "CategoryBudgets",
   RECURRING:    "RecurringExpenses",
   REPAYMENTS:   "ReceivableRepayments",
-  HOLDINGS:     "Holdings",
-  HOLDING_TXNS: "HoldingTxns",
   NETWORTH:     "NetWorthHistory",
-  TRADES:       "Trades",
-  TARGETS:      "AllocationTargets",
   PRICES:       "_Prices",
   LINKED_FLOWS: "_Export_LinkedFlows"
 };

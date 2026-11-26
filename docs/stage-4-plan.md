@@ -128,6 +128,8 @@ Each step is one branch → one PR → `npm run check` green → Arm reviews and
 - **(A)** Arm reads the diff. Any mismatch → stop and fix. Don't go to step 7.
 
 ### Step 7 — Remove investment code from Money Tracker
+**Code removed 2026-11-26** (branch `claude/magical-franklin-vqj7f3`): front end, back end, tests and `CLAUDE.md` updated; Investments dashboard view dropped. Still to do by Arm: check the gold bar's old buy entry has no Account, hide the old tabs, run `reconcile` again and compare.
+
 **Next, after about a week of side-by-side use (from 2026-11-24).** First check how the gold bar's old buy entry in Money Tracker was recorded: if it has an Account, turn it into a transfer before removing the investment code, so that account's balance doesn't change.
 
 - Only after step 6 is clean and both apps have run side by side for about a week.

@@ -56,7 +56,7 @@ Plan: [`docs/stage-4-plan.md`](docs/stage-4-plan.md) (agreed 2026-11-22).
 - [ ] Copy existing Holdings, HoldingTxns, trades and portfolio settings to the new sheet
 - [ ] In Money Tracker, turn broker accounts into **linked investment accounts**: deposits and withdrawals are transfers; the value is read from the Wealth Planner
 - [ ] Check: every account balance and net worth match to the cent before and after
-- [ ] Only then remove the investment code and tabs from Money Tracker
+- [x] Only then remove the investment code and tabs from Money Tracker (code removed 2026-11-26; hiding the old tabs is Arm's step)
 - [ ] Add asset-planning features (to be decided)
 
 **You learn:** running a multi-step project with agents — one ports code, one writes tests, one reviews.

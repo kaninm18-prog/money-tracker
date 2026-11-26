@@ -50,8 +50,7 @@ function transferReceived(r, f, t) {
 // Uses today's exchange rates for foreign-currency accounts.
 // Linked investment accounts (docs/stage-4-plan.md section 3) only move by transfers here: now, their
 // balance is the Wealth Planner value (25_linked_accounts.gs); on past dates, what was transferred in.
-// Their own income (dividends already inside that value), spending, holdings, trades and
-// receivables are not added on top.
+// Their own income (dividends already inside that value), spending and receivables are not added on top.
 function accountBalances(asOf) {
   function on(d) { return !asOf || (d && d <= asOf); }
   function own(a) { return a && !a.linked; }
@@ -69,20 +68,6 @@ function accountBalances(asOf) {
     var f = byName[r.from], t = byName[r.to];
     if (f) f.balance -= r.amount;                       // amount is in the From account's currency
     if (t) t.balance += transferReceived(r, f, t);
-  });
-  // Assets & investments: buying takes cash out of the account, selling puts it back
-  holdingTxnRows().forEach(function(t) {
-    if (!on(t.date)) return;
-    var a = byName[t.account]; if (!own(a)) return;
-    var amt = (t.origAmount && t.currency && t.currency === a.currency) ? t.origAmount   // exact USD moved
-            : (a.currency === 'THB' ? t.amount : t.amount / a.rate);
-    if (t.type === 'buy') a.balance -= amt;
-    else if (t.type === 'sell') a.balance += amt;
-  });
-  // Trading journal: closed trades linked to an account add their net profit/loss (in the account's currency)
-  tradeRows().forEach(function(t) {
-    if (!t.closeTime || !t.account || !on(t.closeTime.substring(0, 10))) return;
-    var a = byName[t.account]; if (own(a)) a.balance += t.net;
   });
   // Receivables: money lent out leaves the account; each repayment goes back into the account it landed in.
   // (Old settled receivables without a repayment log count as fully returned, so they net to zero.)

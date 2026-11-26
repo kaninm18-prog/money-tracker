@@ -239,7 +239,6 @@ function buildNudges() {
       }
     }
   });
-  if (typeof allocationNudges === 'function') out = out.concat(allocationNudges());
   return out.sort(function(a, b){ return b.prio - a.prio; }).slice(0, 4);
 }
 function renderNudges() {

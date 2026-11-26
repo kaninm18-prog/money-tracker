@@ -1,23 +1,8 @@
 // ── NET WORTH HISTORY ────────────────────────────────────────
 // Month-end net worth for up to 24 months. Months with a saved snapshot use it (it has the real
 // market value of your investments at the time). Earlier months are rebuilt from your transactions,
-// with investments/assets at what you paid ("estimated").
+// ("estimated"). Investments are inside their linked accounts (at what was transferred in, D5).
 function monthEnd(ym) { var y = parseInt(ym.substring(0, 4)), m = parseInt(ym.substring(5, 7)); return ymd(y, m, 31); }
-function holdingsAt(asOf) {                         // value at cost of what you held on that date
-  var byId = {}, kinds = {};
-  sheetToRows(getSheet(SHEET.HOLDINGS), function(d){ return { id: String(d[0]), kind: String(d[2] || "other") }; })
-    .forEach(function(h){ kinds[h.id] = HOLDING_KINDS[h.kind] || "asset"; });
-  holdingTxnRows().filter(function(t){ return t.date && t.date <= asOf; })
-    .sort(function(a, b){ return a.date === b.date ? a.rowIndex - b.rowIndex : a.date.localeCompare(b.date); })
-    .forEach(function(t) {
-      var h = byId[t.holdingId] || (byId[t.holdingId] = { qty: 0, cost: 0 });
-      if (t.type === "buy") { h.qty += t.quantity; h.cost += t.amount; }
-      else if (t.type === "sell") { var out = h.qty > 0 ? h.cost / h.qty * t.quantity : 0; h.qty -= t.quantity; h.cost -= out; if (h.qty < 1e-9) { h.qty = 0; h.cost = 0; } }
-    });
-  var r = { investments: 0, assets: 0 };
-  Object.keys(byId).forEach(function(id){ r[kinds[id] === "investment" ? "investments" : "assets"] += byId[id].cost; });
-  return r;
-}
 // Money people still owe you (advances, work expenses to be reimbursed) — counted in net worth.
 // asOf "" = now; otherwise what was outstanding on that date.
 function receivablesAt(asOf) {
@@ -30,12 +15,10 @@ function receivablesAt(asOf) {
   });
   return round2(tot);
 }
-// Today's net worth parts. Once an account is linked, Money Tracker's own holdings are not added:
-// they are being moved to the Wealth Planner and are counted inside the linked accounts' values.
-function liveNetWorth(acc, hld) {
-  var linked = (acc.accounts || []).some(function(a){ return a.linked; });
-  return { accounts: acc.totalBalance || 0, investments: linked ? 0 : hld.totals.investments,
-           assets: linked ? 0 : hld.totals.assets, receivables: receivablesAt("") };
+// Today's net worth parts. Investments are inside the linked accounts' values (Wealth Planner), so the
+// Investments and Assets columns stay for the saved history but are 0 from now on.
+function liveNetWorth(acc) {
+  return { accounts: acc.totalBalance || 0, investments: 0, assets: 0, receivables: receivablesAt("") };
 }
 function netWorthHistory(live) {
   var thisMonth = todayStr().substring(0, 7);
@@ -55,15 +38,14 @@ function netWorthHistory(live) {
     months.unshift(ym);
     m--; if (m < 1) { m = 12; y--; }
   }
-  var linked = anyLinkedAccount();                 // D5: linked accounts already hold the investments, at cost
   var out = months.map(function(ym) {
     var row;
     if (ym === thisMonth && live) row = { accounts: live.accounts, investments: live.investments, assets: live.assets, receivables: live.receivables || 0, estimated: false, live: true };
     else if (saved[ym]) row = { accounts: saved[ym].accounts, investments: saved[ym].investments, assets: saved[ym].assets, receivables: saved[ym].receivables || 0, estimated: false };
     else {
-      var end = monthEnd(ym), ab = accountBalances(end).accounts, h = linked ? { investments: 0, assets: 0 } : holdingsAt(end);
+      var end = monthEnd(ym), ab = accountBalances(end).accounts;
       var tot = ab.reduce(function(s, a){ return s + a.balance * a.rate; }, 0);
-      row = { accounts: tot, investments: h.investments, assets: h.assets, receivables: receivablesAt(end), estimated: true };
+      row = { accounts: tot, investments: 0, assets: 0, receivables: receivablesAt(end), estimated: true };
     }
     row.month = ym;
     row.accounts = round2(row.accounts); row.investments = round2(row.investments); row.assets = round2(row.assets);

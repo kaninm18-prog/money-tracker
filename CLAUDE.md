@@ -23,7 +23,7 @@ Writes made offline are queued and replayed (`QUEUEABLE` in `js/core.js`); adds 
 - Accounts have `Currency` (default THB) and `Rate` (THB per 1 unit, set by hand or by the daily price refresh). Balances are in the account's own currency; `balanceThb` / `totalBalance` are THB.
 - Transfers: `Amount` is in the **From** account's currency; optional `ReceivedAmount` in the **To** account's currency. A transfer never changes the total.
 - Receivables: lending takes the full amount out of the account; each repayment (`ReceivableRepayments`) puts money into the account it was received in. A receivable settles automatically when nothing is left. Old settled receivables without repayments count as fully returned.
-- Asset/investment buys move cash into a holding — they are **not** spending. Fees are expenses; dividends are income.
+- Investments live in the **Wealth Planner** app. A broker is a **linked investment account** (`LinkedTo`): its balance is the Wealth Planner's value (`_Export_Values`, cached if unreadable), a transfer into it never changes the total, and its own income/spending/receivables are not added on top. Dividends sync in as Income rows (`WD…` Ids, from `_Export_Dividends`). Net worth = accounts + receivables. See `docs/stage-4-plan.md`.
 
 ## Working on the code
 
@@ -56,7 +56,3 @@ Writes made offline are queued and replayed (`QUEUEABLE` in `js/core.js`); adds 
 6. Don't change the money rules above without being asked — if a task seems to need it, stop and explain.
 7. Add a line to `CHANGELOG.md` for anything the user would notice, and set `APP_VERSION` in `js/core.js` to the newest changelog date (a test checks they match).
 8. Commit messages end with the attribution lines given in your session (if any).
-
-## Planned
-
-The investment parts (`src/16_holdings.gs`, `18_prices`, `21_portfolio`, `22_trading_journal`, `js/holdings.js`, `js/portfolio.js`) will move to a separate **Wealth Planner** app (ROADMAP stage 4). Avoid large new features there until the split.

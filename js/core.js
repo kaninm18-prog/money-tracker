@@ -6,7 +6,7 @@
 // ════════════════════════════════════════════
 // Shown in Settings so you can tell whether the phone has the latest update.
 // Bump with every release: the date of the newest CHANGELOG.md heading (add .2, .3 for more the same day).
-var APP_VERSION = '2026.11.26.2';
+var APP_VERSION = '2026.11.26.3';
 var SCRIPT_URL = localStorage.getItem('moneyScriptUrl') || '';
 var API_TOKEN  = '';             // only in memory, and only while unlocked (it is stored encrypted — see js/lock.js)
 var viewMonth  = new Date().getMonth() + 1;
@@ -37,6 +37,7 @@ var editingProjectKey  = '';
 var editingBudgetId    = null;
 var annualSummaryYear  = new Date().getFullYear();
 var balanceMode  = localStorage.getItem('balanceMode') || 'net_worth';
+if (balanceMode === 'portfolio') balanceMode = 'net_worth';   // the Investments view moved to the Wealth Planner
 
 // ── Theme (auto / light / dark) ──
 function themePref() { try { return localStorage.getItem('themePref') || 'auto'; } catch(e) { return 'auto'; } }
@@ -54,10 +55,9 @@ if (window.matchMedia) {
 }
 document.addEventListener('DOMContentLoaded', applyTheme);
 var BALANCE_MODES = {
-  net_worth:       { label: 'Net Worth',       sub: 'accounts + investments + owed to you − debts' },
+  net_worth:       { label: 'Net Worth',       sub: 'accounts (investments at their Wealth Planner value) + owed to you − debts' },
   monthly_balance: { label: 'Monthly Balance', sub: 'income minus expenses this month' },
-  available_cash:  { label: 'Available Cash',  sub: 'cash & bank accounts only' },
-  portfolio:       { label: 'Investments',     sub: 'current value of gold, stocks, funds…' }
+  available_cash:  { label: 'Available Cash',  sub: 'cash & bank accounts only' }
 };
 
 var MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -67,7 +67,6 @@ var recurringExpenses = [];
 var trends = [];
 var backupInfo = null;
 var netWorthHist = [], priceInfo = null;
-var holdings = [], holdingTotals = { value: 0, investments: 0, assets: 0, cost: 0, unrealized: 0 };
 var CAT_COLORS  = ["#64748b","#ff6584","#22c55e","#f59e0b","#3b82f6","#ec4899","#14b8a6","#f97316","#eab308","#06b6d4","#84cc16","#e11d48","#0891b2"];
 
 // Icon for a category: the one you picked (saved in the sheet) → built-in → a guess from the name → 📌
@@ -467,10 +466,7 @@ function applyData(d) {
   if (d.history && d.history.ok) { setHistory(d.history); }
   if (d.netWorth && d.netWorth.ok) { netWorthHist = d.netWorth.months || []; }
   if (d.prices) { priceInfo = d.prices; }
-  if (d.holdings && d.holdings.ok) { holdings = d.holdings.holdings || []; holdingTotals = d.holdings.totals || holdingTotals; }
-  if (d.portfolio && d.portfolio.ok) setPortfolioMeta(d.portfolio);
   renderAll();
-  renderPortfolio();
   runLaunchAction();
 }
 
@@ -595,7 +591,6 @@ function renderAll() {
   renderRecurring();
   renderUpcoming();
   renderBackupStatus();
-  renderHoldings();
   renderNetWorth();
   populateProjectDropdown();
   syncBalanceModeUI();

@@ -1,5 +1,5 @@
 // Account groups: column 10 "Group" of Accounts, its defaults, and renameAccountGroup. Run with `npm test`.
-// Grouping is display only: balances and totals must not move (see also unlinked.test.js / the golden file).
+// Grouping is display only: balances and totals must not move.
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');

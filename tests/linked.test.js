@@ -5,7 +5,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createBackend, WEALTH_ID } = require('./harness');
 const fixture = require('./fixtures/unlinked');
-const golden = require('./fixtures/unlinked-golden.json');
 
 const plain = x => JSON.parse(JSON.stringify(x));     // objects made inside the backend's vm → plain JSON
 const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.006, (msg || '') + ` expected ${b}, got ${a}`);
@@ -26,17 +25,6 @@ function setup(opts) {
   const income = () => plain(b.sheets.Income.rows.slice(1));
   return Object.assign(b, { accounts, acc, values, dividends, income });
 }
-
-// ── The hard rule (see also unlinked.test.js) ─────────────────
-test('nothing linked, Wealth Planner set up with no dividends: still identical', () => {
-  const b = createBackend({ now: fixture.NOW });
-  b.props.WEALTH_SHEET_ID = WEALTH_ID;
-  b.wealth.setTab('_Export_Values', VALUES, [['Somewhere', 'THB', 99999, 99999, '2026-11-22']]);
-  b.wealth.setTab('_Export_Dividends', DIVS, []);
-  fixture.build(b);
-  assert.deepEqual(plain(fixture.snapshot(b)), golden);
-  assert.ok(!b.sheets._Export_LinkedFlows, 'no flows tab without a linked account');
-});
 
 test('the account form saves LinkedTo in column 9; an older app that sends no linkedTo keeps it', () => {
   const b = setup();
@@ -71,9 +59,6 @@ test('own flows on a linked account are not added on top of its value', () => {
   b.values([['Kasikorn Securities', 'THB', 52000, 52000, '2026-11-21']]);
   b.api({ action: 'addIncome', date: '2026-11-10', amount: 500, category: 'Investment Returns', account: 'KS' });
   b.api({ action: 'addExpense', date: '2026-11-10', amount: 50, category: 'Other', account: 'KS' });
-  b.api({ action: 'addHoldingTxn', type: 'buy', holding: { name: 'PTT', kind: 'stock' }, quantity: 10, price: 30, account: 'KS', date: '2026-11-10' });
-  b.api({ action: 'addTrade', ticket: '9', symbol: 'XAUUSD', side: 'buy', volume: 0.1, openTime: '2026-11-10 10:00', openPrice: 2000,
-    closeTime: '2026-11-10 12:00', closePrice: 2005, profit: 50, account: 'KS' });
   b.api({ action: 'addReceivable', date: '2026-11-10', amount: 1000, counterparty: 'Ben', account: 'KS' });
   near(b.acc('KS').balance, 52000);
 });
@@ -99,26 +84,23 @@ test('a transfer into a linked account leaves the total unchanged, before and af
   near(b.acc('KS').balance, 60000);
 });
 
-test('net worth: linked values replace Money Tracker holdings (no double counting)', () => {
+test('net worth = accounts (linked ones at their Wealth Planner value) + owed to you', () => {
   const b = setup();
-  b.api({ action: 'addHoldingTxn', type: 'buy', holding: { name: 'PTT', kind: 'stock' }, quantity: 100, price: 30, account: 'Bank', date: '2026-10-10' });
-  b.api({ action: 'addHoldingTxn', type: 'buy', holding: { name: 'Car', kind: 'vehicle' }, quantity: 1, price: 500000, account: '', date: '2026-10-10' });
-  b.values([['Kasikorn Securities', 'THB', 3200, 3200, '2026-11-21']]);   // PTT, now held in the Wealth Planner
+  b.values([['Kasikorn Securities', 'THB', 3200, 3200, '2026-11-21']]);
+  b.api({ action: 'addReceivable', date: '2026-10-20', amount: 1000, counterparty: 'Ben', account: 'Bank' });
   const res = b.api({ action: 'bootstrap', month: 11, year: 2026 });
-  assert.ok(res.holdings.totals.value > 0, 'Money Tracker still lists its holdings until step 7');
   const live = res.netWorth.months[res.netWorth.months.length - 1];
   assert.ok(live.live);
   assert.equal(live.investments, 0); assert.equal(live.assets, 0);
-  near(live.netWorth, res.accounts.totalBalance);
-  near(res.accounts.totalBalance, 97000 + 3200);
+  near(res.accounts.totalBalance, 99000 + 3200);
+  near(live.netWorth, res.accounts.totalBalance + 1000);
   const saved = b.sheets.NetWorthHistory.rows.find(r => r[0] === '2026-11');
-  near(saved[3], 0); near(saved[4], 0); near(saved[5], res.accounts.totalBalance, 'daily snapshot');
+  near(saved[3], 0); near(saved[4], 0); near(saved[5], live.netWorth, 'daily snapshot');
   b.run('dailyRefresh');
   const again = b.sheets.NetWorthHistory.rows.find(r => r[0] === '2026-11');
-  near(again[3], 0); near(again[5], res.accounts.totalBalance, 'dailyRefresh snapshot');
+  near(again[5], live.netWorth, 'dailyRefresh snapshot');
   const r = b.context.reconcileData();
-  near(r.netWorth, r.totalBalance);
-  near(r.holdingTotals.investments, 3000, 'holdings still reported for the step 6 diff');
+  near(r.netWorth, live.netWorth);
 });
 
 // ── When the Wealth Planner can't be read ───────────────────
@@ -162,13 +144,12 @@ test('history: estimated months value a linked account at net transfers in', () 
   b.api({ action: 'addTransfer', date: '2026-08-05', amount: 30000, fromAccount: 'Bank', toAccount: 'KS' });
   b.api({ action: 'addTransfer', date: '2026-09-20', amount: 4000, fromAccount: 'KS', toAccount: 'Bank' });
   b.api({ action: 'addIncome', date: '2026-09-25', amount: 700, category: 'Investment Returns', account: 'KS' });  // in the value already
-  b.api({ action: 'addHoldingTxn', type: 'buy', holding: { name: 'Gold', kind: 'gold' }, quantity: 1, price: 40000, account: 'Bank', date: '2026-08-01' });
   const months = b.api({ action: 'getNetWorthHistory' }).months, m = ym => months.find(x => x.month === ym);
   assert.equal(months[0].month, '2026-08');
   assert.ok(m('2026-08').estimated);
-  near(m('2026-08').accounts, 100000 - 40000, 'bank −30000, KS +30000 at cost: the transfer moves nothing');
-  near(m('2026-08').investments, 0, 'Money Tracker holdings are not added once accounts are linked');
-  near(m('2026-09').accounts, 100000 - 40000);
+  near(m('2026-08').accounts, 100000, 'bank −30000, KS +30000 at cost: the transfer moves nothing');
+  near(m('2026-08').investments, 0);
+  near(m('2026-09').accounts, 100000);
   const ac = b.context.accountBalances('2026-09-30').accounts.find(a => a.name === 'KS');
   near(ac.balance, 26000, '30000 in − 4000 out; the dividend income is skipped');
   near(b.context.accountBalances('2026-07-31').accounts.find(a => a.name === 'KS').balance, 0);

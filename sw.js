@@ -2,10 +2,10 @@
 // The page itself is fetched fresh when online (so updates show up right away)
 // and served from the cache when offline. Calls to Apps Script are never cached.
 // The Wealth Planner shares this github.io address and its cache storage, so only touch caches named "money-tracker-…".
-var CACHE = 'money-tracker-v12';
+var CACHE = 'money-tracker-v13';
 var SHELL = ['./', './index.html', './manifest.json', './css/app.css',
   './js/lock.js', './js/core.js', './js/lockscreen.js', './js/dashboard.js', './js/transactions.js', './js/accounts.js',
-  './js/holdings.js', './js/settings.js', './js/projects.js', './js/reports.js', './js/portfolio.js', './js/suggest.js',
+  './js/settings.js', './js/projects.js', './js/reports.js', './js/suggest.js',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png',
   'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'];
 
