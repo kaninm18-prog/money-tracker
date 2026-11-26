@@ -25,18 +25,6 @@ function getAllTransactions(p) {
       fromAccount: d[2], toAccount: d[3], note: d[4], receivedAmount: toFloat(d[5]) || 0, id: String(d[6] || "") };
   }).forEach(function(r){ if (inPeriod(r.date)) txns.push(r); });
 
-  // Asset / investment buys and sells (cash movements, not expenses)
-  var hNames = {};
-  sheetToRows(getSheet(SHEET.HOLDINGS), function(d){ return { id: String(d[0]), name: String(d[1]), unit: String(d[4] || "") }; })
-    .forEach(function(h){ hNames[h.id] = h; });
-  holdingTxnRows().forEach(function(t) {
-    if ((t.type !== 'buy' && t.type !== 'sell') || !inPeriod(t.date)) return;
-    var h = hNames[t.holdingId] || {};
-    txns.push({ rowIndex: t.rowIndex, id: t.id, type: "holding", holdingTxnType: t.type, holdingId: t.holdingId,
-      holdingName: h.name || "?", unit: h.unit || "", date: t.date, amount: t.amount, quantity: t.quantity,
-      price: t.price, fee: t.fee, account: t.account, note: t.note });
-  });
-
   // Pending receivables: always included regardless of month filter
   // (they are ongoing obligations that affect account balance until settled)
   loadReceivables().forEach(function(rv) {

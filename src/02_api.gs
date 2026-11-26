@@ -42,13 +42,7 @@ function route(p) {
       case "deleteCategory":         return deleteCategory(p);
       case "setCategoryIcon":        return setCategoryIcon(p);
       case "refreshPrices":          return jsonResponse(refreshPrices());
-      case "getTrades":              return jsonResponse(getTrades());
-      case "addTrade":               return addTrade(p);
-      case "deleteTrade":            return deleteTrade(p);
-      case "importTrades":           return importTrades(p);
       case "importPack":             return importPack(p);
-      case "setTargets":             return setTargets(p);
-      case "setBenchmark":           return setBenchmark(p);
       case "getNetWorthHistory":     return jsonResponse(netWorthHistory(null));
       case "getIncomeCategories":    return getIncomeCategories();
       case "addIncomeCategory":      return addIncomeCategory(p);
@@ -85,12 +79,6 @@ function route(p) {
       case "checkRecurring":         return checkRecurring();
       case "getTrends":              return getTrends(p);
       case "searchTransactions":     return searchTransactions(p);
-      case "getHoldings":            return jsonResponse(holdingsData());
-      case "addHolding":             return addHolding(p);
-      case "updateHolding":          return updateHolding(p);
-      case "deleteHolding":          return deleteHolding(p);
-      case "addHoldingTxn":          return addHoldingTxn(p);
-      case "deleteHoldingTxn":       return deleteHoldingTxn(p);
       case "backupNow":              return jsonResponse({ ok: true, name: backupNow(), last: todayStr() });
       default:
         return jsonResponse({ ok: false, error: "Unknown action: " + p.action });
@@ -124,9 +112,7 @@ function bootstrap(p) {
   var rcr  = run(getRecurring);
   var trd  = run(function(){ return getTrends(p); });
   var hist = expenseHistory(180);
-  var hld  = holdingsData();
-  var pf   = portfolioMeta();
-  var live = liveNetWorth(acc, hld);
+  var live = liveNetWorth(acc);
   var nwh  = netWorthHistory(live);
   } finally { _readCache = null; }
   if (wealth.flows !== undefined && generated) writeLinkedFlows();   // new recurring transfers
@@ -136,7 +122,7 @@ function bootstrap(p) {
     ok: true,
     accounts: acc, categories: exp, incomeCategories: inc, transactions: txn,
     projects: prj, receivables: rec, installmentPlans: ins, budgets: bud, recurringExpenses: rcr,
-    trends: trd, holdings: hld, netWorth: nwh, history: hist, portfolio: pf, checked: !!p.runChecks, generated: generated,
+    trends: trd, netWorth: nwh, history: hist, checked: !!p.runChecks, generated: generated,
     prices: { last: props.getProperty("LAST_PRICE_REFRESH") || "", daily: !!props.getProperty("PRICES_DAILY") },
     backup: { last: props.getProperty("LAST_BACKUP") || "", weekly: !!props.getProperty("BACKUP_WEEKLY") }
   });

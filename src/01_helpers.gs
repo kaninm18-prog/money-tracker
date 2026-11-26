@@ -51,21 +51,6 @@ function getSheet(name) {
       case SHEET.BUDGETS:
         sh.appendRow(["Category","MonthlyLimit","AlertThreshold","IsActive","AppliesToProjects"]);
         break;
-      case SHEET.HOLDINGS:
-        sh.appendRow(["Id","Name","Kind","Symbol","Unit","CurrentPrice","PriceDate","Note","Status"]);
-        sh.getRange(2, 7, 998, 1).setNumberFormat("@");
-        break;
-      case SHEET.HOLDING_TXNS:
-        sh.appendRow(["Id","HoldingId","Date","Type","Quantity","Price","Amount","Fee","Account","Note","LinkedId"]);
-        sh.getRange(2, 3, 998, 1).setNumberFormat("@");
-        break;
-      case SHEET.TRADES:
-        sh.appendRow(["Id","Ticket","Symbol","Side","Volume","OpenTime","OpenPrice","CloseTime","ClosePrice","Commission","Swap","Profit","Account","Note","Currency"]);
-        sh.getRange(2, 6, 998, 1).setNumberFormat("@"); sh.getRange(2, 8, 998, 1).setNumberFormat("@"); sh.getRange(2, 2, 998, 1).setNumberFormat("@");
-        break;
-      case SHEET.TARGETS:
-        sh.appendRow(["Class","TargetPct"]);
-        break;
       case SHEET.NETWORTH:
         sh.appendRow(["Month","Date","Accounts","Investments","Assets","NetWorth","Receivables"]);
         sh.getRange(2, 1, 998, 2).setNumberFormat("@");
@@ -178,9 +163,6 @@ ID_COL[SHEET.INCOME]      = 8;
 ID_COL[SHEET.TRANSFERS]   = 7;
 ID_COL[SHEET.RECEIVABLES] = 10;
 ID_COL[SHEET.REPAYMENTS]  = 1;
-ID_COL[SHEET.HOLDINGS]    = 1;
-ID_COL[SHEET.HOLDING_TXNS] = 1;
-ID_COL[SHEET.TRADES]      = 1;
 var ID_PREFIX = {};
 ID_PREFIX[SHEET.EXPENSES] = "E"; ID_PREFIX[SHEET.INCOME] = "I"; ID_PREFIX[SHEET.TRANSFERS] = "T";
 
