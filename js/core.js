@@ -6,7 +6,7 @@
 // ════════════════════════════════════════════
 // Shown in Settings so you can tell whether the phone has the latest update.
 // Bump with every release: the date of the newest CHANGELOG.md heading (add .2, .3 for more the same day).
-var APP_VERSION = '2026.11.26';
+var APP_VERSION = '2026.11.26.2';
 var SCRIPT_URL = localStorage.getItem('moneyScriptUrl') || '';
 var API_TOKEN  = '';             // only in memory, and only while unlocked (it is stored encrypted — see js/lock.js)
 var viewMonth  = new Date().getMonth() + 1;
@@ -680,7 +680,8 @@ function escAttr(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').re
 // Stable id of a loaded transaction (sent with edits/deletes so the server finds the right row)
 function findTxn(type, rowIndex) {
   var match = function(x){ return x.type === type && x.rowIndex === rowIndex; };
-  return transactions.find(match) || (searchResults ? searchResults.transactions.find(match) : null) || null;
+  return transactions.find(match) || (searchResults ? searchResults.transactions.find(match) : null) ||
+    (typeof projectDetail !== 'undefined' && projectDetail ? projectDetail.expenses.find(match) : null) || null;
 }
 function txnId(type, rowIndex) {
   var t = findTxn(type, rowIndex);

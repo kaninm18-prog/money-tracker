@@ -386,6 +386,7 @@ main { flex:1; padding:12px 16px calc(var(--nav-h) + 12px); max-width:500px; mar
 .project-card-name { font-size:0.95rem; font-weight:700; }
 .project-card-dates { font-size:0.72rem; color:var(--text2); margin-top:2px; }
 .project-card-amount { text-align:right; }
+.pd-row { display:flex; justify-content:space-between; gap:10px; font-size:0.85rem; padding:4px 0; }
 .project-card-spent { font-size:1rem; font-weight:700; color:var(--expense-color); }
 .project-card-budget { font-size:0.72rem; color:var(--text2); }
 .project-progress-wrap { height:6px; background:var(--border); border-radius:3px; margin-bottom:10px; }
