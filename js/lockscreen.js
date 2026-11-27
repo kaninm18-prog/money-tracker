@@ -258,7 +258,7 @@ function dropUnlocked() {
   accounts = []; totalBalance = 0; expCategories = []; incCategories = []; transactions = [];
   projects = []; receivables = []; installmentPlans = []; budgets = []; recurringExpenses = [];
   trends = []; backupInfo = null; netWorthHist = []; priceInfo = null;
-  searchResults = null; searchAll = false; projectDetail = null; collapsedGroups = {}; acctGroupList = []; accountsEditMode = false; expHistory = []; habitCache = null;
+  searchResults = null; searchAll = false; projectDetail = null; showCompletedProjects = false; collapsedGroups = {}; acctGroupList = []; accountsEditMode = false; expHistory = []; habitCache = null;
   pendingBudgetAlert = null; packPending = null;
   clearScreen();
 }

@@ -12,31 +12,78 @@ function setProjectsTab(tab) {
   });
 }
 
+// Completed projects are hidden from the list (and the pickers) until "Show completed" is tapped. Display only.
+var showCompletedProjects = false;
+function isDoneProject(p) { return p && p.status === 'completed'; }
+function projectCardHtml(p) {
+  var done = isDoneProject(p);
+  var pct = p.budget > 0 ? Math.min(100, Math.round(p.spent/p.budget*100)) : 0;
+  var over = p.budget > 0 && p.spent > p.budget;
+  var dateRange = (p.startDate ? fmtDate(p.startDate) : '') + (p.endDate ? ' – '+fmtDate(p.endDate) : '');
+  if (done) dateRange = '<span class="project-done">✓ Completed' + (p.completedDate ? ' ' + fmtDateY(p.completedDate) : '') + '</span>' + (dateRange ? ' · ' + dateRange : '');
+  return '<div class="project-card' + (done ? ' completed' : '') + '">' +
+    '<div class="project-card-header" style="cursor:pointer" onclick="openProjectDetail(\''+escQ(p.name)+'\')">' +
+      '<div><div class="project-card-name">' + (done ? '✓ ' : '📁 ') + recEsc(p.name) + '</div><div class="project-card-dates">'+dateRange+'</div></div>' +
+      '<div class="project-card-amount"><div class="project-card-spent">'+fmtMoney(p.spent)+'</div>' +
+        (p.budget ? '<div class="project-card-budget">of '+fmtMoney(p.budget)+'</div>' : '') +
+      '</div>' +
+    '</div>' +
+    (p.budget ? '<div class="project-progress-wrap"><div class="project-progress-bar'+(over?' over':'')+'" style="width:'+pct+'%"></div></div>' : '') +
+    '<div class="project-actions">' +
+      '<button class="acc-edit-btn" onclick="openEditProject('+p.rowIndex+')">✏️ Edit</button>' +
+      '<button class="acc-del-btn" onclick="deleteProject('+p.rowIndex+',\''+escQ(p.name)+'\')">🗑️ Delete</button>' +
+    '</div>' +
+  '</div>';
+}
 function renderProjectsPage() {
   var html = '';
+  var active = projects.filter(function(p){ return !isDoneProject(p); }), done = projects.filter(isDoneProject);
   if (!projects.length) {
     html = '<div class="empty"><div class="empty-icon">📁</div><p>No projects yet.<br>Use projects to track trip or event costs separately from monthly expenses.</p></div>';
   } else {
-    projects.forEach(function(p) {
-      var pct = p.budget > 0 ? Math.min(100, Math.round(p.spent/p.budget*100)) : 0;
-      var over = p.budget > 0 && p.spent > p.budget;
-      var dateRange = (p.startDate ? fmtDate(p.startDate) : '') + (p.endDate ? ' – '+fmtDate(p.endDate) : '');
-      html += '<div class="project-card">' +
-        '<div class="project-card-header" style="cursor:pointer" onclick="openProjectDetail(\''+escQ(p.name)+'\')">' +
-          '<div><div class="project-card-name">📁 '+p.name+'</div><div class="project-card-dates">'+dateRange+'</div></div>' +
-          '<div class="project-card-amount"><div class="project-card-spent">'+fmtMoney(p.spent)+'</div>' +
-            (p.budget ? '<div class="project-card-budget">of '+fmtMoney(p.budget)+'</div>' : '') +
-          '</div>' +
-        '</div>' +
-        (p.budget ? '<div class="project-progress-wrap"><div class="project-progress-bar'+(over?' over':'')+'" style="width:'+pct+'%"></div></div>' : '') +
-        '<div class="project-actions">' +
-          '<button class="acc-edit-btn" onclick="openEditProject('+p.rowIndex+')">✏️ Edit</button>' +
-          '<button class="acc-del-btn" onclick="deleteProject('+p.rowIndex+',\''+escQ(p.name)+'\')">🗑️ Delete</button>' +
-        '</div>' +
-      '</div>';
-    });
+    if (!active.length) html += '<div class="empty"><div class="empty-icon">✓</div><p>All projects are completed.</p></div>';
+    active.forEach(function(p){ html += projectCardHtml(p); });
+    if (done.length) {
+      html += '<button class="btn btn-ghost btn-sm projects-done-toggle" onclick="toggleCompletedProjects()">' +
+        (showCompletedProjects ? 'Hide completed' : '✓ Show completed (' + done.length + ')') + '</button>';
+      if (showCompletedProjects) {
+        // most recently completed first
+        done.slice().sort(function(x, y){ return String(y.completedDate || '').localeCompare(String(x.completedDate || '')); })
+          .forEach(function(p){ html += projectCardHtml(p); });
+      }
+    }
   }
   document.getElementById('projects-list').innerHTML = html;
+}
+function toggleCompletedProjects() { showCompletedProjects = !showCompletedProjects; renderProjectsPage(); }
+function reloadProjects() {
+  return api({action:'getProjects'}).then(function(r){ if (r.ok) { projects = r.projects; renderProjectsPage(); populateProjectDropdown(); } });
+}
+// Complete / Reopen, from the project's detail view
+function setProjectStatusFromDetail(status) {
+  var p = projectDetail && projectDetail.project;
+  if (!p) return;
+  var btn = document.getElementById('pd-status-btn'); if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  api({ action: 'setProjectStatus', key: p.name, rowIndex: p.rowIndex, status: status }).then(function(res) {
+    if (!res.ok) {
+      if (btn) btn.disabled = false;
+      renderProjectActions();
+      toast(/Unknown action/.test(res.error || '') ? 'Redeploy Apps Script to complete projects' : 'Error: ' + (res.error || '?'));
+      return;
+    }
+    closeModal('project-detail-modal');
+    toast(status === 'completed' ? 'Completed — hidden from the list (Show completed brings it back)' : 'Project reopened', 3500);
+    reloadProjects();
+  }).catch(function(){ if (btn) btn.disabled = false; renderProjectActions(); toast('Needs a connection'); });
+}
+function renderProjectActions() {
+  var el = document.getElementById('pd-actions'), p = projectDetail && projectDetail.project;
+  if (!el) return;
+  el.innerHTML = !p ? '' : isDoneProject(p)
+    ? '<div class="balance-mode-desc" style="margin-bottom:8px">✓ Completed' + (p.completedDate ? ' on ' + fmtDateY(p.completedDate) : '') + '. Hidden from the projects list and from the project picker.</div>' +
+      '<button class="btn btn-ghost" id="pd-status-btn" onclick="setProjectStatusFromDetail(\'active\')">↩ Reopen project</button>'
+    : '<button class="btn btn-ghost" id="pd-status-btn" onclick="setProjectStatusFromDetail(\'completed\')">✓ Mark as completed</button>' +
+      '<div class="balance-mode-desc" style="margin-top:6px">Hides it from the list and the project picker. Its spending stays in every report.</div>';
 }
 
 // ── Project detail: every expense of one project across all months, with breakdowns ──
@@ -45,6 +92,7 @@ function openProjectDetail(name) {
   projectDetail = null;
   document.getElementById('pd-title').textContent = '📁 ' + name;
   document.getElementById('pd-body').innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  document.getElementById('pd-actions').innerHTML = '';
   openModal('project-detail-modal');
   api({ action: 'getProjectDetail', name: name }).then(function(res) {
     if (!res || !res.ok) {
@@ -59,6 +107,7 @@ function openProjectDetail(name) {
 function renderProjectDetail() {
   var d = projectDetail, el = document.getElementById('pd-body');
   if (!d || !el) return;
+  renderProjectActions();
   var p = d.project, pct = p.budget > 0 ? Math.round(p.spent / p.budget * 100) : 0, over = p.budget > 0 && p.spent > p.budget;
   var dates = (p.startDate ? fmtDateY(p.startDate) : '') + (p.endDate ? ' – ' + fmtDateY(p.endDate) : '');
   var html = '<div class="project-card" style="box-shadow:none;padding:0 0 6px">' +
@@ -138,7 +187,7 @@ function saveProject() {
     if (res.ok) {
       closeModal('project-modal');
       toast(editingProjectRow ? 'Project updated!' : 'Project created!');
-      api({action:'getProjects'}).then(function(r){ if(r.ok){ projects=r.projects; renderProjectsPage(); populateProjectDropdown(); } });
+      reloadProjects();
     } else { toast('Error: '+res.error); }
     document.getElementById('save-project-btn').textContent = editingProjectRow ? 'Save Changes' : 'Create Project';
   });
@@ -147,16 +196,30 @@ function saveProject() {
 function deleteProject(rowIndex, name) {
   if (!confirm('Delete project "'+name+'"?\nExpenses logged to this project will remain but lose their project tag.')) return;
   api({action:'deleteProject', rowIndex:rowIndex, key:name}).then(function(res){
-    if (res.ok) { toast('Deleted'); api({action:'getProjects'}).then(function(r){ if(r.ok){ projects=r.projects; renderProjectsPage(); populateProjectDropdown(); } }); }
+    if (res.ok) { toast('Deleted'); reloadProjects(); }
     else { toast('Error: '+res.error); }
   });
 }
 
+// The pickers list active projects only. An expense already in a completed project keeps it when edited:
+// setProjectPicker adds that one project back as an option, so saving never drops its project.
 function populateProjectDropdown() {
   var opts = '<option value="">— No project (regular expense) —</option>';
-  projects.forEach(function(p){ opts += '<option value="'+escQ(p.name)+'">📁 '+p.name+'</option>'; });
+  projects.forEach(function(p){ if (!isDoneProject(p)) opts += '<option value="'+escQ(p.name)+'">📁 '+recEsc(p.name)+'</option>'; });
   var sel = document.getElementById('fe-project');
   if (sel) sel.innerHTML = opts;
+}
+function setProjectPicker(id, name) {
+  populateProjectDropdown();
+  var sel = document.getElementById(id);
+  if (!sel) return;
+  var p = name ? projects.find(function(x){ return x.name === name; }) : null;
+  if (isDoneProject(p)) {
+    var o = document.createElement('option');
+    o.value = name; o.textContent = '✓ ' + name + ' (completed)';
+    sel.appendChild(o);
+  }
+  sel.value = name || '';
 }
 
 // ════════════════════════════════════════════
@@ -488,7 +551,7 @@ function openAddInstallmentPlan(rowIndex) {
 
   // Populate project dropdown
   var projOpts = '<option value="">— No project —</option>';
-  projects.forEach(function(p){ projOpts += '<option value="'+escQ(p.name)+'">📁 '+p.name+'</option>'; });
+  projects.forEach(function(p){ if (!isDoneProject(p)) projOpts += '<option value="'+escQ(p.name)+'">📁 '+recEsc(p.name)+'</option>'; });
   document.getElementById('fin-project').innerHTML = projOpts;
 
   openModal('installment-modal');

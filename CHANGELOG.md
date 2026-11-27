@@ -2,6 +2,9 @@
 
 One line per change the user would notice. Newest first.
 
+## 2026-11-27
+- Projects: open a project and tap **✓ Mark as completed** to hide its card. **Show completed** at the bottom of the list brings completed ones back (greyed, with the date), and **↩ Reopen project** undoes it. Completed projects aren't offered when you add an expense, but an expense already in one keeps its project when you edit it. Nothing about money changes: the spending stays in every total and report. Needs the backend redeployed (it deploys from `main` automatically).
+
 ## 2026-11-26
 - Settings → Backup & automation has a **Refresh exchange rates** button again (it was in the Holdings section, which moved to the Wealth Planner). Rates still update by themselves every morning.
 - Investments moved out: Money Tracker no longer has its own Holdings, trading journal or portfolio screens, the "Asset / Investment" button, or the Investments dashboard view. They live in the Wealth Planner; link a broker to an account to see its value here. Net worth is now accounts + what people owe you. Old investment rows stay in the hidden tabs of your Sheet, unused. Needs the backend redeployed (it deploys from `main` automatically).
