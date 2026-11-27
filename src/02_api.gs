@@ -51,6 +51,7 @@ function route(p) {
       case "getProjectDetail":       return getProjectDetail(p);
       case "addProject":             return addProject(p);
       case "updateProject":          return updateProject(p);
+      case "setProjectStatus":       return setProjectStatus(p);
       case "deleteProject":          return deleteProject(p);
       case "getReceivables":         return getReceivables();
       case "addReceivable":          return addReceivable(p);

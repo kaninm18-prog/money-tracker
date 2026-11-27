@@ -1,9 +1,16 @@
 // ── PROJECTS ─────────────────────────────────────────────────
+// Status (column 5): "" = active, "completed" = done and hidden from the list and the pickers in the app.
+// CompletedDate (column 6): when it was marked completed. Both are display only: spending is never affected.
+function projectFromRow(d, ri) {
+  var done = String(d[4] || "").trim().toLowerCase() === "completed";
+  return { rowIndex: ri, name: d[0], budget: toFloat(d[1]), startDate: formatDate(d[2]), endDate: formatDate(d[3]),
+           status: done ? "completed" : "active", completedDate: done ? formatDate(d[5]) : "" };
+}
 
 function getProjects() {
   var sh = getSheet(SHEET.PROJECTS);
   var projects = sheetToRows(sh, function(d, ri) {
-    return { rowIndex: ri, name: d[0], budget: toFloat(d[1]), startDate: formatDate(d[2]), endDate: formatDate(d[3]) };
+    return projectFromRow(d, ri);
   });
   var expSh = getSheet(SHEET.EXPENSES);
   var expRows = sheetToRows(expSh, function(d){ return { amount: toFloat(d[1]), projectId: d[7] || "" }; });
@@ -22,7 +29,7 @@ function getProjectDetail(p) {
   if (!name) return jsonResponse({ ok: false, error: "Choose a project" });
   var proj = null;
   sheetToRows(getSheet(SHEET.PROJECTS), function(d, ri) {
-    return { rowIndex: ri, name: d[0], budget: toFloat(d[1]), startDate: formatDate(d[2]), endDate: formatDate(d[3]) };
+    return projectFromRow(d, ri);
   }).forEach(function(x){ if (String(x.name) === name) proj = x; });
   if (!proj) return staleResponse();
   ensureRowIds(SHEET.EXPENSES);
@@ -43,6 +50,7 @@ function getProjectDetail(p) {
     .sort(function(a, b){ return b.amount - a.amount; });
   var months = Object.keys(byMonth).sort().reverse().map(function(m){ return { month: m, amount: round2(byMonth[m]) }; });
   return jsonResponse({ ok: true, project: { name: proj.name, budget: proj.budget, startDate: proj.startDate, endDate: proj.endDate,
+    status: proj.status, completedDate: proj.completedDate,
     rowIndex: proj.rowIndex, spent: round2(total), count: rows.length }, expenses: rows, categories: categories, months: months });
 }
 
@@ -60,6 +68,19 @@ function updateProject(p) {
   if (!row) return staleResponse();
   sh.getRange(row, 1, 1, 4).setValues([[p.name || "", toFloat(p.budget), p.startDate || "", p.endDate || ""]]);
   return jsonResponse({ ok: true });
+}
+
+// Mark a project completed (hidden in the app) or active again. Found by name (key) like updateProject.
+function setProjectStatus(p) {
+  var status = String(p.status || "");
+  if (status !== "completed" && status !== "active") return jsonResponse({ ok: false, error: "Status should be completed or active" });
+  var sh  = getSheet(SHEET.PROJECTS);
+  var row = resolveByKey(SHEET.PROJECTS, p);
+  if (!row) return staleResponse();
+  ensureHeaders(sh, 5, ["Status", "CompletedDate"]);
+  sh.getRange(row, 6).setNumberFormat("@");
+  sh.getRange(row, 5, 1, 2).setValues([[status === "completed" ? "completed" : "", status === "completed" ? todayStr() : ""]]);
+  return jsonResponse({ ok: true, status: status, completedDate: status === "completed" ? todayStr() : "" });
 }
 
 function deleteProject(p) {

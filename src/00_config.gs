@@ -11,7 +11,7 @@
 //                       (Group: heading on the Accounts page; empty = the type's default, see defaultAccountGroup)
 //    Categories       → Name | Icon
 //    IncomeCategories → Name | Icon
-//    Projects         → Name | Budget | StartDate | EndDate
+//    Projects         → Name | Budget | StartDate | EndDate | Status ("" active / completed) | CompletedDate
 //    Receivables      → Date | Amount | Counterparty | Type | Note | ReimbursedBy | Status | SettledDate | Account | Id
 //    ReceivableRepayments → Id | ReceivableId | Date | Amount | Account | Note
 //    InstallmentPlans → Description | PurchaseDate | Merchant | TotalAmount | InstallmentCount | InstallmentAmount | FirstInstallmentDate | Account | Category | ProjectId | Status | InstallmentsPaid

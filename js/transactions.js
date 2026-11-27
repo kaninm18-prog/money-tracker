@@ -176,7 +176,7 @@ function openExpenseForm(rowIndex) {
     document.getElementById('fe-repeat-group').style.display = 'none';
     document.getElementById('fe-recurring').checked = t ? !!t.isRecurring : false;
     document.getElementById('fe-recurrence-period').value = t ? (t.recurrencePeriod||'monthly') : 'monthly';
-    document.getElementById('fe-project').value = t ? (t.projectId||'') : '';
+    setProjectPicker('fe-project', t ? (t.projectId||'') : '');   // keeps a completed project when editing
   } else {
     document.getElementById('fe-amount').value = '';
     editingFx = null;
@@ -186,7 +186,7 @@ function openExpenseForm(rowIndex) {
     document.getElementById('fe-recurring').checked = false;
     document.getElementById('fe-recurrence-period').value = 'monthly';
     document.getElementById('fe-recurring-sub').style.display = 'none';
-    document.getElementById('fe-project').value = '';
+    setProjectPicker('fe-project', '');
     renderCatGrid('fe-cat-grid', expCategories, null);
     renderAcctList('fe-acct-list', null);
   }

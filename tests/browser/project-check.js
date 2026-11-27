@@ -48,6 +48,7 @@ function makeBackend() {
 }
 let backend = makeBackend();
 let oldBackend = false;
+let noStatusAction = false;                         // a backend from before setProjectStatus
 const calls = [];
 
 async function newPage(browser, opts) {
@@ -63,6 +64,7 @@ async function newPage(browser, opts) {
     calls.push(body);
     let out;
     if (oldBackend && body.action === 'getProjectDetail') out = { ok: false, error: 'Unknown action: getProjectDetail' };
+    else if (noStatusAction && body.action === 'setProjectStatus') out = { ok: false, error: 'Unknown action: setProjectStatus' };
     else { try { out = backend.api(Object.assign({}, body)); } catch (e) { out = { ok: false, error: String(e) }; } }
     if (body.token !== TOKEN) out = { ok: false, auth: true, error: 'unauthorized' };
     await r.fulfill({ contentType: 'application/json', body: JSON.stringify(out) }).catch(() => {});
@@ -137,12 +139,50 @@ function step(name) { console.log('✓ ' + name); }
     assert.equal(await page.textContent('#header-networth'), netWorth, 'viewing changes nothing');
     step('an empty project says so; an old backend gets a redeploy message; net worth unchanged');
 
+    // complete → hidden; Show completed; picker; editing keeps the project; reopen
+    const cardNames = () => page.$$eval('#projects-list .project-card-name', es => es.map(e => e.textContent));
+    await openProject(page, SECRET);
+    await page.click('#pd-status-btn:has-text("Mark as completed")');
+    await page.waitForFunction(() => !document.querySelector('#project-detail-modal.open'));
+    await page.waitForFunction(s => !document.getElementById('projects-list').textContent.includes(s), SECRET);
+    assert.deepEqual(await cardNames(), ['📁 Empty one'], 'the completed card is hidden');
+    assert.match(await page.textContent('.projects-done-toggle'), /Show completed \(1\)/);
+    assert.ok(calls.some(c => c.action === 'setProjectStatus' && c.status === 'completed' && c.key === SECRET));
+    await page.evaluate(() => openExpenseForm());
+    const opts = await page.$$eval('#fe-project option', os => os.map(o => o.textContent));
+    assert.ok(!opts.some(o => o.includes(SECRET)), 'not offered for a new expense: ' + opts.join(' | '));
+    await page.evaluate(() => document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open')));
+    await page.click('.projects-done-toggle');
+    assert.deepEqual(await cardNames(), ['📁 Empty one', '✓ ' + SECRET], 'shown again under the active ones');
+    assert.match(await page.textContent('.project-card.completed .project-card-dates'), /✓ Completed/);
+    await shot(page, 'projects-completed');
+    await openProject(page, SECRET);
+    assert.match(await page.textContent('#pd-actions'), /Completed on/);
+    await page.click('#pd-body .txn-item:has-text("Electrician")');
+    await page.waitForFunction(() => document.querySelector('#expense-modal.open'));
+    assert.equal(await page.inputValue('#fe-project'), SECRET, 'editing keeps the completed project');
+    assert.match(await page.$eval('#fe-project', s => s.options[s.selectedIndex].textContent), /\(completed\)/);
+    await page.evaluate(() => document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open')));
+    noStatusAction = true;
+    await openProject(page, SECRET);
+    await page.click('#pd-status-btn:has-text("Reopen")');
+    await page.waitForFunction(() => /Redeploy Apps Script to complete projects/.test(document.getElementById('toast').textContent));
+    noStatusAction = false;
+    assert.equal(await page.isEnabled('#pd-status-btn'), true, 'the button works again after an old backend');
+    await page.click('#pd-status-btn:has-text("Reopen")');
+    await page.waitForFunction(s => !document.querySelector('#project-detail-modal.open') &&
+      [].some.call(document.querySelectorAll('#projects-list .project-card:not(.completed) .project-card-name'), e => e.textContent.includes(s)), SECRET);
+    assert.equal(await page.locator('.projects-done-toggle').count(), 0, 'no completed projects left: no toggle');
+    assert.equal(await page.textContent('#header-networth'), netWorth, 'completing and reopening change nothing about money');
+    step('Mark as completed hides the card; Show completed brings it back; not in the picker, but kept when editing; Reopen; old backend message');
+
     // lock clears it
     await openProject(page, SECRET);
     await page.evaluate(() => lockNow());
     const html = await page.evaluate(() => document.documentElement.outerHTML);
     for (const s of [SECRET, 'Electrician', 'Tiles']) assert.ok(!html.includes(s), '"' + s + '" still in the page after lock');
     assert.equal(await page.evaluate(() => projectDetail), null);
+    assert.equal(await page.evaluate(() => showCompletedProjects), false);
     assert.ok(!(await page.evaluate(() => JSON.stringify(Object.assign({}, localStorage)))).includes(SECRET));
     step('lock empties the detail view and projectDetail; nothing in plain localStorage');
     assert.deepEqual(errors, [], 'console errors');
